@@ -20,7 +20,8 @@ ENV/
 .vscode/
 
 # Data and large files
-/datasets/
+/datasets/mm-fit
+/datasets/UTD_MHAD
 /data_gen/*.tfrecord
 
 # Logs
