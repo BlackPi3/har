@@ -6,6 +6,28 @@ patience: 10
 seed: 0
 device: null # runner will auto-choose cuda if available
 
+# MMFit dataset configuration
+mmfit_data_dir: '../datasets/mm-fit/'  # Relative to notebooks/
+sensor_window_length: 300  # 3 seconds * 100Hz
+cluster: false
+dtype: float32
+use_simulated_data: false
+pose_file: 'pose_3d_upsample_normal.npy'
+acc_file: 'sw_l_acc_std.npy'
+labels_file: 'labels.csv'
+sim_acc_file: 'sw_l_sim_acc.npy'
+
+# Train/val/test splits
+TRAIN_W_IDS: ['w01', 'w02', 'w03', 'w04', 'w06', 'w07', 'w08', 'w16', 'w17', 'w18', 'w00', 'w05']
+VAL_W_IDS: ['w14', 'w15', 'w19', 'w20']
+TEST_W_IDS: ['w09', 'w10', 'w11', 'w13']
+
+# Model parameters (for backward compatibility with notebook)
+in_ch: 3
+num_joints: 3
+ac_fin: 100
+ac_num_classes: 11
+
 models:
     regressor:
         type: tcn_regressor # model identifier
