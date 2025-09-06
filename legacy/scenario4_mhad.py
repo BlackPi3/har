@@ -7,7 +7,7 @@ import torch
 from utils import config
 from utils import utils
 from datasets.mhad_dataloader import mhad_dataloader
-from utils.modules import Regressor, FeatureExtractor, ActivityClassifier
+from legacy.utils.modules import Regressor, FeatureExtractor, ActivityClassifier
 import sys
 
 sys.path.append("..")

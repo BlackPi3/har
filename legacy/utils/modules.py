@@ -4,6 +4,8 @@ import math
 import torch
 
 # >>> REGRESSOR models <<< #
+
+
 class TCNBlock(nn.Module):
     def __init__(self, in_ch, out_ch, num_joints, kernel_size, dilation, dropout):
         super(TCNBlock, self).__init__()
@@ -51,6 +53,7 @@ class TCNBlock(nn.Module):
         x = self.leakyrelu(self.dropout2(self.conv2(x)))
 
         return x + short_cut
+
 
 class RegressorNew(nn.Module):
     def __init__(self, in_ch=3, num_joints=3, window_length=100):
@@ -126,6 +129,7 @@ class RegressorNew(nn.Module):
         x = x.view(-1, self.in_ch, self.window_length)
 
         return x
+
 
 class Regressor(nn.Module):
     def __init__(self, in_ch, num_joints, window_length):
@@ -216,6 +220,7 @@ class Regressor(nn.Module):
 
         return x
 
+
 class FeatureExtractor(nn.Module):
     def __init__(self, n_filters=9, filter_size=5, n_dense=100, n_channels=3, window_size=300, drop_prob=0.2, pool_filter_size=2):
         super(FeatureExtractor, self).__init__()
@@ -284,6 +289,7 @@ class FeatureExtractor(nn.Module):
 
         return out
 
+
 class ActivityClassifier(nn.Module):
     def __init__(self, f_in, n_classes):
         super(ActivityClassifier, self).__init__()
@@ -300,15 +306,19 @@ class ActivityClassifier(nn.Module):
         out = self.classfier(x)
         return out
 
+
 class Discriminator(nn.Module):
     def __init__(self, input_size):
         super(Discriminator, self).__init__()
         self.model = nn.Sequential(
-            nn.Conv1d(in_channels=3, out_channels=64, kernel_size=5, stride=1, padding=2),  # Conv1D for temporal patterns
+            nn.Conv1d(in_channels=3, out_channels=64, kernel_size=5,
+                      stride=1, padding=2),  # Conv1D for temporal patterns
             nn.LeakyReLU(0.2),
-            nn.Conv1d(in_channels=64, out_channels=64, kernel_size=5, stride=1, padding=2),
+            nn.Conv1d(in_channels=64, out_channels=64,
+                      kernel_size=5, stride=1, padding=2),
             nn.LeakyReLU(0.2),
-            nn.Conv1d(in_channels=64, out_channels=1, kernel_size=5, stride=1, padding=2),  # Output 1 score per time step
+            nn.Conv1d(in_channels=64, out_channels=1, kernel_size=5,
+                      stride=1, padding=2),  # Output 1 score per time step
         )
 
         self._initialize_weights()
@@ -318,7 +328,7 @@ class Discriminator(nn.Module):
             if isinstance(m, nn.Linear):
                 init.kaiming_normal_(m.weight)
                 init.constant_(m.bias, 0)
-    
+
     def forward(self, x):
         # Flatten the input from (batch size, 3, window) to (batch size, 3 * window)
         # x = x.view(x.size(0), -1)

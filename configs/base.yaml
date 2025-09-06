@@ -1,0 +1,41 @@
+batch_size: 64
+num_workers: 4
+lr: 1e-3
+epochs: 100
+patience: 10
+seed: 0
+device: null # runner will auto-choose cuda if available
+
+models:
+    regressor:
+        type: tcn_regressor # model identifier
+        params:
+            input_channels: 3 # was in_ch
+            num_joints: 3
+            sequence_length: 100 # was window_length
+            hidden_channels: 32
+            fc_hidden: 16
+    
+    feature_extractor:
+        type: temporal_feature_extractor
+        params:
+            input_channels: 3   # was n_channels
+            n_filters: 9
+            filter_size: 5
+            n_dense: 100
+            window_size: 300
+            drop_prob: 0,2
+            pool_size: 2
+
+    classifier:
+        type: activity_classifier
+        params:
+            f_in: 100
+            n_classes: 11
+    
+    discriminator:
+        type: temporal_discriminator
+        params:
+            input_channels: 3
+            kernel_size: 5
+            hidden_channels: 64

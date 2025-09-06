@@ -1,0 +1,10 @@
+dataset_name: mmfit
+
+models:
+    regressor:
+        params:
+            sequence_length: 300
+
+loss_coefficients:
+    alpha: 1.0
+    beta: 0.1

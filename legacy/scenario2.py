@@ -10,7 +10,7 @@ sys.path.append('..')
 from utils import config
 from utils import utils
 
-from utils.modules import Regressor, FeatureExtractor, ActivityClassifier
+from legacy.utils.modules import Regressor, FeatureExtractor, ActivityClassifier
 
 if config.dataset == config.Dataset.MMFIT:
     from datasets import mmfit_data as data

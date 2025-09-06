@@ -5,7 +5,7 @@ import torch
 from utils import config
 from utils import utils
 from datasets.mhad_dataloader import mhad_dataloader
-from utils.modules import RegressorNew, Regressor
+from legacy.utils.modules import RegressorNew, Regressor
 import sys
 
 sys.path.append("..")

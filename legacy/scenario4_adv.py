@@ -7,7 +7,7 @@ import torch
 from utils import config
 from utils import utils
 from datasets.adv_dataloader import adv_dataloader
-from utils.modules import Regressor, FeatureExtractor, ActivityClassifier, Discriminator
+from legacy.utils.modules import Regressor, FeatureExtractor, ActivityClassifier, Discriminator
 import sys
 import os
 import torch.autograd as autograd
