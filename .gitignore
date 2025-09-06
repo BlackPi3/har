@@ -4,6 +4,12 @@ __pycache__/
 *.so
 *.egg-info/
 
+# Testing
+.pytest_cache/
+.coverage
+.tox/
+htmlcov/
+
 # Jupyter
 .ipynb_checkpoints/
 
@@ -39,6 +45,21 @@ temp/
 
 # Slurm outputs (if using HPC)
 slurm-*.out
+
+# OS-generated files
+Thumbs.db
+ehthumbs.db
+
+# Backup files
+*~
+*.bak
+*.swp
+*.swo
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
 
 # Data and large files
 /datasets/mm-fit
