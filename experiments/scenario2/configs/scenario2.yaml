@@ -1,0 +1,13 @@
+dataset_name: mmfit
+
+# Override data directory for experiment structure  
+data_dir: '../../../data/mm-fit/'
+
+models:
+    regressor:
+        params:
+            sequence_length: 300
+
+loss_coefficients:
+    alpha: 1.0
+    beta: 0.1

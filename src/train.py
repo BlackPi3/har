@@ -52,9 +52,12 @@ class Trainer:
                     total_loss.backward()
                     self.optimizer.step()
                 total += total_loss.item()
-                mse_acc += mse_l; sim_acc += sim_l; act_acc += act_l
+                mse_acc += mse_l
+                sim_acc += sim_l
+                act_acc += act_l
                 p = torch.argmax(logits, dim=1).cpu().numpy()
-                preds.extend(p); trues.extend(labels.cpu().numpy())
+                preds.extend(p)
+                trues.extend(labels.cpu().numpy())
 
         avg_loss = total / len(self.dl[split])
         return avg_loss, f1_score(trues, preds, average="macro"), mse_acc / len(self.dl[split]), sim_acc / len(self.dl[split]), act_acc / len(self.dl[split])
@@ -62,21 +65,51 @@ class Trainer:
     def fit(self, epochs):
         best = {"f1": -np.inf, "state": None}
         history = {"train_loss": [], "val_loss": [], "train_f1": [], "val_f1": []}
+        
+        print(f"Starting training for {epochs} epochs...")
+        print("-" * 70)
+        
         for epoch in range(epochs):
-            tr_loss, tr_f1, *_ = self._run_epoch("train")
-            val_loss, val_f1, *_ = self._run_epoch("val")
-            history["train_loss"].append(tr_loss); history["val_loss"].append(val_loss)
-            history["train_f1"].append(tr_f1); history["val_f1"].append(val_f1)
+            tr_loss, tr_f1, tr_mse, tr_sim, tr_act = self._run_epoch("train")
+            val_loss, val_f1, val_mse, val_sim, val_act = self._run_epoch("val")
+            
+            history["train_loss"].append(tr_loss)
+            history["val_loss"].append(val_loss)
+            history["train_f1"].append(tr_f1)
+            history["val_f1"].append(val_f1)
+            
+            # Print epoch progress
+            print(f"Epoch {epoch+1:3d}/{epochs} | "
+                  f"Train Loss: {tr_loss:.4f} | Val Loss: {val_loss:.4f} | "
+                  f"Train F1: {tr_f1:.4f} | Val F1: {val_f1:.4f}")
+            
             if self.scheduler is not None:
                 try:
                     self.scheduler.step(val_loss)
                 except TypeError:
                     self.scheduler.step()
+            
             if val_f1 > best["f1"]:
                 best["f1"] = val_f1
                 best["state"] = {k: copy.deepcopy(m.state_dict()) for k, m in self.models.items()}
+                print(f"    → New best Val F1: {val_f1:.4f}")
+            
             if (epoch - np.argmax(history["val_f1"])) >= self.cfg.patience:
+                print(f"Early stopping triggered after {epoch+1} epochs (patience: {self.cfg.patience})")
                 break
+        
+        print("-" * 70)
+        print(f"Training completed. Best Val F1: {best['f1']:.4f}")
+        
+        # restore best
+        if best["state"]:
+            for k, m in self.models.items():
+                m.load_state_dict(best["state"][k])
+        return history
+        
+        print("-" * 70)
+        print(f"Training completed. Best Val F1: {best['f1']:.4f}")
+        
         # restore best
         if best["state"]:
             for k, m in self.models.items():

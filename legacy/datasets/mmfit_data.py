@@ -195,17 +195,17 @@ def build_mmfit_datasets(cfg):
         tuple: (train_dataset, val_dataset, test_dataset) as ConcatDataset objects
     """
     # Default configuration values (fallback if not provided in cfg)
-    DEFAULT_TRAIN_W_IDS = ['w01', 'w02', 'w03', 'w04', 'w06', 'w07', 'w08', 'w16', 'w17', 'w18', 'w00', 'w05']
-    DEFAULT_VAL_W_IDS = ['w14', 'w15', 'w19', 'w20']
-    DEFAULT_TEST_W_IDS = ['w09', 'w10', 'w11', 'w13']
+    DEFAULT_TRAIN_SUBJECTS = ['w01', 'w02', 'w03', 'w04', 'w06', 'w07', 'w08', 'w16', 'w17', 'w18', 'w00', 'w05']
+    DEFAULT_VAL_SUBJECTS = ['w14', 'w15', 'w19', 'w20']
+    DEFAULT_TEST_SUBJECTS = ['w09', 'w10', 'w11', 'w13']
     
-    TRAIN_SIM_W_IDS = ['w08', 'w16', 'w17', 'w18', 'w00', 'w05']
+    TRAIN_SIM_SUBJECTS = ['w08', 'w16', 'w17', 'w18', 'w00', 'w05']
     
     # Extract configuration values with fallbacks
-    data_dir = getattr(cfg, 'mmfit_data_dir', 'datasets/mm-fit/')
-    train_ids = getattr(cfg, 'TRAIN_W_IDS', DEFAULT_TRAIN_W_IDS)
-    val_ids = getattr(cfg, 'VAL_W_IDS', DEFAULT_VAL_W_IDS) 
-    test_ids = getattr(cfg, 'TEST_W_IDS', DEFAULT_TEST_W_IDS)
+    data_dir = getattr(cfg, 'data_dir', '../datasets/mm-fit/')  # Updated fallback path
+    train_ids = getattr(cfg, 'train_subjects', DEFAULT_TRAIN_SUBJECTS)
+    val_ids = getattr(cfg, 'val_subjects', DEFAULT_VAL_SUBJECTS) 
+    test_ids = getattr(cfg, 'test_subjects', DEFAULT_TEST_SUBJECTS)
     
     pose_file = getattr(cfg, 'pose_file', 'pose_3d_upsample_normal.npy')
     acc_file = getattr(cfg, 'acc_file', 'sw_l_acc_std.npy')
@@ -226,7 +226,7 @@ def build_mmfit_datasets(cfg):
         labels_file_path = os.path.join(id_dir, f"{w_id}_{labels_file}")
 
         # Use simulated accelerometer data for specific subjects if mode is combined
-        if use_simulated_data and w_id in TRAIN_SIM_W_IDS:
+        if use_simulated_data and w_id in TRAIN_SIM_SUBJECTS:
             acc_file_path = os.path.join(id_dir, f"{w_id}_{sim_acc_file}")
 
         dataset = MMFit(
@@ -235,7 +235,7 @@ def build_mmfit_datasets(cfg):
             labels_file=labels_file_path,
             sensor_window_length=sensor_window_length,
             cluster=getattr(cfg, 'cluster', False),
-            dtype=getattr(cfg, 'dtype', torch.float32),
+            dtype=torch.float32,  # Always use float32, don't overcomplicate
         )
 
         if w_id in train_ids:

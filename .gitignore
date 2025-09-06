@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *.so
+*.egg-info/
 
 # Jupyter
 .ipynb_checkpoints/
@@ -18,6 +19,26 @@ ENV/
 # PyCharm/VSCode
 .idea/
 .vscode/
+
+# Data directories (large datasets)
+data/
+datasets/  # Legacy directory
+legacy_datasets/
+
+# Experiment outputs
+outputs/
+experiments/*/outputs/
+*.log
+
+# Model checkpoints and temporary files
+*.pth
+*.pkl
+*.joblib
+tmp/
+temp/
+
+# Slurm outputs (if using HPC)
+slurm-*.out
 
 # Data and large files
 /datasets/mm-fit
