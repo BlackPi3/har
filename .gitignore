@@ -28,8 +28,7 @@ ENV/
 
 # Data directories (large datasets)
 data/
-datasets/  # Legacy directory
-legacy_datasets/
+legacy/
 
 # Experiment outputs
 outputs/
@@ -60,11 +59,6 @@ ehthumbs.db
 build/
 dist/
 *.egg-info/
-
-# Data and large files
-/datasets/mm-fit
-/datasets/UTD_MHAD
-/data_gen/*.tfrecord
 
 # Logs
 *.log
