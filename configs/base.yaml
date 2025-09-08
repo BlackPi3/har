@@ -7,7 +7,7 @@ seed: 0
 device: null # runner will auto-choose cuda if available
 
 # Dataset configuration
-data_dir: './data/mm-fit/'  # Updated for new structure
+data_dir: './data/mm-fit/'  # Local path - will be overridden for cluster
 cluster: false
 use_simulated_data: false
 

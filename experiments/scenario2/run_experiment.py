@@ -26,17 +26,29 @@ def run_scenario2_experiment(base_config=None, exp_config=None, opts=None, outpu
     # Default paths relative to this script
     script_dir = Path(__file__).parent
     base_config = base_config or str(script_dir / "../../configs/base.yaml")
-    exp_config = exp_config or str(script_dir / "configs/scenario2.yaml")
+    exp_config = exp_config or str(script_dir / "../../configs/scenario2.yaml")
     
     # Load configuration
     cfg = load_config(base_config, exp_config, opts=opts or [])
     set_seed(getattr(cfg, 'seed', None))
+    
+    # Verify data directory exists
+    if not os.path.exists(cfg.data_dir):
+        print(f"Warning: Data directory not found: {cfg.data_dir}")
+        print("Please ensure data is available at the specified path")
+        if cfg.data_dir.startswith('./'):
+            print("Local path detected - ensure you're running from project root")
+        elif cfg.data_dir.startswith('/netscratch/'):
+            print("Cluster path detected - ensure data is mounted/available")
+    else:
+        print(f"✓ Data directory found: {cfg.data_dir}")
     
     print(f"Running Scenario 2 Experiment")
     print(f"Base config: {base_config}")
     print(f"Experiment config: {exp_config}")
     print(f"Device: {cfg.device}")
     print(f"Dataset: {cfg.dataset_name}")
+    print(f"Data directory: {cfg.data_dir}")
     
     # Create output directory
     if output_dir is None:
@@ -83,7 +95,6 @@ def run_scenario2_experiment(base_config=None, exp_config=None, opts=None, outpu
     history = trainer.fit(cfg.epochs)
     
     # Save results
-    import json
     results = {
         'config': {k: str(v) if not isinstance(v, (int, float, bool, str, list, dict)) else v 
                   for k, v in vars(cfg).items()},

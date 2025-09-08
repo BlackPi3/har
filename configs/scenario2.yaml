@@ -1,5 +1,8 @@
 dataset_name: mmfit
 
+# Scenario 2 configuration for local development
+# Uses data_dir from base.yaml (./data/mm-fit/)
+
 models:
     regressor:
         params:
