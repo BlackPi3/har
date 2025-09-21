@@ -2,9 +2,7 @@
 # Defines root directory, file names, and subject splits.
 # Keep only data-related settings here; model/optim settings belong elsewhere.
 
-name: mmfit
-
-# data_dir is inferred at runtime from utils.DATA_DIR / name (not stored here)
+data_name: mmfit
 
 # Filenames inside each subject directory
 pose_file: pose_3d_upsample_normal.npy

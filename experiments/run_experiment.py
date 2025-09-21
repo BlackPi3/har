@@ -12,10 +12,11 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 
 from src.config import set_seed
-from src import utils as project_utils
 from src.data import get_dataloaders
 from src.train import Trainer
 from src.models import Regressor, FeatureExtractor, ActivityClassifier
+
+import pytorch_lightning as pl
 
 
 def _select_device(pref: str) -> str:
@@ -63,29 +64,22 @@ def main(cfg: DictConfig) -> Any:
     device_str = _select_device(getattr(cfg, "device", "auto"))
     torch_device = torch.device(device_str)
 
-    # Data sanity
-    # Infer data directory: prefer explicit (if present), else utils.DATA_DIR / name
-    dataset_name = getattr(cfg.data, 'name', 'dataset')
-    candidate_dirs = []
-    explicit = getattr(cfg.data, 'data_dir', None)
-    if explicit:
-        candidate_dirs.append(explicit)
-    candidate_dirs.append(str(project_utils.DATA_DIR / dataset_name))
-    candidate_dirs.append(str(project_utils.DATA_DIR / dataset_name.replace('-', '_')))
-    # Also consider common pluralization or mm-fit vs mmfit variants
-    if '-' in dataset_name:
-        candidate_dirs.append(str(project_utils.DATA_DIR / dataset_name.replace('-', '')))
-    resolved_data_dir = next((d for d in candidate_dirs if os.path.exists(d)), candidate_dirs[0])
-    if not os.path.exists(resolved_data_dir):
-        print(f"Warning: Data directory not found (tried): {candidate_dirs}")
+    # Data directory resolution (simplified): rely on explicit config.
+    data_name = cfg.data.data_name
+    data_dir = Path(cfg.env.data_dir) / data_name
+
+    if not os.path.exists(data_dir):
+        print(
+            f"Warning: data_dir {data_dir} does not exist; proceeding anyway.")
     else:
-        print(f"✓ Data directory: {resolved_data_dir}")
+        print(f"✓ Data directory: {data_dir}")
 
     print("Running Experiment")
-    exp_name = getattr(cfg.experiment, "experiment_name", getattr(cfg.experiment, "name", "unknown_experiment"))
+    exp_name = getattr(cfg.experiment, "experiment_name", getattr(
+        cfg.experiment, "name", "unknown_experiment"))
     print(f"Experiment: {exp_name}")
     print(f"Device: {device_str}")
-    print(f"Dataset: {getattr(cfg.data, 'name', 'unknown')}")
+    print(f"Dataset: {data_dir}")
     print(f"Working directory (Hydra run dir): {Path.cwd()}")
 
     # Build lightweight config namespace expected by legacy trainer & dataloaders
@@ -101,8 +95,9 @@ def main(cfg: DictConfig) -> Any:
         "test_subjects",
     ]
     ns_dict = {k: cfg.data[k] for k in legacy_keys if k in cfg.data}
-    ns_dict['data_dir'] = resolved_data_dir
+    ns_dict['data_dir'] = data_dir
     # Flexible fallback retrieval for common hyperparameters across groups
+
     def _fallback(*candidates, default=None):
         for cand in candidates:
             if cand is None:
@@ -121,39 +116,164 @@ def main(cfg: DictConfig) -> Any:
                     return node
         return default
 
-    ns_dict["batch_size"] = _fallback("batch_size", "data.batch_size", default=64)
-    ns_dict["num_workers"] = _fallback("num_workers", "data.num_workers", "env.num_workers", default=4)
+    ns_dict["batch_size"] = _fallback(
+        "batch_size", "data.batch_size", default=64)
+    ns_dict["num_workers"] = _fallback(
+        "num_workers", "data.num_workers", "env.num_workers", default=4)
     ns_dict["epochs"] = _fallback("epochs", "trainer.epochs", default=100)
     ns_dict["patience"] = _fallback("patience", "trainer.patience", default=10)
     ns_dict["lr"] = float(_fallback("lr", "optim.lr", default=1e-3))
-    ns_dict["weight_decay"] = float(_fallback("weight_decay", "optim.weight_decay", default=0.0))
+    ns_dict["weight_decay"] = float(
+        _fallback("weight_decay", "optim.weight_decay", default=0.0))
     # Map experiment alpha/beta to legacy names expected by Trainer
     if "experiment" in cfg and "alpha" in cfg.experiment:
         ns_dict["scenario2_alpha"] = cfg.experiment.alpha
     if "experiment" in cfg and "beta" in cfg.experiment:
         ns_dict["scenario2_beta"] = cfg.experiment.beta
-    dataset_name = getattr(cfg.data, 'name', 'mmfit')
-    ns_dict["dataset_name"] = dataset_name
+    # Ensure namespace uses the resolved dataset_name (from any accepted key)
+    ns_dict["dataset_name"] = data_name
     ns = SimpleNamespace(**ns_dict)
     ns.device = device_str
     ns.torch_device = torch_device
     ns.cluster = False
 
-    dls = get_dataloaders(dataset_name, ns)
+    dls = get_dataloaders(data_name, ns)
     print("Dataset sizes:", {k: len(v.dataset) for k, v in dls.items()})
 
+    backend = getattr(cfg.trainer_backend, 'name', 'legacy')
     models = build_models(cfg, torch_device)
     print("Parameter counts:", {k: count_params(m) for k, m in models.items()})
 
-    params = sum([list(m.parameters()) for m in models.values()], [])
-    optimizer = torch.optim.Adam(params, lr=float(ns.lr), weight_decay=getattr(ns, "weight_decay", 0.0))
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode="min", factor=0.1, patience=ns.patience
-    )
+    if backend == 'legacy':
+        params = sum([list(m.parameters()) for m in models.values()], [])
+        optimizer = torch.optim.Adam(params, lr=float(
+            ns.lr), weight_decay=getattr(ns, "weight_decay", 0.0))
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode="min", factor=0.1, patience=ns.patience
+        )
+        trainer = Trainer(models, dls, optimizer, scheduler, ns, torch_device)
+        print(
+            f"\n[Backend: legacy] Starting training for {ns.epochs} epochs...")
+        history = trainer.fit(ns.epochs)
+    else:
+        if pl is None:
+            raise RuntimeError(
+                "pytorch-lightning is not installed but trainer_backend=lightning was selected")
 
-    trainer = Trainer(models, dls, optimizer, scheduler, ns, torch_device)
-    print(f"\nStarting training for {ns.epochs} epochs...")
-    history = trainer.fit(ns.epochs)
+        class HARLightningModule(pl.LightningModule):
+            def __init__(self, cfg, ns, models):
+                super().__init__()
+                # optional minimal logging
+                self.save_hyperparameters(ignore=["models"])
+                self.pose2imu = models["pose2imu"]
+                self.fe = models["fe"]
+                self.ac = models["ac"]
+                self.alpha = getattr(cfg.experiment, 'alpha', 1.0)
+                self.beta = getattr(cfg.experiment, 'beta', 0.0)
+                self.lr = float(ns.lr)
+                self.weight_decay = float(getattr(ns, 'weight_decay', 0.0))
+                self.patience = int(ns.patience)
+                self._val_preds = []
+                self._val_targets = []
+                self.ce = torch.nn.CrossEntropyLoss()
+
+            def forward(self, pose):
+                return self.pose2imu(pose)
+
+            def _shared_step(self, batch):
+                pose, acc, labels = batch
+                pose, acc, labels = pose.to(self.device), acc.to(
+                    self.device), labels.to(self.device)
+                sim_acc = self.pose2imu(pose)
+                mse_loss = torch.nn.functional.mse_loss(sim_acc, acc)
+                real_feat = self.fe(acc)
+                sim_feat = self.fe(sim_acc)
+                sim_loss = (1 - torch.nn.functional.cosine_similarity(sim_feat, real_feat, dim=1)
+                            ).mean() if self.beta > 0 else torch.tensor(0.0, device=self.device)
+                logits_real = self.ac(real_feat)
+                logits_sim = self.ac(sim_feat)
+                act_loss = self.ce(logits_real, labels) + \
+                    self.ce(logits_sim, labels)
+                total = mse_loss + self.alpha * act_loss + self.beta * sim_loss
+                return total, mse_loss.detach(), sim_loss.detach(), act_loss.detach(), logits_real, labels
+
+            def training_step(self, batch, batch_idx):
+                total, mse_l, sim_l, act_l, logits, labels = self._shared_step(
+                    batch)
+                self.log("train_loss", total, prog_bar=True,
+                         on_epoch=True, on_step=False)
+                self.log("train_mse", mse_l, prog_bar=False, on_epoch=True)
+                self.log("train_act", act_l, prog_bar=False, on_epoch=True)
+                if self.beta > 0:
+                    self.log("train_sim", sim_l, prog_bar=False, on_epoch=True)
+                return total
+
+            def validation_step(self, batch, batch_idx):
+                total, mse_l, sim_l, act_l, logits, labels = self._shared_step(
+                    batch)
+                preds = torch.argmax(logits, dim=1)
+                self._val_preds.append(preds.cpu())
+                self._val_targets.append(labels.cpu())
+                self.log("val_loss", total, prog_bar=True,
+                         on_epoch=True, on_step=False)
+                return total
+
+            def on_validation_epoch_end(self):
+                if self._val_preds:
+                    preds = torch.cat(self._val_preds)
+                    targets = torch.cat(self._val_targets)
+                    # Manual macro F1
+                    num_classes = int(targets.max().item() + 1)
+                    conf = torch.zeros(
+                        num_classes, num_classes, dtype=torch.long)
+                    for p, t in zip(preds, targets):
+                        conf[t, p] += 1
+                    tp = conf.diag()
+                    fp = conf.sum(0) - tp
+                    fn = conf.sum(1) - tp
+                    precision = tp.float() / (tp + fp + 1e-8)
+                    recall = tp.float() / (tp + fn + 1e-8)
+                    f1_per_class = 2 * precision * \
+                        recall / (precision + recall + 1e-8)
+                    macro_f1 = f1_per_class.mean().item()
+                    self.log("val_f1", macro_f1, prog_bar=True, on_epoch=True)
+                self._val_preds.clear()
+                self._val_targets.clear()
+
+            def configure_optimizers(self):
+                params = list(self.pose2imu.parameters()) + \
+                    list(self.fe.parameters()) + list(self.ac.parameters())
+                optimizer = torch.optim.Adam(
+                    params, lr=self.lr, weight_decay=self.weight_decay)
+                scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+                    optimizer, mode="min", factor=0.1, patience=self.patience)
+                return {
+                    'optimizer': optimizer,
+                    'lr_scheduler': {
+                        'scheduler': scheduler,
+                        'monitor': 'val_loss',
+                        'interval': 'epoch',
+                        'frequency': 1
+                    }
+                }
+
+        lightning_module = HARLightningModule(cfg, ns, models)
+        # Basic trainer settings (can later map from cfg.trainer_backend lightning-specific keys)
+        pl_trainer = pl.Trainer(
+            max_epochs=ns.epochs,
+            accelerator='auto',
+            devices=1,
+            enable_checkpointing=False,
+            logger=False,
+            deterministic=True,
+        )
+        print(
+            f"\n[Backend: lightning] Starting training for {ns.epochs} epochs...")
+        pl_trainer.fit(
+            lightning_module, train_dataloaders=dls['train'], val_dataloaders=dls['val'])
+        # For compatibility produce history-like dict (limited)
+        history = {'train_loss': [], 'val_loss': [],
+                   'train_f1': [], 'val_f1': []}
 
     results = {
         "config": OmegaConf.to_container(cfg, resolve=True),

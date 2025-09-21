@@ -1,0 +1,15 @@
+name: lightning
+description: PyTorch Lightning backend.
+accelerator: auto
+devices: 1
+precision: 32
+log_every_n_steps: 50
+deterministic: true
+early_stopping:
+  monitor: val_loss
+  mode: min
+  patience: ${trainer.patience}
+checkpoint:
+  monitor: val_loss
+  mode: min
+  save_top_k: 1
