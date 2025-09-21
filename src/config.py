@@ -69,6 +69,12 @@ def load_config(base_path: str = None, exp_path: str = None, opts: list = None):
     # Detect cluster by SLURM env vars
     is_cluster = bool(os.environ.get("SLURM_JOB_ID") or os.environ.get("SLURM_CPUS_ON_NODE"))
 
+    # If running on cluster and cluster_overrides are defined, merge them (b overrides a)
+    if is_cluster and isinstance(cfg_dict.get("cluster_overrides"), dict):
+        overrides = cfg_dict.pop("cluster_overrides")  # remove to avoid persisting raw section
+        cfg_dict = merge_dicts(cfg_dict, overrides)
+        cfg_dict["cluster_overrides_applied"] = True
+
     # Device selection
     if is_cluster:
         device_str = "cuda" if torch.cuda.is_available() else "cpu"

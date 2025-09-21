@@ -1,0 +1,25 @@
+## MM-Fit dataset configuration
+# Defines root directory, file names, and subject splits.
+# Keep only data-related settings here; model/optim settings belong elsewhere.
+
+name: mmfit
+
+# data_dir is inferred at runtime from utils.DATA_DIR / name (not stored here)
+
+# Filenames inside each subject directory
+pose_file: pose_3d_upsample_normal.npy
+acc_file: sw_l_acc_std.npy
+sim_acc_file: sw_l_sim_acc.npy
+labels_file: labels.csv
+
+# Subject splits
+train_subjects: ["w01","w02","w03","w04","w06","w07","w08","w16","w17","w18","w00","w05"]
+val_subjects:   ["w14","w15","w19","w20"]
+test_subjects:  ["w09","w10","w11","w13"]
+
+# Optional debug subset controls (activated with data.mmfit.debug_subset=true)
+debug_subset: false
+debug_limit_per_split: 32
+
+batch_size: 64
+num_workers: 4

@@ -28,20 +28,17 @@ echo "Start time: $(date)"
 # Navigate to project directory
 cd "${SLURM_SUBMIT_DIR}"
 
-# Activate conda environment
-conda activate har
-
-# Set up environment
+# Set up environment (no conda activation needed on cluster)
 export PYTHONPATH="${SLURM_SUBMIT_DIR}:$PYTHONPATH"
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 
 # Create outputs directory
 mkdir -p outputs
 
-# Run experiment with specific hyperparameters and cluster configuration
+# Run experiment with specific hyperparameters; cluster overrides auto-applied from base.yaml
 python run_experiment.py \
     --base-config ../../configs/base.yaml \
-    --exp-config ../../configs/scenario2_cluster.yaml \
+    --exp-config ../../configs/scenario2.yaml \
     --lr $LR \
     --epochs 200 \
     --seed $((42 + SLURM_ARRAY_TASK_ID)) \

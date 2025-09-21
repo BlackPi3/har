@@ -1,0 +1,9 @@
+## Temporal feature extractor configuration
+type: temporal_feature_extractor
+input_channels: 3
+n_filters: 9
+filter_size: 5
+n_dense: 100
+window_size: 300
+drop_prob: 0.2
+pool_size: 2

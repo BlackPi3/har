@@ -1,0 +1,3 @@
+data_dir: /netscratch/zolfaghari/datasets
+num_workers: 4
+device: cuda

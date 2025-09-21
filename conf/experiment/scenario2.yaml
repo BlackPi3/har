@@ -1,0 +1,15 @@
+## Scenario 2 experiment configuration
+experiment_name: scenario2
+
+# Loss weighting coefficients consumed by legacy Trainer (mapped to scenario2_alpha/beta)
+alpha: 1.0   # weight for activity classification component
+beta: 0.0    # weight for feature similarity component
+
+use_simulated_data: false
+
+# Scheduler defaults (kept here for future Lightning integration)
+scheduler:
+  mode: min
+  factor: 0.1
+  patience: 10
+  

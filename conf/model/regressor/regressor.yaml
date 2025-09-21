@@ -1,0 +1,7 @@
+## Regressor model configuration
+type: tcn_regressor
+input_channels: 3
+num_joints: 3
+sequence_length: 300
+hidden_channels: 32  # (currently unused in implementation; placeholder for future)
+fc_hidden: 16        # (currently unused)

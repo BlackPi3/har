@@ -16,18 +16,12 @@ htmlcov/
 # macOS
 .DS_Store
 
-# Virtual envs
-venv/
-env/
-ENV/
-.venv/
-
 # PyCharm/VSCode
 .idea/
 .vscode/
 
 # Data directories (large datasets)
-data/
+datasets/
 legacy/
 
 # Experiment outputs

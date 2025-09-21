@@ -1,0 +1,23 @@
+# defining all knobs
+defaults:
+  - env: local
+  - experiment: scenario2
+  - data: mmfit
+  - model/regressor: regressor
+  - model/feature_extractor: feature_extractor
+  - model/classifier: classifier
+  - optim: adam
+  - trainer: default
+  - _self_
+
+# Global training hyperparameters
+seed: 0
+
+## Cluster-specific overrides will move to a dedicated env/ config group later.
+
+hydra:
+  run:
+    dir: experiments/outputs/${now:%Y%m%d-%H%M%S}
+  output_subdir: .hydra
+  job:
+    chdir: true
