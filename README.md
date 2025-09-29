@@ -1,149 +1,79 @@
-# Human Activity Recognition (HAR) Project
+# Human Activity Recognition (HAR)
 
-This repository contains a modular Human Activity Recognition system focused on pose-to-IMU regression and activity classification. The project uses a research-oriented structure with modular components for reproducible experiments.
+Unified, Hydra-configured training pipeline for pose-to-IMU regression + activity classification.
 
-## Project Structure
-
+## Current Layout (trimmed)
 ```
-├── src/                          # Core modular codebase
-│   ├── config.py                 # Configuration loading and merging
-│   ├── data.py                   # Dataset factory and dataloader creation
-│   ├── train.py                  # Training pipeline and Trainer class
-│   ├── inference.py              # Inference utilities
-│   ├── datasets/                 # Dataset implementations
-│   │   ├── common/               # Shared dataset utilities
-│   │   │   ├── base_dataset.py   # Base HAR dataset class
-│   │   │   ├── samplers.py       # Custom sampling strategies
-│   │   │   └── utils.py          # Common dataset utilities
-│   │   └── mmfit/                # MMFit dataset implementation
-│   │       ├── dataset.py        # MMFit dataset class
-│   │       ├── factory.py        # Dataset factory functions
-│   │       ├── loaders.py        # Data loading utilities
-│   │       └── constants.py      # Dataset constants
-│   └── models/                   # Model implementations
-│       ├── classifiers.py        # Activity classifiers
-│       ├── discriminator.py      # Domain discriminators
-│       ├── regressor.py          # Pose-to-IMU regression models
-│       └── tcn.py                # Temporal Convolutional Networks
-├── experiments/                  # Self-contained experiments
-│   └── scenario2/                # Example experiment
-│       ├── configs/              # Experiment-specific configs
-│       ├── notebooks/            # Experiment notebooks
-│       ├── outputs/              # Experiment outputs
-│       └── run_experiment.py     # CLI experiment runner
-├── configs/                      # Base configuration files
-│   ├── base.yaml                 # Base configuration
-│   └── scenario2.yaml            # Example experiment config
-├── datasets/                     # Legacy dataset implementations
-├── legacy/                       # Archived legacy code
-└── data/                         # Data directory (gitignored)
+conf/                # Hydra config root (data/, model/, experiment/, optim/, trainer_backend/, ...)
+experiments/
+  run_experiment.py  # Single entrypoint (legacy or lightning backend)
+src/
+  data.py            # Dataloader factory (dispatch by dataset name)
+  train.py           # Legacy Trainer implementation
+  models/            # Regressor / FeatureExtractor / ActivityClassifier
+  datasets/          # Dataset implementations (mmfit + others)
+docs/
+legacy/              # Older notebooks & scripts (kept for reference)
+datasets/            # Actual data directory (subject folders, not tracked)
 ```
 
-## Key Features
+## Key Ideas
+* Single command entrypoint (`experiments/run_experiment.py`)
+* Configuration-first (Hydra): compose + override at CLI
+* Two training backends: `trainer_backend=legacy` (original loop) or `trainer_backend=lightning`
+* Multi-loss objective (MSE + alpha * classification + beta * feature-similarity)
+* Automatic run directory creation per launch (Hydra) under `experiments/outputs/DATE-TIME/`
 
-- **Modular Architecture**: Clean separation between datasets, models, training, and configuration
-- **Research-Focused**: Self-contained experiments with isolated configs and outputs
-- **Reproducible**: Configuration-driven experiments with seed control
-- **Multiple Datasets**: Support for MMFit, MHAD, NTU, and adversarial datasets
-- **Flexible Training**: Multi-model training with pose-to-IMU regression and activity classification
-
-## Quick Start
-
-### 1. Setup Environment
-
+## Environments
+the code is intended to run either on `local` machine or `cluster computing`. when you're in `local` then be sure to first activate the conda env using:
 ```bash
-# Install dependencies
-pip install -r requirements.txt  # or use conda/poetry as preferred
-
-# Ensure data directory exists
-mkdir -p data/
+conda activate har
 ```
 
-### 2. Run an Experiment
-
-**Option A: Using Jupyter Notebook (for exploration)**
+## Install
 ```bash
-cd experiments/scenario2/notebooks/
-jupyter notebook scenario2.ipynb
+pip install -r requirements.txt  # (use a virtual env)
 ```
 
-**Option B: Using CLI (for reproducible runs)**
+## Data
+Place dataset subjects under the path configured in `conf/env/*.yaml` (e.g. `env/local.yaml` sets `data_dir`).
+For MM-Fit expect a structure like:
+```
+<data_dir>/mm-fit/w01/...
+```
+If your subjects are directly under `<data_dir>/w01`, adjust or set `data.data_dir` explicitly.
+
+## Run (Basic)
 ```bash
-python experiments/scenario2/run_experiment.py --config configs/scenario2.yaml --seed 42
+python experiments/run_experiment.py experiment=scenario2 trainer_backend=lightning
+```
+Common overrides:
+```bash
+python experiments/run_experiment.py trainer.epochs=50 optim.lr=5e-4 \
+  model.regressor.sequence_length=256 experiment.alpha=1.5
 ```
 
-### 3. Configuration
-
-Experiments use hierarchical YAML configuration:
-- `configs/base.yaml`: Base settings (data paths, model architectures, training parameters)
-- `experiments/*/configs/*.yaml`: Experiment-specific overrides
-
-Example configuration structure:
-```yaml
-# Base config
-device: mps
-dataset_name: mmfit
-batch_size: 64
-lr: 1e-3
-
-models:
-  regressor:
-    input_channels: 51
-    num_joints: 17
-    sequence_length: 200
-  classifier:
-    f_in: 512
-    n_classes: 12
+Short smoke test (2 epochs, legacy backend):
+```bash
+python experiments/run_experiment.py trainer_backend=legacy trainer.epochs=2
 ```
 
-## Dataset Support
+## Config Anatomy
+Root defaults file (`conf/conf.yaml`) defines a `defaults:` list specifying which groups load (data, model components, experiment, optim, trainer_backend, etc.). You override any leaf via dotted syntax.
 
-### MMFit Dataset
-- **Purpose**: Pose-to-IMU regression and activity recognition
-- **Data**: 3D pose sequences → accelerometer data
-- **Splits**: Subject-based train/val/test splits
-- **Activities**: 12 fitness activities (squats, lunges, etc.)
+Accepted dataset name keys inside `conf/data/*.yaml`: `name`, `dataset_name`, or `data_name` (current MM-Fit file uses `data_name`).
 
-### Adding New Datasets
-1. Implement dataset class inheriting from `BaseHARDataset`
-2. Create factory function in `src/datasets/{dataset}/factory.py`
-3. Add dataset name to `src/data.py` factory dispatcher
-4. Update configuration files as needed
+Example overrides:
+* Change dataset split file: `data=mmfit` (switch group member)
+* Adjust learning rate: `optim.lr=3e-4`
+* Switch backend: `trainer_backend=legacy`
+* Reduce epochs: `trainer.epochs=10`
 
-## Models
+Hydra stores the fully resolved config in each run dir; we also write `results.json` containing final metrics.
 
-- **Regressor**: TCN-based pose-to-IMU regression
-- **FeatureExtractor**: Shared feature extraction from IMU data  
-- **ActivityClassifier**: Activity classification from extracted features
-- **Discriminator**: Domain adversarial training (optional)
+## Results & Artifacts
+Each run creates: `experiments/outputs/<timestamp>/results.json` plus any future checkpoints/logs (Lightning backend currently runs without checkpointing by design; will be added soon).
 
-## Development Guidelines
+## Roadmap (Brief)
+Planned near-term improvements (full detail in `ROADMAP.md`): external LightningModule file, config-driven Lightning trainer args, debug subset config, W&B logging, Optuna sweeps, checkpointing, torchmetrics F1.
 
-### Adding New Experiments
-1. Create `experiments/{experiment_name}/` directory
-2. Add experiment-specific configs in `configs/`
-3. Create Jupyter notebook in `notebooks/`
-4. Implement CLI runner script if needed
-
-### Code Organization
-- Keep dataset-specific logic in `src/datasets/{dataset}/`
-- Use `src/datasets/common/` for shared utilities
-- Configuration should be declarative and hierarchical
-- All experiments should be reproducible with fixed seeds
-
-## Legacy Code
-
-The `legacy/` directory contains archived implementations that have been refactored:
-- `scenario2_legacy.ipynb` → `experiments/scenario2/notebooks/scenario2.ipynb`
-- Monolithic dataset files → modular `src/datasets/` structure
-
-## Contributing
-
-1. Follow the modular architecture principles
-2. Add tests for new components in `tests/`
-3. Update documentation when adding new features
-4. Use type hints and docstrings for public APIs
-
-## License
-
-[Add your license information here]

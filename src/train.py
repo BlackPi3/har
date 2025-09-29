@@ -106,13 +106,4 @@ class Trainer:
             for k, m in self.models.items():
                 m.load_state_dict(best["state"][k])
         return history
-        
-        print("-" * 70)
-        print(f"Training completed. Best Val F1: {best['f1']:.4f}")
-        
-        # restore best
-        if best["state"]:
-            for k, m in self.models.items():
-                m.load_state_dict(best["state"][k])
-        return history
 # ...existing code...

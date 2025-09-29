@@ -15,6 +15,7 @@ from src.config import set_seed
 from src.data import get_dataloaders
 from src.train import Trainer
 from src.models import Regressor, FeatureExtractor, ActivityClassifier
+from src.lightning_module import HARLightningModule
 
 import pytorch_lightning as pl
 
@@ -157,106 +158,7 @@ def main(cfg: DictConfig) -> Any:
         history = trainer.fit(ns.epochs)
     else:
         if pl is None:
-            raise RuntimeError(
-                "pytorch-lightning is not installed but trainer_backend=lightning was selected")
-
-        class HARLightningModule(pl.LightningModule):
-            def __init__(self, cfg, ns, models):
-                super().__init__()
-                # optional minimal logging
-                self.save_hyperparameters(ignore=["models"])
-                self.pose2imu = models["pose2imu"]
-                self.fe = models["fe"]
-                self.ac = models["ac"]
-                self.alpha = getattr(cfg.experiment, 'alpha', 1.0)
-                self.beta = getattr(cfg.experiment, 'beta', 0.0)
-                self.lr = float(ns.lr)
-                self.weight_decay = float(getattr(ns, 'weight_decay', 0.0))
-                self.patience = int(ns.patience)
-                self._val_preds = []
-                self._val_targets = []
-                self.ce = torch.nn.CrossEntropyLoss()
-
-            def forward(self, pose):
-                return self.pose2imu(pose)
-
-            def _shared_step(self, batch):
-                pose, acc, labels = batch
-                pose, acc, labels = pose.to(self.device), acc.to(
-                    self.device), labels.to(self.device)
-                sim_acc = self.pose2imu(pose)
-                mse_loss = torch.nn.functional.mse_loss(sim_acc, acc)
-                real_feat = self.fe(acc)
-                sim_feat = self.fe(sim_acc)
-                sim_loss = (1 - torch.nn.functional.cosine_similarity(sim_feat, real_feat, dim=1)
-                            ).mean() if self.beta > 0 else torch.tensor(0.0, device=self.device)
-                logits_real = self.ac(real_feat)
-                logits_sim = self.ac(sim_feat)
-                act_loss = self.ce(logits_real, labels) + \
-                    self.ce(logits_sim, labels)
-                total = mse_loss + self.alpha * act_loss + self.beta * sim_loss
-                return total, mse_loss.detach(), sim_loss.detach(), act_loss.detach(), logits_real, labels
-
-            def training_step(self, batch, batch_idx):
-                total, mse_l, sim_l, act_l, logits, labels = self._shared_step(
-                    batch)
-                self.log("train_loss", total, prog_bar=True,
-                         on_epoch=True, on_step=False)
-                self.log("train_mse", mse_l, prog_bar=False, on_epoch=True)
-                self.log("train_act", act_l, prog_bar=False, on_epoch=True)
-                if self.beta > 0:
-                    self.log("train_sim", sim_l, prog_bar=False, on_epoch=True)
-                return total
-
-            def validation_step(self, batch, batch_idx):
-                total, mse_l, sim_l, act_l, logits, labels = self._shared_step(
-                    batch)
-                preds = torch.argmax(logits, dim=1)
-                self._val_preds.append(preds.cpu())
-                self._val_targets.append(labels.cpu())
-                self.log("val_loss", total, prog_bar=True,
-                         on_epoch=True, on_step=False)
-                return total
-
-            def on_validation_epoch_end(self):
-                if self._val_preds:
-                    preds = torch.cat(self._val_preds)
-                    targets = torch.cat(self._val_targets)
-                    # Manual macro F1
-                    num_classes = int(targets.max().item() + 1)
-                    conf = torch.zeros(
-                        num_classes, num_classes, dtype=torch.long)
-                    for p, t in zip(preds, targets):
-                        conf[t, p] += 1
-                    tp = conf.diag()
-                    fp = conf.sum(0) - tp
-                    fn = conf.sum(1) - tp
-                    precision = tp.float() / (tp + fp + 1e-8)
-                    recall = tp.float() / (tp + fn + 1e-8)
-                    f1_per_class = 2 * precision * \
-                        recall / (precision + recall + 1e-8)
-                    macro_f1 = f1_per_class.mean().item()
-                    self.log("val_f1", macro_f1, prog_bar=True, on_epoch=True)
-                self._val_preds.clear()
-                self._val_targets.clear()
-
-            def configure_optimizers(self):
-                params = list(self.pose2imu.parameters()) + \
-                    list(self.fe.parameters()) + list(self.ac.parameters())
-                optimizer = torch.optim.Adam(
-                    params, lr=self.lr, weight_decay=self.weight_decay)
-                scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-                    optimizer, mode="min", factor=0.1, patience=self.patience)
-                return {
-                    'optimizer': optimizer,
-                    'lr_scheduler': {
-                        'scheduler': scheduler,
-                        'monitor': 'val_loss',
-                        'interval': 'epoch',
-                        'frequency': 1
-                    }
-                }
-
+            raise RuntimeError("pytorch-lightning is not installed but trainer_backend=lightning was selected")
         lightning_module = HARLightningModule(cfg, ns, models)
         # Basic trainer settings (can later map from cfg.trainer_backend lightning-specific keys)
         pl_trainer = pl.Trainer(
