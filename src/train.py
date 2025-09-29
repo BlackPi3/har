@@ -2,7 +2,24 @@ import copy
 import numpy as np
 import torch
 import torch.nn.functional as F
-from sklearn.metrics import f1_score
+
+try:  # Keep optional import; fallback if sklearn not installed
+    from sklearn.metrics import f1_score  # type: ignore
+except Exception:  # pragma: no cover - fallback path
+    def f1_score(trues, preds, average="macro"):
+        import numpy as _np
+        trues = _np.asarray(trues)
+        preds = _np.asarray(preds)
+        classes = _np.unique(_np.concatenate([trues, preds]))
+        f1s = []
+        for c in classes:
+            tp = ((preds == c) & (trues == c)).sum()
+            fp = ((preds == c) & (trues != c)).sum()
+            fn = ((preds != c) & (trues == c)).sum()
+            precision = tp / (tp + fp + 1e-8)
+            recall = tp / (tp + fn + 1e-8)
+            f1s.append(2 * precision * recall / (precision + recall + 1e-8))
+        return float(_np.mean(f1s))
 
 # ...existing code...
 class Trainer:

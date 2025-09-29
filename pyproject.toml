@@ -1,19 +1,23 @@
+############################################
+# Minimal packaging config (no extras)
+############################################
+
 [build-system]
 requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "har-project"
+name = "har"
 version = "0.1.0"
-description = "Human Activity Recognition project"
-requires-python = ">=3.8"
-dependencies = [
-    # Add your main dependencies here if you want
-    # "torch",
-    # "numpy", 
-    # "matplotlib",
-    # "pyyaml",
-]
+description = "Human Activity Recognition (Hydra + Lightning)"
+requires-python = ">=3.11"
+# Keep dependencies empty; conda environment manages them.
+dependencies = []
+
+[tool.setuptools]
+package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
-# Automatically find all packages
+where = ["src"]
+include = ["*"]
+namespaces = false

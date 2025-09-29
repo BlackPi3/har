@@ -7,13 +7,25 @@ import os
 import json
 from pathlib import Path
 from typing import Any
+import sys
 import torch
 import hydra
 from omegaconf import DictConfig, OmegaConf
 
-from src.config import set_seed
+# --- Robust import of project modules ---------------------------------------
+# If user forgot to run `pip install -e .`, ensure repo root / src is on sys.path.
+try:
+    from src.config import set_seed  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover
+    repo_root = Path(__file__).resolve().parents[1]
+    src_dir = repo_root / "src"
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+    if src_dir.exists() and str(src_dir) not in sys.path:
+        sys.path.insert(0, str(src_dir))
+    from src.config import set_seed  # retry
+
 from src.data import get_dataloaders
-from src.train import Trainer
 from src.models import Regressor, FeatureExtractor, ActivityClassifier
 from src.lightning_module import HARLightningModule
 
@@ -83,7 +95,7 @@ def main(cfg: DictConfig) -> Any:
     print(f"Dataset: {data_dir}")
     print(f"Working directory (Hydra run dir): {Path.cwd()}")
 
-    # Build lightweight config namespace expected by legacy trainer & dataloaders
+    # Build lightweight namespace expected by dataloaders (legacy trainer removed)
     from types import SimpleNamespace
     legacy_keys = [
         "data_dir",
@@ -141,41 +153,51 @@ def main(cfg: DictConfig) -> Any:
     dls = get_dataloaders(data_name, ns)
     print("Dataset sizes:", {k: len(v.dataset) for k, v in dls.items()})
 
-    backend = getattr(cfg.trainer_backend, 'name', 'legacy')
     models = build_models(cfg, torch_device)
     print("Parameter counts:", {k: count_params(m) for k, m in models.items()})
 
-    if backend == 'legacy':
-        params = sum([list(m.parameters()) for m in models.values()], [])
-        optimizer = torch.optim.Adam(params, lr=float(
-            ns.lr), weight_decay=getattr(ns, "weight_decay", 0.0))
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode="min", factor=0.1, patience=ns.patience
-        )
-        trainer = Trainer(models, dls, optimizer, scheduler, ns, torch_device)
-        print(
-            f"\n[Backend: legacy] Starting training for {ns.epochs} epochs...")
-        history = trainer.fit(ns.epochs)
-    else:
-        if pl is None:
-            raise RuntimeError("pytorch-lightning is not installed but trainer_backend=lightning was selected")
-        lightning_module = HARLightningModule(cfg, ns, models)
-        # Basic trainer settings (can later map from cfg.trainer_backend lightning-specific keys)
-        pl_trainer = pl.Trainer(
-            max_epochs=ns.epochs,
-            accelerator='auto',
-            devices=1,
-            enable_checkpointing=False,
-            logger=False,
-            deterministic=True,
-        )
-        print(
-            f"\n[Backend: lightning] Starting training for {ns.epochs} epochs...")
-        pl_trainer.fit(
-            lightning_module, train_dataloaders=dls['train'], val_dataloaders=dls['val'])
-        # For compatibility produce history-like dict (limited)
-        history = {'train_loss': [], 'val_loss': [],
-                   'train_f1': [], 'val_f1': []}
+    if pl is None:
+        raise RuntimeError("pytorch-lightning must be installed for training")
+    lightning_module = HARLightningModule(cfg, ns, models)
+    tcfg = cfg.trainer
+    callbacks = []
+    if getattr(tcfg.early_stopping, 'enabled', False):
+        from pytorch_lightning.callbacks import EarlyStopping
+        callbacks.append(EarlyStopping(
+            monitor=tcfg.early_stopping.monitor,
+            mode=tcfg.early_stopping.mode,
+            patience=tcfg.early_stopping.patience,
+            min_delta=tcfg.early_stopping.get('min_delta', 0.0),
+            verbose=False,
+        ))
+    if getattr(tcfg.checkpoint, 'enabled', False):
+        from pytorch_lightning.callbacks import ModelCheckpoint
+        ckpt_dir = Path(tcfg.checkpoint.dirpath)
+        ckpt_dir.mkdir(parents=True, exist_ok=True)
+        callbacks.append(ModelCheckpoint(
+            monitor=tcfg.checkpoint.monitor,
+            mode=tcfg.checkpoint.mode,
+            save_top_k=tcfg.checkpoint.save_top_k,
+            dirpath=str(ckpt_dir),
+            filename=tcfg.checkpoint.filename,
+            save_last=tcfg.checkpoint.get('save_last', True),
+        ))
+    logger = tcfg.logger if tcfg.logger else False
+    pl_trainer = pl.Trainer(
+        max_epochs=ns.epochs,
+        accelerator=tcfg.accelerator,
+        devices=tcfg.devices,
+        precision=tcfg.precision,
+        deterministic=tcfg.deterministic,
+        log_every_n_steps=tcfg.log_every_n_steps,
+        gradient_clip_val=tcfg.get('gradient_clip_val', None),
+        enable_checkpointing=tcfg.enable_checkpointing,
+        callbacks=callbacks,
+        logger=logger,
+    )
+    print(f"\n[Lightning] Starting training for {ns.epochs} epochs...")
+    pl_trainer.fit(lightning_module, train_dataloaders=dls['train'], val_dataloaders=dls['val'])
+    history = {'train_loss': [], 'val_loss': [], 'train_f1': [], 'val_f1': []}
 
     results = {
         "config": OmegaConf.to_container(cfg, resolve=True),

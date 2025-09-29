@@ -1,0 +1,17 @@
+name: har
+channels:
+  - conda-forge
+  - pytorch
+dependencies:
+  - python=3.11
+  - pytorch
+  - numpy
+  - scipy
+  - pandas
+  - pyyaml
+  - lightning
+  - torchmetrics
+  - matplotlib
+  - seaborn
+  - hydra-core
+  - pip

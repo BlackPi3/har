@@ -8,7 +8,6 @@ defaults:
   - model/classifier: classifier
   - optim: adam
   - trainer: default
-  - trainer_backend: lightning
   - _self_
 
 # Global training hyperparameters
