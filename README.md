@@ -80,9 +80,6 @@ Global seed configured in `conf/conf.yaml` under `seed:`. Override per run:
 python experiments/run_experiment.py seed=42
 ```
 
-## F1 Metric Implementation Note
-The validation macro F1 now uses a stateful `torchmetrics.MulticlassF1Score` updated each batch and computed/reset at epoch end (no Python-side accumulation of all predictions). This is memory constant, DDP-friendly, and scales better.
-
 ## Config Anatomy
 Root defaults file (`conf/conf.yaml`) defines a `defaults:` list specifying which groups load (data, model components, experiment, optim, trainer, etc.). You override any leaf via dotted syntax.
 
@@ -110,4 +107,39 @@ Each run creates: `experiments/outputs/<timestamp>/results.json` plus checkpoint
 
 ## Roadmap (Brief)
 Planned near-term improvements (see `ROADMAP.md`): debug subset config, W&B logging, Optuna sweeps, torchmetrics F1, logging refinements.
+
+## Packaging & Imports (Why `import src` Works Here)
+This repository intentionally exposes a top-level package named `src` (because `src/__init__.py` exists). Normally, "src layout" projects nest the real package (e.g., `src/har/`) and you would import `har`. We kept `src` directly for lightweight research iteration.
+
+Historical issue encountered:
+* Initial `pyproject.toml` used auto-discovery with:
+  ```toml
+  [tool.setuptools]
+  package-dir = {"" = "src"}
+  [tool.setuptools.packages.find]
+  where = ["src"]
+  include = ["*"]
+  ```
+* Setuptools searched **inside** `src/` for subpackages and did not register the root directory itself as a package named `src`.
+* Result: `pip install -e .` produced metadata but `import src` failed when running scripts from outside the repo root.
+
+Fix applied:
+```toml
+[tool.setuptools]
+packages = ["src"]
+```
+This explicitly instructs setuptools to install the `src/` directory as the package `src`.
+
+Key points / how to avoid future confusion:
+1. Editable install must be run *after* activating the target conda env: `conda activate har && pip install -e .`.
+2. If you change back to auto-discovery, `import src` will likely break again.
+3. To migrate to a conventional layout later: move code into `src/har/`, rename in `pyproject.toml` to `packages = ["har"]`, and update imports (`from src.` → `from har.`).
+4. Tests include a pytest `pythonpath = ["."]` safeguard, but with the explicit package list it’s not strictly required for runtime.
+
+Troubleshooting checklist if `ModuleNotFoundError: No module named 'src'` reappears:
+* Confirm installation: `pip show har` (or whatever `[project].name` is).
+* Inspect site-packages link: `python -c "import src, inspect; print(src.__file__)"`.
+* Ensure no stale wheel in a different environment (reactivate env, reinstall).
+
+This section documents the rationale so we do not repeat the previous trial-and-error phase.
 

@@ -1,30 +1,27 @@
 """Unified Experiment Runner (Hydra-based)
 
-Use: python experiments/run_experiment.py experiment=scenario2
-Override any value: python experiments/run_experiment.py epochs=5 lr=5e-4 model.regressor.sequence_length=256
+Usage examples:
+    python experiments/run_experiment.py data=mmfit_debug trainer.epochs=2
+    python experiments/run_experiment.py experiment=scenario2 trainer.epochs=5 optim.lr=5e-4
+
+NOTE: For plain `python experiments/run_experiment.py ...` to work, the project
+root (the directory containing `src/`) must be on PYTHONPATH. This is naturally
+true if:
+    1. You've run `pip install -e .` inside the active environment, OR
+    2. You invoke via module form: `python -m experiments.run_experiment ...`
+
+If you see `ModuleNotFoundError: No module named 'src'`, ensure the editable
+install succeeded (activate env, then `pip install -e .`).
 """
 import os
 import json
 from pathlib import Path
 from typing import Any
-import sys
 import torch
 import hydra
 from omegaconf import DictConfig, OmegaConf
 
-# --- Robust import of project modules ---------------------------------------
-# If user forgot to run `pip install -e .`, ensure repo root / src is on sys.path.
-try:
-    from src.config import set_seed  # type: ignore
-except ModuleNotFoundError:  # pragma: no cover
-    repo_root = Path(__file__).resolve().parents[1]
-    src_dir = repo_root / "src"
-    if str(repo_root) not in sys.path:
-        sys.path.insert(0, str(repo_root))
-    if src_dir.exists() and str(src_dir) not in sys.path:
-        sys.path.insert(0, str(src_dir))
-    from src.config import set_seed  # retry
-
+from src.config import set_seed  # type: ignore
 from src.data import get_dataloaders
 from src.models import Regressor, FeatureExtractor, ActivityClassifier
 from src.lightning_module import HARLightningModule

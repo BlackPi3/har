@@ -15,9 +15,41 @@ requires-python = ">=3.11"
 dependencies = []
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+# Explicitly list the 'src' package so it is installed. The prior configuration
+# mapped the root to the 'src' directory and attempted to auto-discover, which
+# skips a top-level package whose relative path is ''. This resulted in no
+# installable 'src' package and thus ModuleNotFoundError when running scripts
+# outside the project root. Keeping it explicit avoids ambiguity.
+#
+# WHY THIS WORKS / LESSONS LEARNED
+# --------------------------------
+# 1. We use a *single* top-level Python package literally named `src` (because
+#    `src/__init__.py` exists). This is deliberate for this research project.
+# 2. The conventional "src layout" normally has `src/<real_pkg_name>/...` and you
+#    would import `import <real_pkg_name>`. Here we import `import src` directly.
+# 3. With the earlier auto-discovery config:
+#        [tool.setuptools]
+#        package-dir = {"" = "src"}
+#        [tool.setuptools.packages.find]
+#        where = ["src"]
+#    setuptools looks *inside* `src/` for subpackages. The *root* package at that
+#    level has an empty relative name, so nothing named `src` was installed.
+# 4. Editable install then produced metadata (wheel / dist-info) but no actual
+#    importable `src` package in site-packages, so `python experiments/...` failed
+#    with `ModuleNotFoundError: No module named 'src'` unless invoked from repo root.
+# 5. By enumerating `packages = ["src"]` we tell setuptools explicitly: install the
+#    directory `src/` itself as a package named `src`.
+# 6. After `pip install -e .` the interpreter can resolve `import src` from *any*
+#    working directory inside the environment.
+# 7. Tests also set `pythonpath = ["."]` (see below) for stability, but that is now
+#    redundant for editable installs; it mainly protects ad-hoc test execution.
+# 8. If in future we rename to a semantic package (e.g. `har`), restructure to
+#    `src/har/` and change this list to `packages = ["har"]`.
+# 9. If you accidentally revert to the auto-find config, re-run editable install and
+#    imports fail again—this comment exists to avoid repeating that cycle.
+packages = ["src"]
 
-[tool.setuptools.packages.find]
-where = ["src"]
-include = ["*"]
-namespaces = false
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+

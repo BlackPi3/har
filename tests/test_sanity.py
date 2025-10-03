@@ -25,7 +25,10 @@ def test_forward_and_loss():
 
     module = HARLightningModule(cfg, ns, models)
 
-    pose = torch.randn(batch_size, pose_channels, window_len)
+    # Regressor expects input shape (B, C, J, T) because it uses Conv2d over joints x time
+    pose = torch.randn(batch_size, pose_channels, num_joints, window_len)
+    # Sanity checks to make failure modes clearer
+    assert pose.shape == (batch_size, pose_channels, num_joints, window_len)
     acc = torch.randn(batch_size, acc_channels, window_len)
     labels = torch.randint(0, n_classes, (batch_size,))
 
