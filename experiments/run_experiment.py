@@ -179,7 +179,36 @@ def main(cfg: DictConfig) -> Any:
             filename=tcfg.checkpoint.filename,
             save_last=tcfg.checkpoint.get('save_last', True),
         ))
-    logger = tcfg.logger if tcfg.logger else False
+    # Logger selection (W&B optional)
+    logger = False
+    use_wandb = False
+    if (getattr(tcfg, 'logger', None) == 'wandb') or (hasattr(tcfg, 'wandb') and getattr(tcfg.wandb, 'enabled', False)):
+        use_wandb = True
+    if use_wandb:
+        try:
+            import os as _os
+            from pytorch_lightning.loggers import WandbLogger  # type: ignore
+            if hasattr(tcfg, 'wandb') and getattr(tcfg.wandb, 'mode', None) in ('offline', 'disabled'):
+                _os.environ['WANDB_MODE'] = tcfg.wandb.mode
+            wargs = {}
+            for key in ('project', 'entity', 'group', 'name', 'tags'):
+                if hasattr(tcfg, 'wandb') and getattr(tcfg.wandb, key, None):
+                    wargs[key] = getattr(tcfg.wandb, key)
+            if 'name' not in wargs or not wargs['name']:
+                wargs['name'] = exp_name
+            logger = WandbLogger(**wargs, log_model=False)
+            logger.experiment.config.update({
+                'alpha': getattr(cfg.experiment, 'alpha', None),
+                'beta': getattr(cfg.experiment, 'beta', None),
+                'lr': ns.lr,
+                'weight_decay': ns.weight_decay,
+                'epochs': ns.epochs,
+                'dataset': data_name,
+            }, allow_val_change=True)
+            print("✓ W&B logger initialized")
+        except ImportError:
+            print("W&B requested but not installed. Install via 'pip install wandb'. Proceeding without logger.")
+            logger = False
     pl_trainer = pl.Trainer(
         max_epochs=ns.epochs,
         accelerator=tcfg.accelerator,
@@ -233,6 +262,18 @@ def main(cfg: DictConfig) -> Any:
     }
     with open("results.json", "w") as f:
         json.dump(results, f, indent=2)
+
+    if use_wandb and logger:
+        try:
+            logger.experiment.log({
+                'final/val_loss_last': last_val_loss,
+                'final/val_f1_last': last_val_f1,
+                'final/best_val_f1': best_val_f1,
+                'final/best_val_loss': best_val_loss,
+            })
+        except Exception as e:  # pragma: no cover
+            print(f"Warning: failed to log final metrics to W&B: {e}")
+
     print("\nExperiment completed! results.json saved.")
     return history
 

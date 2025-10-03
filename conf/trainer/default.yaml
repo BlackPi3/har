@@ -11,6 +11,16 @@ gradient_clip_val: null    # e.g. 1.0 to enable
 enable_checkpointing: true
 logger: false              # future: wandb | tensorboard | false
 
+wandb:
+  enabled: false
+  project: har
+  entity: null
+  group: null
+  name: null
+  tags: []
+  mode: online  # online | offline | disabled
+  save_code: true
+
 early_stopping:
   enabled: true
   monitor: val_loss

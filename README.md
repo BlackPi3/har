@@ -108,6 +108,30 @@ Each run creates: `experiments/outputs/<timestamp>/results.json` plus checkpoint
 ## Roadmap (Brief)
 Planned near-term improvements (see `ROADMAP.md`): debug subset config, W&B logging, Optuna sweeps, torchmetrics F1, logging refinements.
 
+## Weights & Biases Logging (Optional)
+Enable W&B logging via Hydra overrides:
+```bash
+python experiments/run_experiment.py trainer.logger=wandb trainer.wandb.enabled=true trainer.wandb.project=har
+```
+Additional useful overrides:
+```bash
+# Offline mode (no network)
+python experiments/run_experiment.py trainer.logger=wandb trainer.wandb.enabled=true trainer.wandb.mode=offline
+
+# Add grouping / tags
+python experiments/run_experiment.py trainer.logger=wandb trainer.wandb.enabled=true \
+  trainer.wandb.group=scenario2 trainer.wandb.tags='["mmfit","alpha1.0"]'
+```
+If `wandb` is not installed the run will continue without a logger and print a warning.
+Environment variable alternative:
+```bash
+export WANDB_API_KEY=...  # prior to launching
+```
+Logged items:
+* Scalars: train/val losses, val_f1, best_val_f1, learning rate (if added later)
+* Config: alpha, beta, lr, weight_decay, epochs, dataset
+* Final summary metrics (also in `results.json`).
+
 ## Packaging & Imports (Why `import src` Works Here)
 This repository intentionally exposes a top-level package named `src` (because `src/__init__.py` exists). Normally, "src layout" projects nest the real package (e.g., `src/har/`) and you would import `har`. We kept `src` directly for lightweight research iteration.
 
