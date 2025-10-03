@@ -198,13 +198,40 @@ def main(cfg: DictConfig) -> Any:
     print(f"\n[Lightning] Starting training for {ns.epochs} epochs...")
     pl_trainer.fit(lightning_module, train_dataloaders=dls['train'], val_dataloaders=dls['val'])
     history = {'train_loss': [], 'val_loss': [], 'train_f1': [], 'val_f1': []}
+    # --- Collect final & best metrics -------------------------------------
+    def _to_float(x):
+        try:
+            if x is None:
+                return None
+            if hasattr(x, 'item'):
+                return float(x.item())
+            return float(x)
+        except Exception:
+            return None
+
+    callback_metrics = getattr(pl_trainer, 'callback_metrics', {}) or {}
+    last_val_loss = _to_float(callback_metrics.get('val_loss'))
+    last_val_f1 = _to_float(callback_metrics.get('val_f1'))
+    best_val_f1 = _to_float(getattr(lightning_module, 'best_val_f1', None))
+
+    # Derive best val_loss from checkpoint callback if present
+    best_val_loss = None
+    for cb in callbacks:
+        cls_name = cb.__class__.__name__
+        if cls_name == 'ModelCheckpoint' and getattr(cb, 'monitor', None) == tcfg.checkpoint.monitor:
+            score = getattr(cb, 'best_model_score', None)
+            best_val_loss = _to_float(score)
+            break
 
     results = {
         "config": OmegaConf.to_container(cfg, resolve=True),
-        "history": history,
+        "history": history,  # placeholder until (optional) per-epoch logging added
         "final_metrics": {
-            "train_loss": history["train_loss"][-1] if history["train_loss"] else None,
-            "val_loss": history["val_loss"][-1] if history["val_loss"] else None,
+            "train_loss_last": history["train_loss"][-1] if history["train_loss"] else None,
+            "val_loss_last": last_val_loss,
+            "val_f1_last": last_val_f1,
+            "best_val_f1": best_val_f1,
+            "best_val_loss": best_val_loss,
         },
     }
     with open("results.json", "w") as f:

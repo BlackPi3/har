@@ -58,6 +58,31 @@ Short smoke test (2 epochs):
 python experiments/run_experiment.py trainer.epochs=2
 ```
 
+## Fast Debug Run
+Use the tiny debug split to validate end-to-end behavior quickly:
+```bash
+python experiments/run_experiment.py data=mmfit_debug experiment=debug trainer.epochs=2
+```
+What this does:
+* Restricts subjects to 1 per split
+* Optionally limits samples per split (`debug_limit_per_split`)
+* Runs only 2 epochs (override)
+* Computes macro F1 (torchmetrics) at epoch end
+
+Ultra-fast plumbing smoke (no checkpoints / early stopping):
+```bash
+python experiments/run_experiment.py data=mmfit_debug experiment=debug trainer.epochs=1 trainer.enable_checkpointing=false trainer.early_stopping.enabled=false
+```
+
+## Determinism / Seeding
+Global seed configured in `conf/conf.yaml` under `seed:`. Override per run:
+```bash
+python experiments/run_experiment.py seed=42
+```
+
+## F1 Metric Implementation Note
+The validation macro F1 now uses a stateful `torchmetrics.MulticlassF1Score` updated each batch and computed/reset at epoch end (no Python-side accumulation of all predictions). This is memory constant, DDP-friendly, and scales better.
+
 ## Config Anatomy
 Root defaults file (`conf/conf.yaml`) defines a `defaults:` list specifying which groups load (data, model components, experiment, optim, trainer, etc.). You override any leaf via dotted syntax.
 
@@ -72,6 +97,16 @@ Hydra stores the fully resolved config in each run dir; we also write `results.j
 
 ## Results & Artifacts
 Each run creates: `experiments/outputs/<timestamp>/results.json` plus checkpoints (if enabled in `trainer.checkpoint.enabled`).
+
+`results.json` now contains:
+* `config`: fully resolved Hydra config
+* `history`: placeholder dict (future per-epoch aggregation)
+* `final_metrics`:
+  - `train_loss_last`: last logged train loss (if tracked in future)
+  - `val_loss_last`: validation loss after final epoch
+  - `val_f1_last`: validation macro F1 after final epoch
+  - `best_val_f1`: best macro F1 observed across epochs
+  - `best_val_loss`: best monitored validation loss (from checkpoint callback)
 
 ## Roadmap (Brief)
 Planned near-term improvements (see `ROADMAP.md`): debug subset config, W&B logging, Optuna sweeps, torchmetrics F1, logging refinements.

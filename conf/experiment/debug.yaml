@@ -1,0 +1,9 @@
+defaults:
+  - scenario2
+
+# Debug-focused overrides (fast iteration)
+experiment_name: debug_scenario2
+
+# Keep same alpha/beta from scenario2 unless overridden
+
+# Suggested usage: data=mmfit_debug experiment=debug trainer.epochs=2

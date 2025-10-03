@@ -41,13 +41,15 @@ class HARLightningModule(pl.LightningModule):
         self.lr = self.hparams['lr']
         self.weight_decay = self.hparams['weight_decay']
         self.patience = self.hparams['patience']
-        # Buffers for validation predictions/targets; used to compute macro F1 over full epoch
-        self._val_preds = []  # list[Tensor]
-        self._val_targets = []  # list[Tensor]
-
-        # Loss + metric (metric lazily created once num_classes known)
+        # Loss + metrics
         self.ce = torch.nn.CrossEntropyLoss()
-        self.val_f1_metric = None  # set to MulticlassF1Score after first val epoch batch
+        # We can infer number of classes from classifier output layer
+        try:
+            self.num_classes = int(self.ac.classfier.out_features)  # type: ignore[attr-defined]
+        except Exception:
+            self.num_classes = None  # fallback; will set lazily on first val batch
+        self.val_f1_metric = MulticlassF1Score(num_classes=self.num_classes, average="macro") if self.num_classes else None
+        self.best_val_f1 = None
 
     def forward(self, pose: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
         return self.pose2imu(pose)
@@ -81,23 +83,27 @@ class HARLightningModule(pl.LightningModule):
     def validation_step(self, batch, batch_idx):  # type: ignore[override]
         total, mse_l, sim_l, act_l, logits, labels = self._shared_step(batch)
         preds = torch.argmax(logits, dim=1)
-        self._val_preds.append(preds.cpu())
-        self._val_targets.append(labels.cpu())
+        # Lazily create metric if class count was unknown (e.g., dynamic classifier)
+        if self.val_f1_metric is None:
+            num_classes = int(logits.shape[1])
+            self.num_classes = num_classes
+            self.val_f1_metric = MulticlassF1Score(num_classes=num_classes, average="macro").to(self.device)
+        # Update metric state (kept on correct device by Lightning)
+        self.val_f1_metric.update(preds, labels)
         self.log("val_loss", total, prog_bar=True, on_epoch=True, on_step=False)
         return total
 
     def on_validation_epoch_end(self):  # type: ignore[override]
-        if not self._val_preds:
-            return
-        preds = torch.cat(self._val_preds)
-        targets = torch.cat(self._val_targets)
         if self.val_f1_metric is None:
-            num_classes = int(targets.max().item() + 1)
-            self.val_f1_metric = MulticlassF1Score(num_classes=num_classes, average="macro").to(self.device)
-        f1 = self.val_f1_metric(preds.to(self.device), targets.to(self.device))
+            return  # no validation batches processed
+        f1 = self.val_f1_metric.compute()
         self.log("val_f1", f1, prog_bar=True, on_epoch=True)
-        self._val_preds.clear()
-        self._val_targets.clear()
+        # Track best
+        if self.best_val_f1 is None or f1.item() > float(self.best_val_f1):
+            self.best_val_f1 = f1.item()
+            self.log("best_val_f1", f1, prog_bar=False, on_epoch=True)
+        # Reset for next epoch
+        self.val_f1_metric.reset()
 
     def configure_optimizers(self):  # type: ignore[override]
         params = list(self.pose2imu.parameters()) + list(self.fe.parameters()) + list(self.ac.parameters())
