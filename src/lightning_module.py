@@ -19,6 +19,7 @@ from __future__ import annotations
 from typing import Dict, Any
 import torch
 import pytorch_lightning as pl
+from torchmetrics.classification import MulticlassF1Score
 
 
 class HARLightningModule(pl.LightningModule):
@@ -40,9 +41,13 @@ class HARLightningModule(pl.LightningModule):
         self.lr = self.hparams['lr']
         self.weight_decay = self.hparams['weight_decay']
         self.patience = self.hparams['patience']
-        self._val_preds = []  # list of tensors
-        self._val_targets = []  # list of tensors
+        # Buffers for validation predictions/targets; used to compute macro F1 over full epoch
+        self._val_preds = []  # list[Tensor]
+        self._val_targets = []  # list[Tensor]
+
+        # Loss + metric (metric lazily created once num_classes known)
         self.ce = torch.nn.CrossEntropyLoss()
+        self.val_f1_metric = None  # set to MulticlassF1Score after first val epoch batch
 
     def forward(self, pose: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
         return self.pose2imu(pose)
@@ -82,21 +87,15 @@ class HARLightningModule(pl.LightningModule):
         return total
 
     def on_validation_epoch_end(self):  # type: ignore[override]
-        if self._val_preds:
-            preds = torch.cat(self._val_preds)
-            targets = torch.cat(self._val_targets)
+        if not self._val_preds:
+            return
+        preds = torch.cat(self._val_preds)
+        targets = torch.cat(self._val_targets)
+        if self.val_f1_metric is None:
             num_classes = int(targets.max().item() + 1)
-            conf = torch.zeros(num_classes, num_classes, dtype=torch.long)
-            for p, t in zip(preds, targets):
-                conf[t, p] += 1
-            tp = conf.diag()
-            fp = conf.sum(0) - tp
-            fn = conf.sum(1) - tp
-            precision = tp.float() / (tp + fp + 1e-8)
-            recall = tp.float() / (tp + fn + 1e-8)
-            f1_per_class = 2 * precision * recall / (precision + recall + 1e-8)
-            macro_f1 = f1_per_class.mean().item()
-            self.log("val_f1", macro_f1, prog_bar=True, on_epoch=True)
+            self.val_f1_metric = MulticlassF1Score(num_classes=num_classes, average="macro").to(self.device)
+        f1 = self.val_f1_metric(preds.to(self.device), targets.to(self.device))
+        self.log("val_f1", f1, prog_bar=True, on_epoch=True)
         self._val_preds.clear()
         self._val_targets.clear()
 
