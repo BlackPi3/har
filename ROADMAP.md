@@ -1,72 +1,72 @@
-# Project Roadmap
+# Project Roadmap (Updated)
 
-Tracking upcoming implementation tasks and enhancements. This list mirrors the current state after moving to a unified Hydra entrypoint with optional Lightning backend.
+Status legend: ✅ Done | 🟡 Partial / In Progress | 🔜 Planned | ⏭️ Deferred / Reconsider
 
-## 1. Modularize Lightning
-- [ ] Extract inline `HARLightningModule` class from `experiments/run_experiment.py` -> `src/lightning_module.py`.
-- [ ] Add docstring & type hints; expose constructor accepting `cfg` and pre-built model dict.
-- [ ] Import it in the runner (cleaner diff & testability).
+## 1. Lightning Modularization ✅
+`HARLightningModule` extracted to `src/lightning_module.py` with constructor using `cfg`, `ns`, and model dict. Runner imports it.
 
-## 2. Config-Driven Lightning Trainer
-- [ ] Extend `conf/trainer_backend/lightning.yaml` with: `max_epochs`, `accelerator`, `devices`, `precision`, `deterministic`, `gradient_clip_val`, `enable_checkpointing`, `early_stopping` block.
-- [ ] Map those keys in the runner to `pl.Trainer` arguments.
-- [ ] Add optional EarlyStopping & ModelCheckpoint callback configs.
+## 2. Config-Driven Trainer ✅
+`conf/trainer/default.yaml` supplies epochs, accelerator, devices, precision, deterministic flag, gradient clipping, checkpoint & early stopping blocks. Runner maps these to `pl.Trainer`.
 
-## 3. Checkpointing & Metrics
-- [ ] Introduce `ModelCheckpoint` (monitor: `val_loss`, save_top_k=1).
-- [ ] Save path relative to Hydra run dir (e.g. `checkpoints/`).
-- [ ] Add torchmetrics `MulticlassF1Score` (macro) replacing manual confusion matrix code.
+## 3. Checkpointing & Core Metrics ✅
+ModelCheckpoint + EarlyStopping integrated. Macro F1 via `torchmetrics.MulticlassF1Score` (streamlined batch-wise). Best F1 tracked.
 
-## 4. Debug Dataset Config
-- [ ] Create `conf/data/mmfit_debug.yaml` inheriting from base mmfit: smaller `train_subjects`, `debug_subset=true`, low limit, maybe `batch_size=8`.
-- [ ] Document usage: `data=mmfit_debug trainer.epochs=2`.
+## 4. Debug Dataset Config ✅
+`conf/data/mmfit_debug.yaml` with reduced subjects, sample caps, smaller batch size. Documented in README.
 
-## 5. W&B Integration
-- [ ] Add optional `logging=wandb` config group (API key expected in env var).
-- [ ] Implement `WandbLogger` only when selected; fallback to `False` otherwise.
-- [ ] Log: losses, val_f1, learning rate, hyperparameters.
+## 5. W&B Integration 🟡
+Optional via trainer overrides. Logging scalars + final metrics works. Missing (future): learning rate logs, artifact upload, automatic git hash.
 
-## 6. Hyperparameter Optimization (Optuna)
-- [ ] Create `experiments/run_hpo.py` using Optuna study (objective wraps Hydra composition + Lightning training).
-- [ ] Define search space via config (e.g. `hpo/space/*.yaml`).
-- [ ] Persist study to `experiments/studies/<name>.db` (SQLite) + export summary JSON.
+## 6. Hyperparameter Optimization (Optuna) 🔜
+Not started. Will add `experiments/run_hpo.py` + search space configs.
 
-## 7. Parity & Deprecation Plan
-- [ ] Run a controlled comparison (fixed seed) between legacy & lightning for a short schedule.
-- [ ] Document any metric drift; once acceptable, mark legacy backend deprecated in README and optionally remove after grace period.
+## 7. Legacy Backend Parity ⏭️ (Deprecated Strategy)
+Legacy code retained under `legacy/` but parity comparison intentionally skipped—Lightning accepted as canonical.
 
-## 8. Reproducibility & Seeds
-- [ ] Add `conf/repro.yaml` (seed, deterministic toggles, cudnn flags) & include in defaults.
-- [ ] Expose `repro.deterministic=false` override for speed runs.
+## 8. Reproducibility & Seeds 🟡
+Global `seed` in root config; deterministic flag present. No separate `repro.yaml`; cudnn benchmark/flags not explicitly exposed yet.
 
-## 9. Mixed Precision & Performance
-- [ ] Allow `precision=16` or `bf16-mixed` in lightning config (guard if unsupported by device).
-- [ ] Add timing logs (epoch duration) when `experiment.profile=true`.
+## 9. Mixed Precision & Performance 🔜
+Config supports `precision` key; no bf16/amp benchmarking or timing hooks yet.
 
-## 10. Code Quality / Tests
-- [ ] Add unit test for LightningModule forward + a single train/val step using a synthetic batch.
-- [ ] Add config composition test for every group member (parametrize over data, trainer_backend).
+## 10. Code Quality / Tests 🟡
+Added one sanity test (`tests/test_sanity.py`). Need: per-component shape tests, config composition test, reproducibility test.
 
-## 11. Metrics & Reporting
-- [ ] Extend `results.json` with: `best_val_loss`, `best_epoch`, `val_f1`.
-- [ ] Optionally write `final_config.yaml` for copy/paste reproduction.
+## 11. Metrics & Reporting 🟡
+`results.json` now has last + best val metrics (loss/F1). Missing: per-epoch history population, best epoch index, optional `final_config.yaml` dump.
 
-## 12. Dataset Path Robustness
-- [ ] Auto-detect if subjects are nested under a subfolder (e.g. `mm-fit/`) and adjust internally with a warning.
-- [ ] Validate that at least one subject loads; otherwise raise a clear error early.
+## 12. Dataset Path Robustness 🔜
+No auto-detection or validation yet (e.g. missing subjects, overlap). Planned: early sanity checks + warnings.
 
-## 13. Documentation Updates
-- [ ] Expand README with minimal example for W&B + Optuna once implemented.
-- [ ] Add diagram (models + data flow) in `docs/`.
+## 13. Documentation 🟡
+README updated (debug run, W&B, packaging rationale). Still pending: Optuna section, architecture / data-flow diagram.
 
-## 14. Cleanup
-- [ ] Remove unused legacy config loading helpers once Lightning path stabilized.
-- [ ] Prune dead code / unused imports flagged by linter.
+## 14. Cleanup 🔜
+Legacy folder still present; unused helpers not pruned. Plan: remove after confirming no regressions rely on legacy assets.
 
-## 15. Optional Future Work
-- [ ] Domain adaptation hooks (re-enable discriminator path under config flag).
-- [ ] Support additional datasets via same interface (MHAD / NTU) with dedicated config files.
-- [ ] Add simple inference script producing per-activity predictions and exporting CSV.
+## 15. Optional / Future Work 🔜
+- Domain adaptation / discriminator reintroduction under a flag
+- Additional datasets (MHAD / NTU) aligned to current interface
+- Simple inference/export script (CSV predictions)
+- Results aggregation CLI / CSV exporter
+- Model artifact registry (W&B or local)
 
 ---
-Prioritize (1) Modularize Lightning, (2) Config-driven Trainer, (3) Checkpoint + torchmetrics, then proceed toward logging & HPO.
+## High-Priority Next Sprint (Proposed)
+1. Per-epoch history capture (loss, F1, lr) + include in `results.json`.
+2. Learning rate logging + W&B integration.
+3. Results aggregation script -> CSV summary of runs.
+4. W&B artifact upload for best checkpoint (if logger active).
+5. Dataset validation (no split leakage, subject existence) with clear errors.
+
+## Medium-Term
+- Optuna integration (optimize `val_f1` / `val_loss`).
+- Mixed precision benchmarking (fp16 / bf16 where supported).
+- Additional unit tests (config composition + reproducibility).
+
+## Deferred / Revisit Later
+- Full legacy parity removal (when confident no fallback needed).
+- Discriminator / advanced adaptation features.
+
+---
+Last updated: ${now:%%Y-%m-%d} (update this timestamp when editing roadmap).
