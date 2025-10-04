@@ -6,6 +6,7 @@ lightning>=2.2.0
 torchmetrics>=1.3.0  # (future use; currently using manual F1)
 hydra-core>=1.3.2
 wandb>=0.17.0
+optuna>=3.6.0
 
 # Data handling
 pandas>=1.3.0

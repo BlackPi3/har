@@ -16,3 +16,4 @@ dependencies:
   - hydra-core
   - pip
   - wandb
+  - optuna
