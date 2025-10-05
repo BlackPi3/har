@@ -17,8 +17,8 @@ ModelCheckpoint + EarlyStopping integrated. Macro F1 via `torchmetrics.Multiclas
 ## 5. W&B Integration 🟡
 Optional via trainer overrides. Logging scalars + final metrics works. Missing (future): learning rate logs, artifact upload, automatic git hash.
 
-## 6. Hyperparameter Optimization (Optuna) 🔜
-Not started. Will add `experiments/run_hpo.py` + search space configs.
+## 6. Hyperparameter Optimization (Optuna) ✅
+Implemented unified Optuna orchestrator `experiments/run_hpo.py` with YAML search space (`conf/hpo/scenario2_mmfit.yaml`). Trials call the single-run entrypoint, write `results.json`, and the study exports `best.json` + `trials.csv`. README includes quickstart and resume instructions. Future enhancements (optional): pruning/samplers selection, multi-objective, and distributed sweeps.
 
 ## 7. Legacy Backend Parity ⏭️ (Deprecated Strategy)
 Legacy code retained under `legacy/` but parity comparison intentionally skipped—Lightning accepted as canonical.
@@ -39,17 +39,17 @@ Added one sanity test (`tests/test_sanity.py`). Need: per-component shape tests,
 No auto-detection or validation yet (e.g. missing subjects, overlap). Planned: early sanity checks + warnings.
 
 ## 13. Documentation 🟡
-README updated (debug run, W&B, packaging rationale). Still pending: Optuna section, architecture / data-flow diagram.
+README updated (debug run, W&B, packaging rationale, Optuna/HPO quickstart). Still pending: architecture / data-flow diagram.
 
 ## 14. Cleanup 🔜
-Legacy folder still present; unused helpers not pruned. Plan: remove after confirming no regressions rely on legacy assets.
+Legacy folder still present; unused helpers not pruned. The `experiments/scenario2/` directory is legacy (pre-unified HPO) and can be removed or migrated (keep analysis utilities if needed). Plan: remove after confirming no regressions rely on legacy assets.
 
 ## 15. Optional / Future Work 🔜
 - Domain adaptation / discriminator reintroduction under a flag
 - Additional datasets (MHAD / NTU) aligned to current interface
 - Simple inference/export script (CSV predictions)
-- Results aggregation CLI / CSV exporter
 - Model artifact registry (W&B or local)
+// Results aggregation CLI moved to High-Priority Next Sprint
 
 ---
 ## High-Priority Next Sprint (Proposed)
@@ -60,7 +60,7 @@ Legacy folder still present; unused helpers not pruned. Plan: remove after confi
 5. Dataset validation (no split leakage, subject existence) with clear errors.
 
 ## Medium-Term
-- Optuna integration (optimize `val_f1` / `val_loss`).
+- Optuna enhancements (pruning strategies, sampler comparison, multi-objective, distributed trials).
 - Mixed precision benchmarking (fp16 / bf16 where supported).
 - Additional unit tests (config composition + reproducibility).
 
@@ -69,4 +69,4 @@ Legacy folder still present; unused helpers not pruned. Plan: remove after confi
 - Discriminator / advanced adaptation features.
 
 ---
-Last updated: ${now:%%Y-%m-%d} (update this timestamp when editing roadmap).
+Last updated: 2025-10-05 (update this timestamp when editing roadmap).
