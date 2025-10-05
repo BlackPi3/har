@@ -45,7 +45,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--direction", choices=["maximize", "minimize"], default="maximize")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--output-root", type=str, default="experiments/outputs/hpo", help="Root folder for trial outputs (relative to repo)")
-    p.add_argument("--search-space", type=str, default=str(REPO_ROOT / "conf/hpo/mmfit_default.yaml"), help="Path to YAML file defining Optuna search space")
+    p.add_argument("--search-space", type=str, default=str(REPO_ROOT / "conf/hpo/scenario2_mmfit.yaml"), help="Path to YAML file defining Optuna search space")
     return p.parse_args()
 
 

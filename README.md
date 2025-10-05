@@ -19,6 +19,7 @@ datasets/            # Actual data directory (subject folders, not tracked)
 
 ## Key Ideas
 * Single command entrypoint (`experiments/run_experiment.py`)
+* Single HPO entrypoint (`experiments/run_hpo.py`)
 * Configuration-first (Hydra): compose + override at CLI
 * Single Lightning training backend (legacy removed)
 * Multi-loss objective (MSE + alpha * classification + beta * feature-similarity)
@@ -135,6 +136,13 @@ Logged items:
 ## Hyperparameter Optimization (Optuna)
 Use the HPO orchestrator to run sequential Optuna trials. The search space is defined in YAML and maps Hydra keys to distributions.
 
+Quick facts:
+- Default search space: `conf/hpo/scenario2_mmfit.yaml` (you can omit `--search-space`)
+- Default output root: `experiments/outputs/hpo/<study_name>/trial_XXX/`
+- Resumable: Passing the same `--study-name` and `--storage` resumes the study
+- Objective: `--metric {val_f1|val_loss}` with `--direction {maximize|minimize}`
+- Reproducibility: fixed `--seed` is propagated to all trials
+
 - Search space: `conf/hpo/scenario2_mmfit.yaml`
   - Canonical window length: `data.sensor_window_length` (models inherit via interpolation)
   - Core knobs: `optim.lr` (log), `optim.weight_decay` (log), `experiment.alpha`, `experiment.beta`
@@ -143,23 +151,47 @@ Use the HPO orchestrator to run sequential Optuna trials. The search space is de
 
 - Quick debug search (tiny split, short epochs)
   ```bash
+  conda activate har
   python experiments/run_hpo.py \
     --n-trials 10 \
     --metric val_f1 --direction maximize \
     --study-name mmfit_sc2_debug \
-    --search-space conf/hpo/scenario2_mmfit.yaml \
     data=mmfit_debug experiment=scenario2 trainer.epochs=5
   ```
 
 - Typical search (full split)
   ```bash
+  conda activate har
   python experiments/run_hpo.py \
     --n-trials 50 \
     --metric val_f1 --direction maximize \
     --study-name mmfit_sc2 \
     --storage experiments/outputs/optuna/mmfit_sc2.db \
-    --search-space conf/hpo/scenario2_mmfit.yaml \
     data=mmfit experiment=scenario2 trainer.epochs=30
+  ```
+
+- Resume a study (same name + storage)
+  ```bash
+  conda activate har
+  python experiments/run_hpo.py \
+    --n-trials 25 \
+    --metric val_f1 --direction maximize \
+    --study-name mmfit_sc2 \
+    --storage experiments/outputs/optuna/mmfit_sc2.db \
+    data=mmfit experiment=scenario2 trainer.epochs=30
+  # Adds 25 more trials onto the existing study
+  ```
+
+- With W&B logging (optional; forwarded to each trial)
+  ```bash
+  conda activate har
+  python experiments/run_hpo.py \
+    --n-trials 10 \
+    --metric val_f1 --direction maximize \
+    --study-name mmfit_sc2_wandb \
+    data=mmfit_debug experiment=scenario2 trainer.epochs=5 \
+    trainer.logger=wandb trainer.wandb.enabled=true \
+    trainer.wandb.project=har trainer.wandb.group=optuna-sc2
   ```
 
 - Outputs and artifacts
@@ -186,6 +218,12 @@ Use the HPO orchestrator to run sequential Optuna trials. The search space is de
     trainer.epochs=50 seed=0
   # Repeat with seed=1..4 and report mean ± std
   ```
+
+### Single entrypoints and legacy scripts
+- Preferred entrypoints:
+  - Training: `experiments/run_experiment.py`
+  - HPO: `experiments/run_hpo.py`
+- The folder `experiments/scenario2/` contains older, scenario-specific sweep utilities (e.g., `run_hyperparameter_search.py`, submit scripts). These are no longer required now that HPO is unified under `experiments/run_hpo.py`. You can safely ignore or remove that folder to keep a single point of entry. If you rely on any plotting/utilities there, consider migrating them into a neutral location (e.g., `experiments/analysis/`).
 
 ## Packaging & Imports (Why `import src` Works Here)
 This repository intentionally exposes a top-level package named `src` (because `src/__init__.py` exists). Normally, "src layout" projects nest the real package (e.g., `src/har/`) and you would import `har`. We kept `src` directly for lightweight research iteration.

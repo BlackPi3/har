@@ -10,6 +10,5 @@ debug_subset: true
 debug_limit_per_split: 16
 
 batch_size: 16
-num_workers: 2
 
 # Note: use with `data=mmfit_debug trainer.epochs=2`
