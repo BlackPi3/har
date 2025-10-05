@@ -83,7 +83,7 @@ python experiments/run_experiment.py seed=42
 ## Config Anatomy
 Root defaults file (`conf/conf.yaml`) defines a `defaults:` list specifying which groups load (data, model components, experiment, optim, trainer, etc.). You override any leaf via dotted syntax.
 
-Accepted dataset name keys inside `conf/data/*.yaml`: `name`, `dataset_name`, or `data_name` (current MM-Fit file uses `data_name`).
+Accepted dataset name keys inside `conf/data/*.yaml`: `name`, `dataset_name`, or `dataset_name` (current MM-Fit file uses `dataset_name`).
 
 Example overrides:
 * Change dataset split file: `data=mmfit` (switch group member)
@@ -132,6 +132,61 @@ Logged items:
 * Config: alpha, beta, lr, weight_decay, epochs, dataset
 * Final summary metrics (also in `results.json`).
 
+## Hyperparameter Optimization (Optuna)
+Use the HPO orchestrator to run sequential Optuna trials. The search space is defined in YAML and maps Hydra keys to distributions.
+
+- Search space: `conf/hpo/scenario2_mmfit.yaml`
+  - Canonical window length: `data.sensor_window_length` (models inherit via interpolation)
+  - Core knobs: `optim.lr` (log), `optim.weight_decay` (log), `experiment.alpha`, `experiment.beta`
+  - Model FE capacity: `model.feature_extractor.n_filters`, `model.feature_extractor.filter_size`
+  - Throughput: `data.batch_size` (coarse steps)
+
+- Quick debug search (tiny split, short epochs)
+  ```bash
+  python experiments/run_hpo.py \
+    --n-trials 10 \
+    --metric val_f1 --direction maximize \
+    --study-name mmfit_sc2_debug \
+    --search-space conf/hpo/scenario2_mmfit.yaml \
+    data=mmfit_debug experiment=scenario2 trainer.epochs=5
+  ```
+
+- Typical search (full split)
+  ```bash
+  python experiments/run_hpo.py \
+    --n-trials 50 \
+    --metric val_f1 --direction maximize \
+    --study-name mmfit_sc2 \
+    --storage experiments/outputs/optuna/mmfit_sc2.db \
+    --search-space conf/hpo/scenario2_mmfit.yaml \
+    data=mmfit experiment=scenario2 trainer.epochs=30
+  ```
+
+- Outputs and artifacts
+  - Per‑trial run dirs: `experiments/outputs/hpo/<study_name>/trial_XXX/` with a full Hydra config and `results.json`
+  - Study summary: `experiments/outputs/hpo/<study_name>/best.json` and `trials.csv`
+  - CLI prints best metric and params on completion
+
+- Fairness guidelines (recommended)
+  - Keep the HPO budget constant across models: `--n-trials`, `trainer.epochs`, early‑stopping policy
+  - Do not tune `num_workers` in HPO; set via env config: `conf/env/local.yaml`, `conf/env/remote.yaml`
+  - Use subject‑independent splits and never include test data during HPO
+
+- Re‑run best config for testing
+  1) Read `experiments/outputs/hpo/<study_name>/best.json` and copy the `best_params` as Hydra overrides.
+  2) Train and evaluate with multiple seeds:
+  ```bash
+  # Example using printed best params (replace with your values)
+  python experiments/run_experiment.py \
+    experiment=scenario2 data=mmfit \
+    optim.lr=3e-4 optim.weight_decay=1e-4 \
+    data.sensor_window_length=256 \
+    model.feature_extractor.n_filters=16 model.feature_extractor.filter_size=5 \
+    experiment.alpha=1.2 experiment.beta=0.3 \
+    trainer.epochs=50 seed=0
+  # Repeat with seed=1..4 and report mean ± std
+  ```
+
 ## Packaging & Imports (Why `import src` Works Here)
 This repository intentionally exposes a top-level package named `src` (because `src/__init__.py` exists). Normally, "src layout" projects nest the real package (e.g., `src/har/`) and you would import `har`. We kept `src` directly for lightweight research iteration.
 
@@ -166,4 +221,3 @@ Troubleshooting checklist if `ModuleNotFoundError: No module named 'src'` reappe
 * Ensure no stale wheel in a different environment (reactivate env, reinstall).
 
 This section documents the rationale so we do not repeat the previous trial-and-error phase.
-

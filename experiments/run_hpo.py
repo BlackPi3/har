@@ -45,6 +45,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--direction", choices=["maximize", "minimize"], default="maximize")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--output-root", type=str, default="experiments/outputs/hpo", help="Root folder for trial outputs (relative to repo)")
+    p.add_argument("--search-space", type=str, default=str(REPO_ROOT / "conf/hpo/mmfit_default.yaml"), help="Path to YAML file defining Optuna search space")
     return p.parse_args()
 
 
@@ -52,13 +53,66 @@ def build_trial_dir(output_root: Path, study_name: str, trial_number: int) -> Pa
     return output_root / study_name / f"trial_{trial_number:03d}"
 
 
-def suggest_params(trial: optuna.Trial) -> Dict[str, Any]:
-    params: Dict[str, Any] = {}
-    params["optim.lr"] = trial.suggest_float("optim.lr", 1e-5, 1e-2, log=True)
-    params["optim.weight_decay"] = trial.suggest_float("optim.weight_decay", 1e-6, 1e-2, log=True)
-    params["experiment.alpha"] = trial.suggest_float("experiment.alpha", 0.5, 2.0)
-    params["experiment.beta"] = trial.suggest_float("experiment.beta", 0.0, 1.0)
-    return params
+def load_search_space(path: Path) -> Dict[str, Any]:
+    import yaml
+    data = yaml.safe_load(path.read_text())
+    if not isinstance(data, dict) or "search_space" not in data:
+        raise ValueError("Search space YAML must contain a top-level 'search_space' mapping")
+    return data["search_space"]
+
+
+def suggest_params_generic(trial: optuna.Trial, space: Dict[str, Any]) -> Dict[str, Any]:
+    """Sample parameters based on a generic YAML-defined search space.
+
+    Spec schema per key:
+      type: float|int|categorical|bool
+      low: <number> (for float/int)
+      high: <number> (for float/int)
+      log: true|false (optional for float/int)
+      step: <number> (optional, for int and float)
+      choices: [..] (for categorical)
+      tie_to: <other_key> (copy value from other_key; no sampling)
+    """
+    sampled: Dict[str, Any] = {}
+    # First pass: sample untied params
+    for key, spec in space.items():
+        if spec is None:
+            continue
+        if isinstance(spec, dict) and spec.get("tie_to"):
+            # Will handle in second pass
+            continue
+        t = spec.get("type") if isinstance(spec, dict) else None
+        if t == "float":
+            low = float(spec["low"])
+            high = float(spec["high"])
+            log = bool(spec.get("log", False))
+            step = spec.get("step", None)
+            if step is not None:
+                sampled[key] = trial.suggest_float(key, low, high, log=log, step=float(step))
+            else:
+                sampled[key] = trial.suggest_float(key, low, high, log=log)
+        elif t == "int":
+            low = int(spec["low"])
+            high = int(spec["high"])
+            step = int(spec.get("step", 1))
+            sampled[key] = trial.suggest_int(key, low, high, step=step)
+        elif t == "categorical":
+            choices = spec["choices"]
+            sampled[key] = trial.suggest_categorical(key, choices)
+        elif t == "bool":
+            sampled[key] = trial.suggest_categorical(key, [True, False])
+        else:
+            raise ValueError(f"Unsupported type for '{key}': {t}")
+
+    # Second pass: apply ties
+    for key, spec in space.items():
+        if isinstance(spec, dict) and spec.get("tie_to"):
+            ref = spec["tie_to"]
+            if ref not in sampled:
+                raise ValueError(f"tie_to references unknown key: {ref}")
+            sampled[key] = sampled[ref]
+
+    return sampled
 
 
 def run_single(cfg_overrides: List[str], trial_dir: Path) -> Tuple[bool, Dict[str, Any]]:
@@ -95,9 +149,24 @@ def main() -> None:
 
     study = optuna.create_study(direction=args.direction, study_name=args.study_name, storage=study_storage, load_if_exists=True)
 
+    # Load search space (YAML). If not found, fall back to internal defaults
+    search_space: Dict[str, Any]
+    space_path = Path(args.search_space)
+    if space_path.exists():
+        search_space = load_search_space(space_path)
+        print(f"✓ Loaded search space from {space_path}")
+    else:
+        print(f"! Search space file not found at {space_path}; using minimal defaults")
+        search_space = {
+            "optim.lr": {"type": "float", "low": 1e-5, "high": 1e-2, "log": True},
+            "optim.weight_decay": {"type": "float", "low": 1e-6, "high": 1e-2, "log": True},
+            "experiment.alpha": {"type": "float", "low": 0.5, "high": 2.0},
+            "experiment.beta": {"type": "float", "low": 0.0, "high": 1.0},
+        }
+
     def objective(trial: optuna.Trial) -> float:
         # Compose overrides: user overrides + suggested params + seed for reproducibility
-        trial_params = suggest_params(trial)
+        trial_params = suggest_params_generic(trial, search_space)
         param_overrides = [f"{k}={v}" for k, v in trial_params.items()]
         # Propagate seed to ensure fairness across trials
         seed_override = f"seed={args.seed}"

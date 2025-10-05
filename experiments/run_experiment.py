@@ -75,8 +75,8 @@ def main(cfg: DictConfig) -> Any:
     torch_device = torch.device(device_str)
 
     # Data directory resolution (simplified): rely on explicit config.
-    data_name = cfg.data.data_name
-    data_dir = Path(cfg.env.data_dir) / data_name
+    dataset_name = cfg.data.dataset_name
+    data_dir = Path(cfg.env.data_dir) / dataset_name
 
     if not os.path.exists(data_dir):
         print(
@@ -135,19 +135,21 @@ def main(cfg: DictConfig) -> Any:
     ns_dict["lr"] = float(_fallback("lr", "optim.lr", default=1e-3))
     ns_dict["weight_decay"] = float(
         _fallback("weight_decay", "optim.weight_decay", default=0.0))
+    # Propagate canonical window length to dataset factory
+    ns_dict["sensor_window_length"] = _fallback("data.sensor_window_length", default=None)
     # Map experiment alpha/beta to legacy names expected by Trainer
     if "experiment" in cfg and "alpha" in cfg.experiment:
         ns_dict["scenario2_alpha"] = cfg.experiment.alpha
     if "experiment" in cfg and "beta" in cfg.experiment:
         ns_dict["scenario2_beta"] = cfg.experiment.beta
-    # Ensure namespace uses the resolved dataset_name (from any accepted key)
-    ns_dict["dataset_name"] = data_name
+    # Ensure namespace uses the resolved dataset_name
+    ns_dict["dataset_name"] = dataset_name
     ns = SimpleNamespace(**ns_dict)
     ns.device = device_str
     ns.torch_device = torch_device
     ns.cluster = False
 
-    dls = get_dataloaders(data_name, ns)
+    dls = get_dataloaders(dataset_name, ns)
     print("Dataset sizes:", {k: len(v.dataset) for k, v in dls.items()})
 
     models = build_models(cfg, torch_device)
@@ -203,7 +205,7 @@ def main(cfg: DictConfig) -> Any:
                 'lr': ns.lr,
                 'weight_decay': ns.weight_decay,
                 'epochs': ns.epochs,
-                'dataset': data_name,
+                'dataset': dataset_name,
             }, allow_val_change=True)
             print("✓ W&B logger initialized")
         except ImportError:
