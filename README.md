@@ -219,6 +219,23 @@ Quick facts:
   # Repeat with seed=1..4 and report mean ± std
   ```
 
+### Running on SLURM (cluster)
+If your cluster provides a container or preinstalled PyTorch image and no conda, use the SLURM script:
+
+```bash
+# Edit SBATCH resources inside if needed; override via env vars as shown
+STUDY_NAME=mmfit_sc2 N_TRIALS=50 \
+OUTPUT_ROOT=/netscratch/$USER/experiments/output/hpo \
+STORAGE=/netscratch/$USER/experiments/optuna/mmfit_sc2.db \
+OVERRIDES="env=remote data=mmfit experiment=scenario2 trainer.epochs=30" \
+sbatch experiments/submit_hpo_slurm.sh
+```
+
+Notes:
+- No conda required. By default the script adds the repo to PYTHONPATH so `import src` works. Set `USE_PIP_INSTALL=1` to run `pip install -e .` in the job.
+- Set `CONTAINER_IMAGE` to use a Slurm containerized job: `CONTAINER_IMAGE=docker://pytorch/pytorch:2.3.1-cuda12.1-cudnn8-runtime`.
+- Always override `--output-root` and `--storage` to point to your cluster scratch (e.g., `/netscratch/$USER/...`).
+
 ### Single entrypoints and legacy scripts
 - Preferred entrypoints:
   - Training: `experiments/run_experiment.py`

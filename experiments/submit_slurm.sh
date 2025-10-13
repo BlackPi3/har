@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Usage: sbatch submit_slurm.sh <gpu_type> <dataset> [lr] [alpha] [epochs]
 # Example: sbatch submit_slurm.sh v100 mmfit 1e-3 1.0 200

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #SBATCH --job-name=har_s2_sweep
 #SBATCH --output=outputs/%j_sweep_%A_%a.out
 #SBATCH --error=outputs/%j_sweep_%A_%a.err
