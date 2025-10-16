@@ -53,7 +53,7 @@ if [[ -n "${CONTAINER_IMAGE:-}" ]]; then
   RUN_PREFIX=(srun --container-image="$CONTAINER_IMAGE")
 fi
 
-# Ensure parent dirs exist (run_hpo also creates subdirs per-trial)
+# Ensure parent dirs exist (run_optuna also creates subdirs per-trial)
 mkdir -p "$(dirname "$STORAGE")"
 mkdir -p "$OUTPUT_ROOT"
 
@@ -65,7 +65,7 @@ else
 fi
 
 # Launch HPO (sequential trials in a single job)
-"${RUN_PREFIX[@]}" python3 experiments/run_hpo.py \
+"${RUN_PREFIX[@]}" python3 experiments/run_optuna.py \
   --n-trials "$N_TRIALS" \
   --metric "$METRIC" --direction "$DIRECTION" \
   --study-name "$STUDY_NAME" \

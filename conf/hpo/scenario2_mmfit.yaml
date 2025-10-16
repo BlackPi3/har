@@ -1,5 +1,5 @@
 # Generic Optuna search space for Scenario2 + MM-Fit
-# Keys are Hydra override paths used by run_experiment.py
+# Keys are Hydra override paths used by run_trial.py
 # You can freely add model tweaks (e.g., window sizes, filter sizes) and dataset knobs.
 
 search_space:

@@ -6,7 +6,7 @@ Unified, Hydra-configured training pipeline for pose-to-IMU regression + activit
 ```
 conf/                # Hydra config root (data/, model/, experiment/, optim/, trainer/)
 experiments/
-  run_experiment.py  # Single Lightning-based entrypoint
+  run_trial.py       # Single Lightning-based entrypoint
 src/
   data.py            # Dataloader factory (by dataset name)
   lightning_module.py# HARLightningModule implementation
@@ -18,8 +18,8 @@ datasets/            # Actual data directory (subject folders, not tracked)
 ```
 
 ## Key Ideas
-* Single command entrypoint (`experiments/run_experiment.py`)
-* Single HPO entrypoint (`experiments/run_hpo.py`)
+* Single command entrypoint (`experiments/run_trial.py`)
+* Single HPO entrypoint (`experiments/run_optuna.py`)
 * Configuration-first (Hydra): compose + override at CLI
 * Single Lightning training backend (legacy removed)
 * Multi-loss objective (MSE + alpha * classification + beta * feature-similarity)
@@ -46,23 +46,23 @@ If your subjects are directly under `<data_dir>/w01`, adjust or set `data.data_d
 
 ## Run (Basic)
 ```bash
-python experiments/run_experiment.py experiment=scenario2
+python experiments/run_trial.py experiment=scenario2
 ```
 Common overrides:
 ```bash
-python experiments/run_experiment.py trainer.epochs=50 optim.lr=5e-4 \
+python experiments/run_trial.py trainer.epochs=50 optim.lr=5e-4 \
   model.regressor.sequence_length=256 experiment.alpha=1.5
 ```
 
 Short smoke test (2 epochs):
 ```bash
-python experiments/run_experiment.py trainer.epochs=2
+python experiments/run_trial.py trainer.epochs=2
 ```
 
 ## Fast Debug Run
 Use the tiny debug split to validate end-to-end behavior quickly:
 ```bash
-python experiments/run_experiment.py data=mmfit_debug experiment=debug trainer.epochs=2
+python experiments/run_trial.py data=mmfit_debug experiment=debug trainer.epochs=2
 ```
 What this does:
 * Restricts subjects to 1 per split
@@ -72,13 +72,13 @@ What this does:
 
 Ultra-fast plumbing smoke (no checkpoints / early stopping):
 ```bash
-python experiments/run_experiment.py data=mmfit_debug experiment=debug trainer.epochs=1 trainer.enable_checkpointing=false trainer.early_stopping.enabled=false
+python experiments/run_trial.py data=mmfit_debug experiment=debug trainer.epochs=1 trainer.enable_checkpointing=false trainer.early_stopping.enabled=false
 ```
 
 ## Determinism / Seeding
 Global seed configured in `conf/conf.yaml` under `seed:`. Override per run:
 ```bash
-python experiments/run_experiment.py seed=42
+python experiments/run_trial.py seed=42
 ```
 
 ## Config Anatomy
@@ -112,15 +112,15 @@ Planned near-term improvements (see `ROADMAP.md`): debug subset config, W&B logg
 ## Weights & Biases Logging (Optional)
 Enable W&B logging via Hydra overrides:
 ```bash
-python experiments/run_experiment.py trainer.logger=wandb trainer.wandb.enabled=true trainer.wandb.project=har
+python experiments/run_trial.py trainer.logger=wandb trainer.wandb.enabled=true trainer.wandb.project=har
 ```
 Additional useful overrides:
 ```bash
 # Offline mode (no network)
-python experiments/run_experiment.py trainer.logger=wandb trainer.wandb.enabled=true trainer.wandb.mode=offline
+python experiments/run_trial.py trainer.logger=wandb trainer.wandb.enabled=true trainer.wandb.mode=offline
 
 # Add grouping / tags
-python experiments/run_experiment.py trainer.logger=wandb trainer.wandb.enabled=true \
+python experiments/run_trial.py trainer.logger=wandb trainer.wandb.enabled=true \
   trainer.wandb.group=scenario2 trainer.wandb.tags='["mmfit","alpha1.0"]'
 ```
 If `wandb` is not installed the run will continue without a logger and print a warning.
@@ -152,7 +152,7 @@ Quick facts:
 - Quick debug search (tiny split, short epochs)
   ```bash
   conda activate har
-  python experiments/run_hpo.py \
+  python experiments/run_optuna.py \
     --n-trials 10 \
     --metric val_f1 --direction maximize \
     --study-name mmfit_sc2_debug \
@@ -162,7 +162,7 @@ Quick facts:
 - Typical search (full split)
   ```bash
   conda activate har
-  python experiments/run_hpo.py \
+  python experiments/run_optuna.py \
     --n-trials 50 \
     --metric val_f1 --direction maximize \
     --study-name mmfit_sc2 \
@@ -173,7 +173,7 @@ Quick facts:
 - Resume a study (same name + storage)
   ```bash
   conda activate har
-  python experiments/run_hpo.py \
+  python experiments/run_optuna.py \
     --n-trials 25 \
     --metric val_f1 --direction maximize \
     --study-name mmfit_sc2 \
@@ -185,7 +185,7 @@ Quick facts:
 - With W&B logging (optional; forwarded to each trial)
   ```bash
   conda activate har
-  python experiments/run_hpo.py \
+  python experiments/run_optuna.py \
     --n-trials 10 \
     --metric val_f1 --direction maximize \
     --study-name mmfit_sc2_wandb \
@@ -209,7 +209,7 @@ Quick facts:
   2) Train and evaluate with multiple seeds:
   ```bash
   # Example using printed best params (replace with your values)
-  python experiments/run_experiment.py \
+  python experiments/run_trial.py \
     experiment=scenario2 data=mmfit \
     optim.lr=3e-4 optim.weight_decay=1e-4 \
     data.sensor_window_length=256 \
@@ -238,9 +238,9 @@ Notes:
 
 ### Single entrypoints and legacy scripts
 - Preferred entrypoints:
-  - Training: `experiments/run_experiment.py`
-  - HPO: `experiments/run_hpo.py`
-- The folder `experiments/scenario2/` contains older, scenario-specific sweep utilities (e.g., `run_hyperparameter_search.py`, submit scripts). These are no longer required now that HPO is unified under `experiments/run_hpo.py`. You can safely ignore or remove that folder to keep a single point of entry. If you rely on any plotting/utilities there, consider migrating them into a neutral location (e.g., `experiments/analysis/`).
+  - Training: `experiments/run_trial.py`
+  - HPO: `experiments/run_optuna.py`
+- The folder `experiments/scenario2/` contains older, scenario-specific sweep utilities (e.g., `run_hyperparameter_search.py`, submit scripts). These are no longer required now that HPO is unified under `experiments/run_optuna.py`. You can safely ignore or remove that folder to keep a single point of entry. If you rely on any plotting/utilities there, consider migrating them into a neutral location (e.g., `experiments/analysis/`).
 
 ## Packaging & Imports (Why `import src` Works Here)
 This repository intentionally exposes a top-level package named `src` (because `src/__init__.py` exists). Normally, "src layout" projects nest the real package (e.g., `src/har/`) and you would import `har`. We kept `src` directly for lightweight research iteration.

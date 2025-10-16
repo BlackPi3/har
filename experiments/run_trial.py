@@ -1,23 +1,43 @@
-"""DEPRECATED: please use `experiments/run_trial.py` instead.
+"""Unified Trial Runner (Hydra-based)
 
-This legacy wrapper forwards all arguments to `run_trial.py` so that
-existing scripts continue to work.
+Usage examples:
+    python experiments/run_trial.py data=mmfit_debug trainer.epochs=2
+    python experiments/run_trial.py experiment=scenario2 trainer.epochs=5 optim.lr=5e-4
+
+NOTE: For plain `python experiments/run_trial.py ...` to work, the project
+root (the directory containing `src/`) must be on PYTHONPATH. This is naturally
+true if:
+    1. You've run `pip install -e .` inside the active environment, OR
+    2. You invoke via module form: `python -m experiments.run_trial ...`
+
+If you see `ModuleNotFoundError: No module named 'src'`, ensure the editable
+install succeeded (activate env, then `pip install -e .`).
 """
-import sys
+import os
+import json
 from pathlib import Path
-import subprocess
+from typing import Any
+import torch
+import hydra
+from omegaconf import DictConfig, OmegaConf
+
+from src.config import set_seed  # type: ignore
+from src.data import get_dataloaders
+from src.models import Regressor, FeatureExtractor, ActivityClassifier
+from src.lightning_module import HARLightningModule
+
+import pytorch_lightning as pl
 
 
-def main() -> int:
-    here = Path(__file__).resolve()
-    run_trial = here.with_name("run_trial.py")
-    print("[DEPRECATION] experiments/run_experiment.py is renamed to experiments/run_trial.py. Forwarding...", file=sys.stderr)
-    cmd = [sys.executable, str(run_trial)] + sys.argv[1:]
-    return subprocess.call(cmd)
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+def _select_device(pref: str) -> str:
+    if pref not in (None, "", "auto"):
+        return pref
+    if torch.cuda.is_available():
+        return "cuda"
+    mps_backend = getattr(torch.backends, "mps", None)
+    if mps_backend and mps_backend.is_available():
+        return "mps"
+    return "cpu"
 
 
 def build_models(cfg, device):
@@ -256,7 +276,7 @@ def main(cfg: DictConfig) -> Any:
         except Exception as e:  # pragma: no cover
             print(f"Warning: failed to log final metrics to W&B: {e}")
 
-    print("\nExperiment completed! results.json saved.")
+    print("\nTrial completed! results.json saved.")
     return history
 
 

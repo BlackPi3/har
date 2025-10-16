@@ -36,7 +36,7 @@ export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 mkdir -p outputs
 
 # Run experiment with specific hyperparameters; cluster overrides auto-applied from base.yaml
-python run_experiment.py \
+python run_trial.py \
     --base-config ../../configs/base.yaml \
     --exp-config ../../configs/scenario2.yaml \
     --lr $LR \

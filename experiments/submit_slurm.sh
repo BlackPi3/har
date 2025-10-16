@@ -83,7 +83,7 @@ fi
 
 # Run the experiment with cluster configuration
 echo "Starting experiment..."
-echo "Command: python run_experiment.py $CMD_ARGS"
-python run_experiment.py $CMD_ARGS
+echo "Command: python run_trial.py $CMD_ARGS"
+python run_trial.py $CMD_ARGS
 
 echo "Job completed at: $(date)"
