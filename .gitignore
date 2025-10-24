@@ -57,6 +57,4 @@ dist/
 
 # Logs
 *.log
-
-/netscratch/zolfaghari/datasets/mmfit
-/netscratch/zolfaghari/datasets/mm-fit
+*/log
