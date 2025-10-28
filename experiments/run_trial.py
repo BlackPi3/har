@@ -85,8 +85,13 @@ def main(cfg: DictConfig) -> Any:
         print(f"✓ Data directory: {data_dir}")
 
     print("Running Experiment")
-    exp_name = getattr(cfg.experiment, "experiment_name", getattr(
-        cfg.experiment, "name", "unknown_experiment"))
+    # Support new 'scenario' group and keep backward compatibility with 'experiment'
+    exp_name = None
+    if hasattr(cfg, 'scenario'):
+        exp_name = getattr(cfg.scenario, 'experiment_name', None) or getattr(cfg.scenario, 'name', None)
+    if exp_name is None and hasattr(cfg, 'experiment'):
+        exp_name = getattr(cfg.experiment, 'experiment_name', None) or getattr(cfg.experiment, 'name', None)
+    exp_name = exp_name or 'unknown_experiment'
     print(f"Experiment: {exp_name}")
     print(f"Device: {device_str}")
     print(f"Dataset: {data_dir}")
@@ -138,10 +143,21 @@ def main(cfg: DictConfig) -> Any:
     # Propagate canonical window length to dataset factory
     ns_dict["sensor_window_length"] = _fallback("data.sensor_window_length", default=None)
     # Map experiment alpha/beta to legacy names expected by Trainer
-    if "experiment" in cfg and "alpha" in cfg.experiment:
-        ns_dict["scenario2_alpha"] = cfg.experiment.alpha
-    if "experiment" in cfg and "beta" in cfg.experiment:
-        ns_dict["scenario2_beta"] = cfg.experiment.beta
+    # alpha/beta may live under scenario (new) or experiment (legacy)
+    try:
+        if hasattr(cfg, 'scenario') and hasattr(cfg.scenario, 'alpha'):
+            ns_dict["scenario2_alpha"] = cfg.scenario.alpha
+        if hasattr(cfg, 'scenario') and hasattr(cfg.scenario, 'beta'):
+            ns_dict["scenario2_beta"] = cfg.scenario.beta
+    except Exception:
+        pass
+    try:
+        if hasattr(cfg, 'experiment') and hasattr(cfg.experiment, 'alpha'):
+            ns_dict["scenario2_alpha"] = cfg.experiment.alpha
+        if hasattr(cfg, 'experiment') and hasattr(cfg.experiment, 'beta'):
+            ns_dict["scenario2_beta"] = cfg.experiment.beta
+    except Exception:
+        pass
     # Ensure namespace uses the resolved dataset_name
     ns_dict["dataset_name"] = dataset_name
     ns = SimpleNamespace(**ns_dict)
@@ -276,8 +292,41 @@ def main(cfg: DictConfig) -> Any:
         except Exception as e:  # pragma: no cover
             print(f"Warning: failed to log final metrics to W&B: {e}")
 
-    print("\nTrial completed! results.json saved.")
-    return history
+    # --- Return scalar objective for HPO/Sweepers -------------------------
+    # Determine objective metric and direction
+    metric = None
+    mode = None
+    try:
+        metric = getattr(cfg.hpo, 'metric', None)
+        mode = getattr(cfg.hpo, 'mode', None)
+    except Exception:
+        metric = None
+        mode = None
+    metric = metric or 'val_f1'
+    mode = mode or 'maximize'
+
+    # Select value from computed metrics
+    if metric == 'val_f1':
+        obj = last_val_f1 if last_val_f1 is not None else best_val_f1
+    elif metric == 'val_loss':
+        obj = last_val_loss if last_val_loss is not None else best_val_loss
+    else:
+        # Fallback to val_f1 for unknown metric
+        obj = last_val_f1 if last_val_f1 is not None else best_val_f1
+        metric = 'val_f1'
+
+    # If still None, emit sentinel according to direction
+    if obj is None:
+        obj = -1e9 if mode == 'maximize' else 1e9
+
+    # If user requests to maximize loss (or minimize f1), invert for convenience
+    if metric == 'val_loss' and mode == 'maximize' and obj is not None:
+        obj = -float(obj)
+    if metric == 'val_f1' and mode == 'minimize' and obj is not None:
+        obj = -float(obj)
+
+    print("\nTrial completed! results.json saved. Returning objective:", float(obj))
+    return float(obj)
 
 
 if __name__ == "__main__":  # pragma: no cover

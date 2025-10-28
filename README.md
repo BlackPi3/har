@@ -276,3 +276,131 @@ Troubleshooting checklist if `ModuleNotFoundError: No module named 'src'` reappe
 * Ensure no stale wheel in a different environment (reactivate env, reinstall).
 
 This section documents the rationale so we do not repeat the previous trial-and-error phase.
+
+# Experiments with Hydra + PyTorch Lightning
+
+This repository runs experiments via a single Hydra entrypoint that builds dataloaders and Lightning modules, handles logging/checkpointing, and writes results.json per run.
+
+## Installation
+
+- Python 3.9+
+- PyTorch + PyTorch Lightning
+- Hydra and OmegaConf
+
+Recommended setup:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -U pip
+pip install -e .            # required so `src/` is importable
+```
+
+If you run without editable install and see `ModuleNotFoundError: No module named 'src'`, either install with `pip install -e .` or invoke as a module: `python -m experiments.run_trial ...`.
+
+## Data
+
+- Configure the base data directory via `env.data_dir` in Hydra config (conf/).
+- The dataset path used by the runner is: `<env.data_dir>/<data.dataset_name>`.
+- If the directory doesn’t exist, the script will warn and proceed.
+
+## Running an experiment
+
+Two equivalent ways:
+
+```bash
+# Module form (works without editable install)
+python -m experiments.run_trial data=mmfit_debug trainer.epochs=2
+
+# Script form (requires pip install -e . so `src/` is importable)
+python experiments/run_trial.py experiment=scenario2 trainer.epochs=5 optim.lr=5e-4
+```
+
+Common overrides:
+
+- Device selection: `device=auto|cuda|mps|cpu` (auto prefers CUDA, then macOS MPS, else CPU).
+- Seed: `seed=42` (used for all RNGs via src.config.set_seed).
+- Data: `data.dataset_name=mmfit` and optionally `env.data_dir=/absolute/path`.
+- Training: `trainer.epochs=100 trainer.patience=10`
+- Optimizer: `optim.lr=1e-3 optim.weight_decay=1e-4`
+- Experiment knobs: `experiment.alpha=... experiment.beta=...`
+- Window length used by data factory: `data.sensor_window_length=256`
+
+Hydra run directory: each run executes in its own working directory (printed at start) and writes outputs there.
+
+## Models expected by config
+
+The runner builds three components from `cfg.model`:
+
+- `model.regressor`
+  - `input_channels, num_joints, sequence_length`
+- `model.feature_extractor`
+  - `n_filters, filter_size, n_dense, input_channels, window_size, drop_prob, pool_size`
+- `model.classifier`
+  - `f_in, n_classes`
+
+These are used to construct:
+- `src.models.Regressor`, `FeatureExtractor`, `ActivityClassifier`
+
+## Logging and checkpointing
+
+Configure via `trainer` in Hydra config:
+
+- Early stopping (optional):
+  - `trainer.early_stopping.enabled=true`
+  - `trainer.early_stopping.monitor=val_loss` (or your metric)
+  - `trainer.early_stopping.mode=min|max`
+  - `trainer.early_stopping.patience=10`
+- Checkpoints (optional):
+  - `trainer.checkpoint.enabled=true`
+  - `trainer.checkpoint.monitor=val_loss`
+  - `trainer.checkpoint.mode=min|max`
+  - `trainer.checkpoint.save_top_k=1`
+  - `trainer.checkpoint.dirpath=checkpoints`
+  - `trainer.checkpoint.filename=epoch{epoch}-val{val_loss:.4f}`
+
+Weights & Biases (optional):
+- Enable either with `trainer.logger=wandb` or `trainer.wandb.enabled=true`
+- Optional fields: `trainer.wandb.{project,entity,group,name,tags,mode}`
+  - Set `trainer.wandb.mode=offline` to avoid network use.
+
+## Outputs
+
+At the end of training, the runner writes `results.json` in the Hydra run directory with:
+
+```json
+{
+  "config": { ...resolved config... },
+  "history": {
+    "train_loss": [],
+    "val_loss": [],
+    "train_f1": [],
+    "val_f1": []
+  },
+  "final_metrics": {
+    "train_loss_last": null,
+    "val_loss_last": <float or null>,
+    "val_f1_last": <float or null>,
+    "best_val_f1": <float or null>,
+    "best_val_loss": <float or null>
+  }
+}
+```
+
+Notes:
+- `best_val_loss` is taken from the ModelCheckpoint callback if enabled and monitoring that metric.
+- `best_val_f1` is tracked by the LightningModule if exposed as `best_val_f1`.
+
+## Device notes
+
+- `device=auto` picks CUDA if available, else macOS MPS, else CPU.
+- On Apple Silicon, ensure a recent PyTorch build for MPS support.
+
+## Troubleshooting
+
+- `ModuleNotFoundError: No module named 'src'`
+  - Run `pip install -e .` in your environment or use `python -m experiments.run_trial ...`.
+- No data found
+  - Ensure `env.data_dir` and `data.dataset_name` point to an existing folder.
+- W&B not installed
+  - Either install `pip install wandb` or disable the logger (`trainer.logger=null` or `trainer.wandb.enabled=false`).

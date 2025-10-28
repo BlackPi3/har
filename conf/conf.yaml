@@ -1,7 +1,7 @@
 # defining all knobs
 defaults:
   - env: local
-  - experiment: scenario2
+  - scenario: scenario2
   - data: mmfit
   - model/regressor: regressor
   - model/feature_extractor: feature_extractor

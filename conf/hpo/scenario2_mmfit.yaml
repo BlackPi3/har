@@ -1,57 +1,31 @@
-# Generic Optuna search space for Scenario2 + MM-Fit
-# Keys are Hydra override paths used by run_trial.py
-# You can freely add model tweaks (e.g., window sizes, filter sizes) and dataset knobs.
+# Per-scenario, per-dataset search space for Hydra Optuna Sweeper
+# Activate with: -m hydra/sweeper=optuna hpo=scenario2_mmfit
 
-search_space:
-  # Optimizer (keep ranges broad; log scale for LR/WD)
-  optim.lr:
-    type: float
-    low: 1e-5
-    high: 1e-2
-    log: true
-  optim.weight_decay:
-    type: float
-    low: 1e-6
-    high: 1e-2
-    log: true
+# This file declares the search space (params) and the objective.
 
-  # Loss blend coefficients
-  experiment.alpha:
-    type: float
-    low: 0
-    high: 10.0
-    step: 1
-  experiment.beta:
-    type: float
-    low: 0.0
-    high: 10.0
-    step: 1
+# Also define the objective to optimize for this space.
+hpo:
+  metric: val_f1
+  mode: maximize
 
-  # Window length: single source of truth at the data layer.
-  # Model configs reference this via interpolation, but we also tie explicitly here for safety.
-  data.sensor_window_length:
-    type: categorical
-    choices: [128, 192, 256, 320, 384, 448, 512]
-  model.regressor.sequence_length:
-    tie_to: data.sensor_window_length
-  model.feature_extractor.window_size:
-    tie_to: data.sensor_window_length
+hydra:
+  sweeper:
+    # Keep sweep-level defaults close to the space so CLI can stay minimal
+    direction: ${hpo.mode}
+    study_name: scenario2_mmfit
+    params:
+      # Optimizer
+      optim.lr: tag(log, interval(1e-5, 1e-2))
+      optim.weight_decay: tag(log, interval(1e-6, 1e-2))
 
-  # Feature extractor capacity/shape
-  model.feature_extractor.n_filters:
-    type: int
-    low: 8
-    high: 32
-    step: 4
-  model.feature_extractor.filter_size:
-    type: int
-    low: 3
-    high: 9
-    step: 2
+      # Scenario2-specific loss coefficients
+      scenario.alpha: interval(0, 10)
+      scenario.beta: interval(0, 10)
 
-  # Data loader throughput (keep simple; avoid num_workers in HPO to keep fairness stable)
-  data.batch_size:
-    type: int
-    low: 32
-    high: 128
-    step: 32
+      # Data/model coupling (MM-Fit typical ranges)
+      data.sensor_window_length: choice(128, 192, 256, 320, 384, 448, 512)
+      model.feature_extractor.n_filters: range(8, 32, 4)
+      model.feature_extractor.filter_size: range(3, 9, 2)
+
+      # Throughput knobs
+      data.batch_size: range(32, 128, 32)

@@ -127,9 +127,11 @@ def run_single(cfg_overrides: List[str], trial_dir: Path) -> Tuple[bool, Dict[st
         # Persist stdout to trial dir for debugging
         (trial_dir / "stdout.log").write_text(output)
         if proc.returncode != 0:
+            (trial_dir / "ERROR.txt").write_text(f"Non-zero returncode: {proc.returncode}\n")
             return False, {"error": f"returncode={proc.returncode}"}
         results_path = trial_dir / "results.json"
         if not results_path.exists():
+            (trial_dir / "ERROR.txt").write_text("results.json not found\n")
             return False, {"error": "results.json not found"}
         data = json.loads(results_path.read_text())
         metrics = data.get("final_metrics", {})

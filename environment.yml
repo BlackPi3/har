@@ -10,10 +10,15 @@ dependencies:
   - pandas
   - pyyaml
   - lightning
+  - pytorch-lightning
   - torchmetrics
   - matplotlib
   - seaborn
   - hydra-core
-  - pip
   - wandb
   - optuna
+  - hydra-optuna-sweeper
+  - pip
+  - pip:
+      - hydra-submitit-launcher
+      - submitit
