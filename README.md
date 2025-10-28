@@ -6,7 +6,7 @@ Unified, Hydra-configured training pipeline for pose-to-IMU regression + activit
 ```
 conf/                # Hydra config root (data/, model/, experiment/, optim/, trainer/)
 experiments/
-  run_trial.py       # Single Lightning-based entrypoint
+  run.py             # Single entrypoint for single runs and sweeps (Hydra)
 src/
   data.py            # Dataloader factory (by dataset name)
   lightning_module.py# HARLightningModule implementation
@@ -18,7 +18,7 @@ datasets/            # Actual data directory (subject folders, not tracked)
 ```
 
 ## Key Ideas
-* Single command entrypoint (`experiments/run_trial.py`)
+* Single command entrypoint (`experiments/run.py`)
 * Single HPO entrypoint (`experiments/run_optuna.py`)
 * Configuration-first (Hydra): compose + override at CLI
 * Single Lightning training backend (legacy removed)
@@ -46,23 +46,23 @@ If your subjects are directly under `<data_dir>/w01`, adjust or set `data.data_d
 
 ## Run (Basic)
 ```bash
-python experiments/run_trial.py experiment=scenario2
+python experiments/run.py scenario=scenario2
 ```
 Common overrides:
 ```bash
-python experiments/run_trial.py trainer.epochs=50 optim.lr=5e-4 \
+python experiments/run.py trainer.epochs=50 optim.lr=5e-4 \
   model.regressor.sequence_length=256 experiment.alpha=1.5
 ```
 
 Short smoke test (2 epochs):
 ```bash
-python experiments/run_trial.py trainer.epochs=2
+python experiments/run.py trainer.epochs=2
 ```
 
 ## Fast Debug Run
 Use the tiny debug split to validate end-to-end behavior quickly:
 ```bash
-python experiments/run_trial.py data=mmfit_debug experiment=debug trainer.epochs=2
+python experiments/run.py data=mmfit_debug scenario=debug trainer.epochs=2
 ```
 What this does:
 * Restricts subjects to 1 per split
@@ -72,13 +72,13 @@ What this does:
 
 Ultra-fast plumbing smoke (no checkpoints / early stopping):
 ```bash
-python experiments/run_trial.py data=mmfit_debug experiment=debug trainer.epochs=1 trainer.enable_checkpointing=false trainer.early_stopping.enabled=false
+python experiments/run.py data=mmfit_debug scenario=debug trainer.epochs=1 trainer.enable_checkpointing=false trainer.early_stopping.enabled=false
 ```
 
 ## Determinism / Seeding
 Global seed configured in `conf/conf.yaml` under `seed:`. Override per run:
 ```bash
-python experiments/run_trial.py seed=42
+python experiments/run.py seed=42
 ```
 
 ## Config Anatomy
@@ -112,15 +112,15 @@ Planned near-term improvements (see `ROADMAP.md`): debug subset config, W&B logg
 ## Weights & Biases Logging (Optional)
 Enable W&B logging via Hydra overrides:
 ```bash
-python experiments/run_trial.py trainer.logger=wandb trainer.wandb.enabled=true trainer.wandb.project=har
+python experiments/run.py trainer.logger=wandb trainer.wandb.enabled=true trainer.wandb.project=har
 ```
 Additional useful overrides:
 ```bash
 # Offline mode (no network)
-python experiments/run_trial.py trainer.logger=wandb trainer.wandb.enabled=true trainer.wandb.mode=offline
+python experiments/run.py trainer.logger=wandb trainer.wandb.enabled=true trainer.wandb.mode=offline
 
 # Add grouping / tags
-python experiments/run_trial.py trainer.logger=wandb trainer.wandb.enabled=true \
+python experiments/run.py trainer.logger=wandb trainer.wandb.enabled=true \
   trainer.wandb.group=scenario2 trainer.wandb.tags='["mmfit","alpha1.0"]'
 ```
 If `wandb` is not installed the run will continue without a logger and print a warning.
@@ -209,7 +209,7 @@ Quick facts:
   2) Train and evaluate with multiple seeds:
   ```bash
   # Example using printed best params (replace with your values)
-  python experiments/run_trial.py \
+  python experiments/run.py \
     experiment=scenario2 data=mmfit \
     optim.lr=3e-4 optim.weight_decay=1e-4 \
     data.sensor_window_length=256 \
@@ -238,7 +238,7 @@ Notes:
 
 ### Single entrypoints and legacy scripts
 - Preferred entrypoints:
-  - Training: `experiments/run_trial.py`
+  - Training: `experiments/run.py`
   - HPO: `experiments/run_optuna.py`
 - The folder `experiments/scenario2/` contains older, scenario-specific sweep utilities (e.g., `run_hyperparameter_search.py`, submit scripts). These are no longer required now that HPO is unified under `experiments/run_optuna.py`. You can safely ignore or remove that folder to keep a single point of entry. If you rely on any plotting/utilities there, consider migrating them into a neutral location (e.g., `experiments/analysis/`).
 
@@ -296,7 +296,7 @@ pip install -U pip
 pip install -e .            # required so `src/` is importable
 ```
 
-If you run without editable install and see `ModuleNotFoundError: No module named 'src'`, either install with `pip install -e .` or invoke as a module: `python -m experiments.run_trial ...`.
+If you run without editable install and see `ModuleNotFoundError: No module named 'src'`, either install with `pip install -e .` or invoke as a module: `python -m experiments.run ...`.
 
 ## Data
 
@@ -310,10 +310,10 @@ Two equivalent ways:
 
 ```bash
 # Module form (works without editable install)
-python -m experiments.run_trial data=mmfit_debug trainer.epochs=2
+python -m experiments.run data=mmfit_debug trainer.epochs=2
 
 # Script form (requires pip install -e . so `src/` is importable)
-python experiments/run_trial.py experiment=scenario2 trainer.epochs=5 optim.lr=5e-4
+python experiments/run.py scenario=scenario2 trainer.epochs=5 optim.lr=5e-4
 ```
 
 Common overrides:
@@ -399,7 +399,7 @@ Notes:
 ## Troubleshooting
 
 - `ModuleNotFoundError: No module named 'src'`
-  - Run `pip install -e .` in your environment or use `python -m experiments.run_trial ...`.
+  - Run `pip install -e .` in your environment or use `python -m experiments.run ...`.
 - No data found
   - Ensure `env.data_dir` and `data.dataset_name` point to an existing folder.
 - W&B not installed

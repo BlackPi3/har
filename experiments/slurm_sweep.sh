@@ -23,7 +23,7 @@ srun \
   --container-image="$CONTAINER_IMAGE" \
   --container-workdir="$PROJECT_ROOT" \
   --container-mounts="$PROJECT_ROOT":"$PROJECT_ROOT",/netscratch/$USER:/netscratch/$USER,/ds:/ds:ro \
-  python -m experiments.run_trial -m \
+  python -m experiments.run -m \
     scenario=scenario2 data=mmfit hpo=scenario2_mmfit \
     hydra/sweeper=optuna \
     hydra.sweeper.storage=sqlite:////$STUDY_DB \

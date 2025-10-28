@@ -1,14 +1,14 @@
-"""Unified Trial Runner (Hydra-based)
+"""Unified Experiment Runner (Hydra-based)
 
 Usage examples:
-    python experiments/run_trial.py data=mmfit_debug trainer.epochs=2
-    python experiments/run_trial.py experiment=scenario2 trainer.epochs=5 optim.lr=5e-4
+    python experiments/run.py data=mmfit_debug trainer.epochs=2
+    python experiments/run.py scenario=scenario2 trainer.epochs=5 optim.lr=5e-4
 
-NOTE: For plain `python experiments/run_trial.py ...` to work, the project
+NOTE: For plain `python experiments/run.py ...` to work, the project
 root (the directory containing `src/`) must be on PYTHONPATH. This is naturally
 true if:
     1. You've run `pip install -e .` inside the active environment, OR
-    2. You invoke via module form: `python -m experiments.run_trial ...`
+    2. You invoke via module form: `python -m experiments.run ...`
 
 If you see `ModuleNotFoundError: No module named 'src'`, ensure the editable
 install succeeded (activate env, then `pip install -e .`).
@@ -111,14 +111,12 @@ def main(cfg: DictConfig) -> Any:
     ]
     ns_dict = {k: cfg.data[k] for k in legacy_keys if k in cfg.data}
     ns_dict['data_dir'] = data_dir
-    # Flexible fallback retrieval for common hyperparameters across groups
 
     def _fallback(*candidates, default=None):
         for cand in candidates:
             if cand is None:
                 continue
             if isinstance(cand, str):
-                # dotted path access
                 node = cfg
                 ok = True
                 for part in cand.split('.'):
@@ -140,10 +138,7 @@ def main(cfg: DictConfig) -> Any:
     ns_dict["lr"] = float(_fallback("lr", "optim.lr", default=1e-3))
     ns_dict["weight_decay"] = float(
         _fallback("weight_decay", "optim.weight_decay", default=0.0))
-    # Propagate canonical window length to dataset factory
     ns_dict["sensor_window_length"] = _fallback("data.sensor_window_length", default=None)
-    # Map experiment alpha/beta to legacy names expected by Trainer
-    # alpha/beta may live under scenario (new) or experiment (legacy)
     try:
         if hasattr(cfg, 'scenario') and hasattr(cfg.scenario, 'alpha'):
             ns_dict["scenario2_alpha"] = cfg.scenario.alpha
@@ -158,7 +153,6 @@ def main(cfg: DictConfig) -> Any:
             ns_dict["scenario2_beta"] = cfg.experiment.beta
     except Exception:
         pass
-    # Ensure namespace uses the resolved dataset_name
     ns_dict["dataset_name"] = dataset_name
     ns = SimpleNamespace(**ns_dict)
     ns.device = device_str
@@ -197,7 +191,6 @@ def main(cfg: DictConfig) -> Any:
             filename=tcfg.checkpoint.filename,
             save_last=tcfg.checkpoint.get('save_last', True),
         ))
-    # Logger selection (W&B optional)
     logger = False
     use_wandb = False
     if (getattr(tcfg, 'logger', None) == 'wandb') or (hasattr(tcfg, 'wandb') and getattr(tcfg.wandb, 'enabled', False)):
@@ -242,7 +235,7 @@ def main(cfg: DictConfig) -> Any:
     print(f"\n[Lightning] Starting training for {ns.epochs} epochs...")
     pl_trainer.fit(lightning_module, train_dataloaders=dls['train'], val_dataloaders=dls['val'])
     history = {'train_loss': [], 'val_loss': [], 'train_f1': [], 'val_f1': []}
-    # --- Collect final & best metrics -------------------------------------
+
     def _to_float(x):
         try:
             if x is None:
@@ -258,7 +251,6 @@ def main(cfg: DictConfig) -> Any:
     last_val_f1 = _to_float(callback_metrics.get('val_f1'))
     best_val_f1 = _to_float(getattr(lightning_module, 'best_val_f1', None))
 
-    # Derive best val_loss from checkpoint callback if present
     best_val_loss = None
     for cb in callbacks:
         cls_name = cb.__class__.__name__
@@ -269,7 +261,7 @@ def main(cfg: DictConfig) -> Any:
 
     results = {
         "config": OmegaConf.to_container(cfg, resolve=True),
-        "history": history,  # placeholder until (optional) per-epoch logging added
+        "history": history,
         "final_metrics": {
             "train_loss_last": history["train_loss"][-1] if history["train_loss"] else None,
             "val_loss_last": last_val_loss,
@@ -289,11 +281,9 @@ def main(cfg: DictConfig) -> Any:
                 'final/best_val_f1': best_val_f1,
                 'final/best_val_loss': best_val_loss,
             })
-        except Exception as e:  # pragma: no cover
+        except Exception as e:
             print(f"Warning: failed to log final metrics to W&B: {e}")
 
-    # --- Return scalar objective for HPO/Sweepers -------------------------
-    # Determine objective metric and direction
     metric = None
     mode = None
     try:
@@ -305,21 +295,17 @@ def main(cfg: DictConfig) -> Any:
     metric = metric or 'val_f1'
     mode = mode or 'maximize'
 
-    # Select value from computed metrics
     if metric == 'val_f1':
         obj = last_val_f1 if last_val_f1 is not None else best_val_f1
     elif metric == 'val_loss':
         obj = last_val_loss if last_val_loss is not None else best_val_loss
     else:
-        # Fallback to val_f1 for unknown metric
         obj = last_val_f1 if last_val_f1 is not None else best_val_f1
         metric = 'val_f1'
 
-    # If still None, emit sentinel according to direction
     if obj is None:
         obj = -1e9 if mode == 'maximize' else 1e9
 
-    # If user requests to maximize loss (or minimize f1), invert for convenience
     if metric == 'val_loss' and mode == 'maximize' and obj is not None:
         obj = -float(obj)
     if metric == 'val_f1' and mode == 'minimize' and obj is not None:
@@ -329,5 +315,5 @@ def main(cfg: DictConfig) -> Any:
     return float(obj)
 
 
-if __name__ == "__main__":  # pragma: no cover
+if __name__ == "__main__":
     main()
