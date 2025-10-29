@@ -14,10 +14,14 @@ set -euo pipefail
 PROJECT_ROOT=/home/$USER/har
 CONTAINER_IMAGE=/netscratch/$USER/images/har.sqsh
 
-# Optuna study database path (for persistence/resume across runs)
-STUDY_DB=${STUDY_DB:-/netscratch/$USER/experiments/optuna/scenario2_mmfit.db}
-# Ensure parent directory exists
-mkdir -p "$(dirname "$STUDY_DB")"
+# Unified output root and study directory inside scratch
+STUDY_NAME=${STUDY_NAME:-scenario2_mmfit}
+OUTPUT_ROOT=${OUTPUT_ROOT:-/netscratch/$USER/experiments/output}
+STUDY_DIR="$OUTPUT_ROOT/$STUDY_NAME"
+mkdir -p "$STUDY_DIR"
+
+# Optuna study database lives inside the same study directory
+STUDY_DB="$STUDY_DIR/$STUDY_NAME.db"
 
 srun \
   --container-image="$CONTAINER_IMAGE" \
@@ -27,5 +31,12 @@ srun \
     scenario=scenario2 data=mmfit hpo=scenario2_mmfit \
     hydra/sweeper=optuna \
     hydra.sweeper.storage=sqlite:////$STUDY_DB \
+  hydra.sweeper.study_name=$STUDY_NAME \
+  hydra.sweep.dir=$STUDY_DIR \
+  hydra.sweep.subdir=trial_\${hydra.job.num} \
     trainer.epochs=10 \
     seed=0
+
+# Export trials CSV and best.json into the same STUDY_DIR
+## No separate post-processing needed; experiments/run.py now writes
+## trials.csv and best.json into $STUDY_DIR at the end of each trial.

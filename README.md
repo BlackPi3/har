@@ -136,6 +136,26 @@ Logged items:
 ## Hyperparameter Optimization (Optuna)
 Use the HPO orchestrator to run sequential Optuna trials. The search space is defined in YAML and maps Hydra keys to distributions.
 
+### Sweep outputs (SLURM)
+When launched via `experiments/slurm_sweep.sh`, all sweep artifacts are written into a single directory on scratch:
+
+- Root: `/netscratch/$USER/experiments/output/<study_name>/`
+  - Per‑trial Hydra run dirs: `trial_<N>/...`
+  - Optuna SQLite database: `<study_name>.db`
+  - Aggregates: `trials.csv`, `best.json`
+
+Environment overrides:
+
+- `STUDY_NAME` (default: `scenario2_mmfit`)
+- `OUTPUT_ROOT` (default: `/netscratch/$USER/experiments/output`)
+
+Example submit:
+
+```bash
+STUDY_NAME=scenario2_mmfit OUTPUT_ROOT=/netscratch/$USER/experiments/output \
+sbatch experiments/slurm_sweep.sh
+```
+
 Quick facts:
 - Default search space: `conf/hpo/scenario2_mmfit.yaml` (you can omit `--search-space`)
 - Default output root: `experiments/outputs/hpo/<study_name>/trial_XXX/`
