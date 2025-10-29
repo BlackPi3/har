@@ -1,28 +1,61 @@
 #!/usr/bin/env bash
 #SBATCH -J har-sweep
 #SBATCH -p A100-40GB
-#SBATCH -o /home/zolfaghari/experiments/log/slurm-%x-%j.out
-#SBATCH -e /home/zolfaghari/experiments/log/slurm-%x-%j.err
+#SBATCH -o /netscratch/$USER/experiments/log/slurm-%x-%j.out
+#SBATCH -e /netscratch/$USER/experiments/log/slurm-%x-%j.err
 #SBATCH --gpus=1
 #SBATCH --cpus-per-gpu=8
 #SBATCH --mem=32G
 #SBATCH -t 24:00:00
 
 set -euo pipefail
+set -x
 
 # --- User knobs (override via env) ---
 PROJECT_ROOT=/home/$USER/har
 CONTAINER_IMAGE=/netscratch/$USER/images/har.sqsh
 
-# Unified output root and study directory inside scratch
-STUDY_NAME=${STUDY_NAME:-scenario2_mmfit}
+# Number of Optuna trials (override with N_TRIALS=... when submitting)
 N_TRIALS=${N_TRIALS:-2}
-OUTPUT_ROOT=${OUTPUT_ROOT:-/netscratch/$USER/experiments/output}
-STUDY_DIR="$OUTPUT_ROOT/$STUDY_NAME"
-mkdir -p "$STUDY_DIR"
 
-# Optuna study database lives inside the same study directory
-STUDY_DB="$STUDY_DIR/$STUDY_NAME.db"
+# Ensure log directory exists
+mkdir -p /netscratch/$USER/experiments/log
+
+# Sanity checks (optional): enable with DEBUG=1
+DEBUG=${DEBUG:-0}
+if [ "$DEBUG" = "1" ]; then
+  echo "[DEBUG] Host: $(hostname)  User: $USER  Date: $(date)"
+  echo "[DEBUG] PROJECT_ROOT=$PROJECT_ROOT"
+  echo "[DEBUG] CONTAINER_IMAGE=$CONTAINER_IMAGE"
+  echo "[DEBUG] N_TRIALS=$N_TRIALS"
+fi
+
+if [ ! -f "$CONTAINER_IMAGE" ]; then
+  echo "Error: container image not found: $CONTAINER_IMAGE" >&2
+  exit 1
+fi
+
+if [ "$DEBUG" = "1" ]; then
+  srun \
+    --container-image="$CONTAINER_IMAGE" \
+    --container-workdir="$PROJECT_ROOT" \
+    --container-mounts="$PROJECT_ROOT":"$PROJECT_ROOT",/netscratch/$USER:/netscratch/$USER,/ds:/ds:ro \
+    python - <<'PY'
+import sys, platform
+print('Python:', sys.version)
+print('Platform:', platform.platform())
+try:
+    import hydra
+    print('hydra OK')
+except Exception as e:
+    print('hydra import failed:', e)
+try:
+    import optuna
+    print('optuna OK')
+except Exception as e:
+    print('optuna import failed:', e)
+PY
+fi
 
 srun \
   --container-image="$CONTAINER_IMAGE" \
@@ -31,10 +64,6 @@ srun \
   python -m experiments.run -m \
     scenario=scenario2 data=mmfit hpo=scenario2_mmfit \
     hydra/sweeper=optuna \
-    hydra.sweeper.storage=sqlite:////$STUDY_DB \
-  hydra.sweeper.n_trials=$N_TRIALS \
-  hydra.sweeper.study_name=$STUDY_NAME \
-  hydra.sweep.dir=$STUDY_DIR \
-  hydra.sweep.subdir=trial_\${hydra.job.num} \
+    hydra.sweeper.n_trials=$N_TRIALS \
     trainer.epochs=10 \
     seed=0
