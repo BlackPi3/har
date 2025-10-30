@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #SBATCH -J har-sweep
 #SBATCH -p A100-40GB
-#SBATCH -o /netscratch/$USER/experiments/log/slurm-%x-%j.out
-#SBATCH -e /netscratch/$USER/experiments/log/slurm-%x-%j.err
+#SBATCH -o /netscratch/zolfaghari/experiments/log/slurm-%x-%j.out
+#SBATCH -e /netscratch/zolfaghari/experiments/log/slurm-%x-%j.err
 #SBATCH --gpus=1
 #SBATCH --cpus-per-gpu=8
 #SBATCH --mem=32G
