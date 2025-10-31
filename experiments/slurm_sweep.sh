@@ -2,8 +2,8 @@
 #SBATCH -J har-sweep
 #SBATCH -p L40S
 #SBATCH --gpus=1
-#SBATCH --cpus-per-gpu=8
-#SBATCH --mem=64G
+#SBATCH --cpus-per-gpu=16
+#SBATCH --mem=48G
 #SBATCH -t 00:30:00
 
 # GPUs: RTX3090, V100-32GB, L40S / RTXA6000, A100-40GB / A100-PCI
