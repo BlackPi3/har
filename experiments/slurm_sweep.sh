@@ -27,46 +27,15 @@ HPO=${HPO:-scenario2_mmfit}
 mkdir -p /netscratch/$USER/experiments/log
 # Pre-create per-study output dir so Optuna SQLite parent exists
 mkdir -p "/netscratch/$USER/experiments/output/$HPO"
+LOGDIR=/netscratch/$USER/experiments/log
+mkdir -p "$LOGDIR"
 
-# Sanity checks (optional): enable with DEBUG=1
-DEBUG=${DEBUG:-1}
-## Limit enroot/unsquashfs parallelism to reduce peak RAM during container extract
-export ENROOT_MAX_PROCESSORS=${ENROOT_MAX_PROCESSORS:-1}
-if [ "${DEBUG:-0}" != "0" ]; then
-  echo "[DEBUG] Host: $(hostname)  User: $USER  Date: $(date)"
-  echo "[DEBUG] PROJECT_ROOT=$PROJECT_ROOT"
-  echo "[DEBUG] CONTAINER_IMAGE=$CONTAINER_IMAGE"
-  echo "[DEBUG] N_TRIALS=$N_TRIALS"
-  echo "[DEBUG] HPO=$HPO"
-fi
+# --- Dynamic timestamp (e.g., 251025-5pm) ---
+DATESTAMP=$(date +%d%m%y-%I%P)   # %I = 12-hour, %P = am/pm (e.g., 5pm)
 
-if [ ! -f "$CONTAINER_IMAGE" ]; then
-  echo "Error: container image not found: $CONTAINER_IMAGE" >&2
-  exit 1
-fi
-
-if [ "${DEBUG:-0}" != "0" ]; then
-  echo "[DEBUG] Running Python package preflight inside container..."
-  srun \
-    --container-image="$CONTAINER_IMAGE" \
-    --container-workdir="$PROJECT_ROOT" \
-    --container-mounts="$PROJECT_ROOT":"$PROJECT_ROOT",/netscratch/$USER:/netscratch/$USER,/ds:/ds:ro \
-    python - <<'PY'
-import sys, platform
-print('Python:', sys.version)
-print('Platform:', platform.platform())
-try:
-    import hydra
-    print('hydra OK')
-except Exception as e:
-    print('hydra import failed:', e)
-try:
-    import optuna
-    print('optuna OK')
-except Exception as e:
-    print('optuna import failed:', e)
-PY
-fi
+# --- Redirect stdout/stderr manually ---
+exec > >(tee -a "$LOGDIR/${DATESTAMP}.out")
+exec 2> >(tee -a "$LOGDIR/${DATESTAMP}.err" >&2)
 
 srun \
   --container-image="$CONTAINER_IMAGE" \
