@@ -15,7 +15,7 @@ hydra:
     # Single source of truth for study name: derive from selected hpo group
     study_name: ${hydra:runtime.choices.hpo}
     # Store Optuna DB alongside trials in scratch, per-study folder
-    storage: "sqlite:////netscratch/${oc.env:USER}/experiments/output/${hydra:runtime.choices.hpo}/${hydra:runtime.choices.hpo}.db"
+    storage: "sqlite:////netscratch/zolfaghari/experiments/output/${hydra:runtime.choices.hpo}/${hydra:runtime.choices.hpo}.db"
     params:
       # Optimizer
       optim.lr: tag(log, interval(1e-5, 1e-2))
@@ -36,5 +36,5 @@ hydra:
 
   sweep:
     # Place all trials under a unified per-study directory
-    dir: /netscratch/${oc.env:USER}/experiments/output/${hydra:runtime.choices.hpo}
+    dir: "/netscratch/zolfaghari/experiments/output/${hydra:runtime.choices.hpo}"
     subdir: trial_${hydra.job.num}

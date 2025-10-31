@@ -12,8 +12,8 @@ set -euo pipefail
 set -x
 
 # --- User knobs (override via env) ---
-PROJECT_ROOT=/home/$USER/har
-CONTAINER_IMAGE=/netscratch/$USER/images/har.sqsh
+PROJECT_ROOT=/home/zolfaghari/har
+CONTAINER_IMAGE=/netscratch/zolfaghari/images/har.sqsh
 
 # Number of Optuna trials (override with N_TRIALS=... when submitting)
 N_TRIALS=${N_TRIALS:-2}
@@ -21,11 +21,12 @@ N_TRIALS=${N_TRIALS:-2}
 # HPO space to use (override with HPO=... when submitting)
 HPO=${HPO:-scenario2_mmfit}
 
-# Ensure log directory exists
-mkdir -p /netscratch/$USER/experiments/log
+# Ensure log directory exists (use a single, consistent user for scratch paths)
+export SCRATCH_USER=${SCRATCH_USER:-$USER}
+mkdir -p /netscratch/zolfaghari/experiments/log
 # Pre-create per-study output dir so Optuna SQLite parent exists
-mkdir -p "/netscratch/$USER/experiments/output/$HPO"
-LOGDIR=/netscratch/$USER/experiments/log
+mkdir -p "/netscratch/zolfaghari/experiments/output/$HPO"
+LOGDIR=/netscratch/zolfaghari/experiments/log
 mkdir -p "$LOGDIR"
 
 # --- Dynamic timestamp (e.g., 251025-5pm) ---
@@ -38,7 +39,8 @@ exec 2> >(tee -a "$LOGDIR/${DATESTAMP}.err" >&2)
 srun \
   --container-image="$CONTAINER_IMAGE" \
   --container-workdir="$PROJECT_ROOT" \
-  --container-mounts="$PROJECT_ROOT":"$PROJECT_ROOT",/netscratch/$USER:/netscratch/$USER,/ds:/ds:ro \
+  --container-mounts="$PROJECT_ROOT":"$PROJECT_ROOT",/netscratch/zolfaghari:/netscratch/zolfaghari,/ds:/ds:ro \
+  \
   python -m experiments.run -m \
     env=remote \
     scenario=scenario2 \
