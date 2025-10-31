@@ -30,7 +30,7 @@ mkdir -p "/netscratch/$USER/experiments/output/$HPO"
 DEBUG=${DEBUG:-0}
 ## Limit enroot/unsquashfs parallelism to reduce peak RAM during container extract
 export ENROOT_MAX_PROCESSORS=${ENROOT_MAX_PROCESSORS:-1}
-if [ "$DEBUG" = "1" ]; then
+if [ "${DEBUG:-0}" != "0" ]; then
   echo "[DEBUG] Host: $(hostname)  User: $USER  Date: $(date)"
   echo "[DEBUG] PROJECT_ROOT=$PROJECT_ROOT"
   echo "[DEBUG] CONTAINER_IMAGE=$CONTAINER_IMAGE"
@@ -43,7 +43,8 @@ if [ ! -f "$CONTAINER_IMAGE" ]; then
   exit 1
 fi
 
-if [ "$DEBUG" = "1" ]; then
+if [ "${DEBUG:-0}" != "0" ]; then
+  echo "[DEBUG] Running Python package preflight inside container..."
   srun \
     --container-image="$CONTAINER_IMAGE" \
     --container-workdir="$PROJECT_ROOT" \
