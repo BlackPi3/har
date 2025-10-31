@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 #SBATCH -J har-sweep
-#SBATCH -p A100-40GB
+#SBATCH -p RTX3090
 #SBATCH -o /netscratch/zolfaghari/experiments/log/slurm-%x-%j.out
 #SBATCH -e /netscratch/zolfaghari/experiments/log/slurm-%x-%j.err
 #SBATCH --gpus=1
 #SBATCH --cpus-per-gpu=8
 #SBATCH --mem=64G
-#SBATCH -t 24:00:00
+#SBATCH -t 00:30:00
+
+# GPUs: RTX3090, V100-32GB, L40S / RTXA6000, A100-40GB / A100-PCI
 
 set -euo pipefail
 set -x
@@ -27,7 +29,7 @@ mkdir -p /netscratch/$USER/experiments/log
 mkdir -p "/netscratch/$USER/experiments/output/$HPO"
 
 # Sanity checks (optional): enable with DEBUG=1
-DEBUG=${DEBUG:-0}
+DEBUG=${DEBUG:-1}
 ## Limit enroot/unsquashfs parallelism to reduce peak RAM during container extract
 export ENROOT_MAX_PROCESSORS=${ENROOT_MAX_PROCESSORS:-1}
 if [ "${DEBUG:-0}" != "0" ]; then
@@ -74,5 +76,5 @@ srun \
     env=remote scenario=scenario2 data=mmfit +hpo=$HPO \
     hydra/sweeper=optuna \
     hydra.sweeper.n_trials=$N_TRIALS \
-    trainer.epochs=10 \
+    trainer.epochs=2 \
     seed=0

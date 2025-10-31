@@ -26,9 +26,23 @@ class HARLightningModule(pl.LightningModule):
     def __init__(self, cfg: Any, ns: Any, models: Dict[str, torch.nn.Module]):  # ns is a SimpleNamespace; cfg is DictConfig
         super().__init__()
         # Persist only scalar hyperparameters; ignore model module weights to avoid bloating checkpoints
+        # Support both new 'scenario' group and legacy 'experiment'
+        def _get_from(obj, key, default):
+            try:
+                return float(getattr(obj, key, default))
+            except Exception:
+                return float(default)
+        alpha = _get_from(getattr(cfg, 'scenario', object()), 'alpha', 1.0)
+        beta = _get_from(getattr(cfg, 'scenario', object()), 'beta', 0.0)
+        # Fallback to legacy cfg.experiment if present
+        try:
+            alpha = float(getattr(cfg.experiment, 'alpha', alpha))
+            beta = float(getattr(cfg.experiment, 'beta', beta))
+        except Exception:
+            pass
         self.save_hyperparameters({
-            'alpha': float(getattr(cfg.experiment, 'alpha', 1.0)),
-            'beta': float(getattr(cfg.experiment, 'beta', 0.0)),
+            'alpha': alpha,
+            'beta': beta,
             'lr': float(getattr(ns, 'lr', 1e-3)),
             'weight_decay': float(getattr(ns, 'weight_decay', 0.0)),
             'patience': int(getattr(ns, 'patience', 10)),
