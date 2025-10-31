@@ -73,6 +73,19 @@ def main(cfg: DictConfig) -> Any:
     set_seed(cfg.seed)
     device_str = _select_device(getattr(cfg, "device", "auto"))
     torch_device = torch.device(device_str)
+    # Determine cluster mode: if env=remote in Hydra choices (or SLURM present)
+    cluster_flag = False
+    try:
+        env_choice = cfg.hydra.runtime.choices.get("env") if hasattr(cfg.hydra.runtime, "choices") else None
+        if env_choice is None:
+            # fallback to attribute access
+            env_choice = getattr(getattr(cfg.hydra.runtime, "choices", object()), "env", None)
+        cluster_flag = (env_choice == "remote")
+    except Exception:
+        cluster_flag = False
+    # Also treat SLURM execution as cluster mode
+    if os.environ.get("SLURM_JOB_ID"):
+        cluster_flag = True
 
     # Data directory resolution (simplified): rely on explicit config.
     dataset_name = cfg.data.dataset_name
@@ -157,7 +170,8 @@ def main(cfg: DictConfig) -> Any:
     ns = SimpleNamespace(**ns_dict)
     ns.device = device_str
     ns.torch_device = torch_device
-    ns.cluster = False
+    ns.cluster = cluster_flag
+    print(f"Cluster mode: {ns.cluster} (env choice remote -> {cluster_flag})")
 
     dls = get_dataloaders(dataset_name, ns)
     print("Dataset sizes:", {k: len(v.dataset) for k, v in dls.items()})
