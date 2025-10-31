@@ -31,8 +31,8 @@ hydra:
       model.feature_extractor.n_filters: range(8, 32, 4)
       model.feature_extractor.filter_size: range(3, 9, 2)
 
-  # Throughput knobs
-  data.batch_size: range(32, 128, 32)
+      # Throughput knobs
+      data.batch_size: choice(1024, 1536, 2048)
 
   sweep:
     # Place all trials under a unified per-study directory

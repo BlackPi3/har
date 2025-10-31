@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #SBATCH -J har-sweep
-#SBATCH -p RTX3090
+#SBATCH -p L40S
 #SBATCH --gpus=1
 #SBATCH --cpus-per-gpu=8
 #SBATCH --mem=64G
@@ -40,8 +40,11 @@ srun \
   --container-workdir="$PROJECT_ROOT" \
   --container-mounts="$PROJECT_ROOT":"$PROJECT_ROOT",/netscratch/$USER:/netscratch/$USER,/ds:/ds:ro \
   python -m experiments.run -m \
-    env=remote scenario=scenario2 data=mmfit +hpo=$HPO \
+    env=remote \
+    scenario=scenario2 \
+    data=mmfit data.debug_subset=true \
+    trainer.epochs=2 \
+    +hpo=$HPO \
     hydra/sweeper=optuna \
     hydra.sweeper.n_trials=$N_TRIALS \
-    trainer.epochs=2 \
     seed=0

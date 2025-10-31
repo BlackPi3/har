@@ -29,6 +29,7 @@ outputs/
 experiments/output/
 experiments/optuna/
 *.log
+multirun
 
 # Model checkpoints and temporary files
 *.pth
