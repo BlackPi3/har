@@ -35,6 +35,8 @@ def build_mmfit_datasets(cfg):
     sim_acc_file = getattr(cfg, 'sim_acc_file', DEFAULT_SIM_ACC_FILE)
     
     sensor_window_length = getattr(cfg, 'sensor_window_length', DEFAULT_SENSOR_WINDOW_LENGTH)
+    stride_seconds = getattr(cfg, 'stride_seconds', None)
+    sampling_rate_hz = int(getattr(cfg, 'sampling_rate_hz', 100))
     
     # Check for mode configuration - determine if we should use simulated data
     use_simulated_data = getattr(cfg, 'use_simulated_data', False)
@@ -57,6 +59,8 @@ def build_mmfit_datasets(cfg):
                 acc_file=acc_file_path,
                 labels_file=labels_file_path,
                 sensor_window_length=sensor_window_length,
+                stride_seconds=stride_seconds,
+                sampling_rate_hz=sampling_rate_hz,
                 cluster=getattr(cfg, 'cluster', False),
                 dtype=getattr(cfg, 'dtype', None) or torch.float32,
             )

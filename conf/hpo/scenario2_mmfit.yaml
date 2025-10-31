@@ -27,11 +27,12 @@ hydra:
 
       # Data/model coupling (MM-Fit typical ranges)
       data.sensor_window_length: choice(128, 192, 256, 320, 384, 448, 512)
+      data.stride_seconds: choice(0.1, 0.2, 0.5, 1.0)
       model.feature_extractor.n_filters: range(8, 32, 4)
       model.feature_extractor.filter_size: range(3, 9, 2)
 
-      # Throughput knobs
-      data.batch_size: range(32, 128, 32)
+  # Throughput knobs
+  data.batch_size: range(32, 128, 32)
 
   sweep:
     # Place all trials under a unified per-study directory

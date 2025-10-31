@@ -22,3 +22,5 @@ debug_limit_per_split: 32
 batch_size: 64
 
 sensor_window_length: 300
+sampling_rate_hz: 100        # Hz; assumed standard across datasets for now
+stride_seconds: 0.2          # hop size between windows (seconds); 0.2s => 20-sample stride at 100 Hz

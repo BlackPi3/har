@@ -19,8 +19,11 @@ class MMFit(BaseHARDataset):
     Currently uses left wrist joint trajectory and accelerometer sensor data.
     """
     
-    def __init__(self, pose_file: str, acc_file: str, labels_file: str, 
-                 sensor_window_length: int, cluster: bool = False, 
+    def __init__(self, pose_file: str, acc_file: str, labels_file: str,
+                 sensor_window_length: int,
+                 stride_seconds: float | None = None,
+                 sampling_rate_hz: int = 100,
+                 cluster: bool = False,
                  dtype: torch.dtype = torch.float32):
         """
         Initialize MMFit dataset.
@@ -35,7 +38,13 @@ class MMFit(BaseHARDataset):
         """
         super().__init__()
         
-        self.sensor_window_length = sensor_window_length
+        self.sensor_window_length = int(sensor_window_length)
+        # Stride: convert seconds to samples (assumes 100 Hz by default)
+        if stride_seconds is None:
+            self.stride = 1
+        else:
+            s = int(round(float(stride_seconds) * float(sampling_rate_hz)))
+            self.stride = max(1, s)
         self.ACTIONS = ACTIONS
         
         # Load pose data: (3, N, joints) -> select specific joints
@@ -66,15 +75,20 @@ class MMFit(BaseHARDataset):
         self.end_frames = [row[1] for row in self.labels]
     
     def __len__(self) -> int:
-        """Return dataset size based on possible windows."""
-        return self.pose.shape[1] - self.sensor_window_length
+        """Return number of windows with hop 'stride'."""
+        N = int(self.pose.shape[1])
+        W = int(self.sensor_window_length)
+        S = int(self.stride)
+        if N <= W:
+            return 0
+        return (N - W) // S
     
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, int]:
         """
-        Get a data sample using dynamic windowing.
+        Get a data sample using dynamic windowing with hop size 'stride'.
         
         Args:
-            idx: Sample index
+            idx: Sample index (0-based)
             
         Returns:
             Tuple of (pose_window, acc_window, activity_label)
@@ -82,16 +96,20 @@ class MMFit(BaseHARDataset):
                 - acc_window: (3, window_length) - accelerometer data
                 - activity_label: integer class label
         """
+        # Compute window start/end using hop size
+        S = int(self.stride)
+        W = int(self.sensor_window_length)
+        start = int(idx) * S
+        end = start + W
         # Extract windowed data
         # Pose: (3, joints, W) - skip frame/timestamp columns and permute
-        sample_pose = self.pose[:, idx:idx + self.sensor_window_length, POSE_DATA_INDICES].permute(0, 2, 1)
-        
-        # Accelerometer: (3, W) - skip frame/timestamp columns and permute  
-        sample_acc = self.acc[idx:idx + self.sensor_window_length, POSE_DATA_INDICES].permute(1, 0)
+        sample_pose = self.pose[:, start:end, POSE_DATA_INDICES].permute(0, 2, 1)
+        # Accelerometer: (3, W) - skip frame/timestamp columns and permute
+        sample_acc = self.acc[start:end, POSE_DATA_INDICES].permute(1, 0)
         
         # Determine activity label for this window
-        window_start_frame = self.pose[0, idx, 0]
-        window_end_frame = self.pose[0, idx + self.sensor_window_length, 0]
+        window_start_frame = self.pose[0, start, 0]
+        window_end_frame = self.pose[0, end, 0]
         
         # Use midpoint with tolerance for activity labeling
         tolerance = DEFAULT_LABELING_TOLERANCE
