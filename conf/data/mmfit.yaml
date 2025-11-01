@@ -15,10 +15,6 @@ train_subjects: ["w01","w02","w03","w04","w06","w07","w08","w16","w17","w18","w0
 val_subjects:   ["w14","w15","w19","w20"]
 test_subjects:  ["w09","w10","w11","w13"]
 
-# Optional debug subset controls (activated with data.mmfit.debug_subset=true)
-debug_subset: false
-debug_limit_per_split: 32
-
 batch_size: 1024
 
 sensor_window_length: 300

@@ -44,7 +44,7 @@ srun \
   python -m experiments.run -m \
     env=remote \
     scenario=scenario2 \
-    data=mmfit data.debug_subset=true \
+  data=mmfit \
     trainer.epochs=2 \
     +hpo=$HPO \
     hydra/sweeper=optuna \

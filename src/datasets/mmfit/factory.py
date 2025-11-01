@@ -77,7 +77,7 @@ def build_mmfit_datasets(cfg):
             print(f"Warning: Could not load dataset for subject {w_id}: {e}")
             continue
 
-    # Return ConcatDatasets
+    # Return ConcatDatasets (no artificial debug limiting here)
     train_dataset = ConcatDataset(train) if train else None
     val_dataset = ConcatDataset(val) if val else None
     test_dataset = ConcatDataset(test) if test else None

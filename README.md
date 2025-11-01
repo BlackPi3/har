@@ -66,7 +66,6 @@ python experiments/run.py data=mmfit_debug scenario=debug trainer.epochs=2
 ```
 What this does:
 * Restricts subjects to 1 per split
-* Optionally limits samples per split (`debug_limit_per_split`)
 * Runs only 2 epochs (override)
 * Computes macro F1 (torchmetrics) at epoch end
 

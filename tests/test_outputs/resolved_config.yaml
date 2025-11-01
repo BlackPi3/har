@@ -40,8 +40,6 @@ data:
   - w10
   - w11
   - w13
-  debug_subset: false
-  debug_limit_per_split: 32
   batch_size: 64
   num_workers: 4
 model:
