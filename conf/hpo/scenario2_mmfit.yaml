@@ -12,10 +12,10 @@ hydra:
   sweeper:
     # Keep sweep-level defaults close to the space so CLI can stay minimal
     direction: ${hpo.mode}
-    # Single source of truth for study name: derive from selected hpo group
-    study_name: ${hydra:runtime.choices.hpo}
+    # Study name with a robust fallback: prefer env STUDY_NAME, else this file's canonical name
+    study_name: ${oc.env:STUDY_NAME,scenario2_mmfit}
     # Store Optuna DB alongside trials in scratch, per-study folder
-    storage: "sqlite:////netscratch/zolfaghari/experiments/output/${hydra:runtime.choices.hpo}/${hydra:runtime.choices.hpo}.db"
+    storage: "sqlite:////netscratch/zolfaghari/experiments/output/${oc.env:STUDY_NAME,scenario2_mmfit}/${oc.env:STUDY_NAME,scenario2_mmfit}.db"
     params:
       # Optimizer
       optim.lr: tag(log, interval(1e-5, 1e-2))
@@ -36,5 +36,5 @@ hydra:
 
   sweep:
     # Place all trials under a unified per-study directory
-    dir: "/netscratch/zolfaghari/experiments/output/${hydra:runtime.choices.hpo}"
+    dir: "/netscratch/zolfaghari/experiments/output/${oc.env:STUDY_NAME,scenario2_mmfit}"
     subdir: trial_${hydra.job.num}

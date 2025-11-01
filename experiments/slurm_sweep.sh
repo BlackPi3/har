@@ -16,7 +16,7 @@ PROJECT_ROOT=/home/zolfaghari/har
 CONTAINER_IMAGE=/netscratch/zolfaghari/images/har.sqsh
 
 # Number of Optuna trials (override with N_TRIALS=... when submitting)
-N_TRIALS=${N_TRIALS:-2}
+N_TRIALS=${N_TRIALS:-1}
 
 # HPO space to use (override with HPO=... when submitting)
 HPO=${HPO:-scenario2_mmfit}
@@ -28,6 +28,9 @@ mkdir -p /netscratch/zolfaghari/experiments/log
 mkdir -p "/netscratch/zolfaghari/experiments/output/$HPO"
 LOGDIR=/netscratch/zolfaghari/experiments/log
 mkdir -p "$LOGDIR"
+
+# Propagate study name to Hydra Optuna Sweeper (used in storage & dir)
+export STUDY_NAME="$HPO"
 
 # --- Dynamic timestamp (e.g., 251025-5pm) ---
 DATESTAMP=$(date +%d%m%y-%I%P)   # %I = 12-hour, %P = am/pm (e.g., 5pm)
@@ -44,8 +47,8 @@ srun \
   python -m experiments.run -m \
     env=remote \
     scenario=scenario2 \
-  data=mmfit \
-    trainer.epochs=2 \
+    data=mmfit \
+    trainer.epochs=1 \
     +hpo=$HPO \
     hydra/sweeper=optuna \
     hydra.sweeper.n_trials=$N_TRIALS \

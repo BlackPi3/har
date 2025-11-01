@@ -110,6 +110,8 @@ def main(cfg: DictConfig) -> Any:
     print(f"Dataset: {data_dir}")
     print(f"Working directory (Hydra run dir): {Path.cwd()}")
 
+    
+
     # Build lightweight namespace expected by dataloaders (legacy trainer removed)
     from types import SimpleNamespace
     legacy_keys = [
@@ -172,6 +174,25 @@ def main(cfg: DictConfig) -> Any:
     ns.torch_device = torch_device
     ns.cluster = cluster_flag
     print(f"Cluster mode: {ns.cluster} (env choice remote -> {cluster_flag})")
+
+    # Show HPO/Sweeper resolution (helps diagnose in-memory studies)
+    try:
+        study_name = _fallback("hydra.sweeper.study_name", default=None)
+        storage = _fallback("hydra.sweeper.storage", default=None)
+        sweep_dir = _fallback("hydra.sweep.dir", default=None)
+        if study_name or storage or sweep_dir:
+            print("Hydra Optuna Sweeper (resolved):")
+            if study_name:
+                print(f"  study_name: {study_name}")
+            if storage:
+                print(f"  storage: {storage}")
+            if sweep_dir:
+                print(f"  sweep.dir: {sweep_dir}")
+            env_study = os.environ.get("STUDY_NAME")
+            if env_study:
+                print(f"  env STUDY_NAME: {env_study}")
+    except Exception:
+        pass
 
     dls = get_dataloaders(dataset_name, ns)
     print("Dataset sizes:", {k: len(v.dataset) for k, v in dls.items()})
