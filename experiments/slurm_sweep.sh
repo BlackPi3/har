@@ -32,6 +32,9 @@ mkdir -p "$LOGDIR"
 # Propagate study name to Hydra Optuna Sweeper (used in storage & dir)
 export STUDY_NAME="$HPO"
 
+# Make Hydra print full tracebacks for easier diagnosis
+export HYDRA_FULL_ERROR=1
+
 # --- Dynamic timestamp (e.g., 251025-5pm) ---
 DATESTAMP=$(date +%d%m%y-%I%P)   # %I = 12-hour, %P = am/pm (e.g., 5pm)
 
@@ -47,9 +50,12 @@ srun \
   python -m experiments.run -m \
     env=remote \
     scenario=scenario2 \
-    data=mmfit \
+    data=mmfit_debug \
     trainer.epochs=1 \
     +hpo=$HPO \
     hydra/sweeper=optuna \
+    hydra.sweeper.study_name=$HPO \
+    hydra.sweeper.storage=sqlite:////netscratch/zolfaghari/experiments/output/$HPO/$HPO.db \
+    hydra.sweep.dir=/netscratch/zolfaghari/experiments/output/$HPO \
     hydra.sweeper.n_trials=$N_TRIALS \
     seed=0
