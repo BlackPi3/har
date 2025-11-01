@@ -59,10 +59,12 @@ class HARLightningModule(pl.LightningModule):
         self.ce = torch.nn.CrossEntropyLoss()
         # We can infer number of classes from classifier output layer
         try:
-            self.num_classes = int(self.ac.classfier.out_features)  # type: ignore[attr-defined]
+            self.num_classes = int(self.ac.classfier.out_features)  # attribute name is 'classfier' in model
         except Exception:
-            self.num_classes = None  # fallback; will set lazily on first val batch
+            self.num_classes = None  # fallback; will set lazily on first batch
+        # Metrics (lazy-init supported if num_classes unknown at construction)
         self.val_f1_metric = MulticlassF1Score(num_classes=self.num_classes, average="macro") if self.num_classes else None
+        self.train_f1_metric = MulticlassF1Score(num_classes=self.num_classes, average="macro").to(self.device) if self.num_classes else None
         self.best_val_f1 = None
 
     def forward(self, pose: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
@@ -87,6 +89,13 @@ class HARLightningModule(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):  # type: ignore[override]
         total, mse_l, sim_l, act_l, logits, labels = self._shared_step(batch)
+        preds = torch.argmax(logits, dim=1)
+        # Lazily create train metric if needed
+        if self.train_f1_metric is None:
+            num_classes = int(logits.shape[1])
+            self.num_classes = self.num_classes or num_classes
+            self.train_f1_metric = MulticlassF1Score(num_classes=num_classes, average="macro").to(self.device)
+        self.train_f1_metric.update(preds, labels)
         self.log("train_loss", total, prog_bar=True, on_epoch=True, on_step=False)
         self.log("train_mse", mse_l, prog_bar=False, on_epoch=True)
         self.log("train_act", act_l, prog_bar=False, on_epoch=True)
@@ -105,6 +114,10 @@ class HARLightningModule(pl.LightningModule):
         # Update metric state (kept on correct device by Lightning)
         self.val_f1_metric.update(preds, labels)
         self.log("val_loss", total, prog_bar=True, on_epoch=True, on_step=False)
+        self.log("val_mse", mse_l, prog_bar=False, on_epoch=True)
+        self.log("val_act", act_l, prog_bar=False, on_epoch=True)
+        if self.beta > 0:
+            self.log("val_sim", sim_l, prog_bar=False, on_epoch=True)
         return total
 
     def on_validation_epoch_end(self):  # type: ignore[override]
@@ -118,6 +131,13 @@ class HARLightningModule(pl.LightningModule):
             self.log("best_val_f1", f1, prog_bar=False, on_epoch=True)
         # Reset for next epoch
         self.val_f1_metric.reset()
+
+    def on_train_epoch_end(self):  # type: ignore[override]
+        # Compute and log train F1 to mirror validation metrics
+        if self.train_f1_metric is not None:
+            f1 = self.train_f1_metric.compute()
+            self.log("train_f1", f1, prog_bar=True, on_epoch=True)
+            self.train_f1_metric.reset()
 
     def configure_optimizers(self):  # type: ignore[override]
         params = list(self.pose2imu.parameters()) + list(self.fe.parameters()) + list(self.ac.parameters())
