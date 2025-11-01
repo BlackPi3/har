@@ -74,6 +74,11 @@ Ultra-fast plumbing smoke (no checkpoints / early stopping):
 python experiments/run.py data=mmfit_debug scenario=debug trainer.epochs=1 trainer.enable_checkpointing=false trainer.early_stopping.enabled=false
 ```
 
+Faster epochs without changing the dataset size (use a fraction of batches):
+```bash
+python experiments/run.py trainer.epochs=2 trainer.limit_train_batches=0.1 trainer.limit_val_batches=0.25
+```
+
 ## Determinism / Seeding
 Global seed configured in `conf/conf.yaml` under `seed:`. Override per run:
 ```bash

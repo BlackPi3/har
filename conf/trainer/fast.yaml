@@ -1,0 +1,26 @@
+# Fast trainer profile for coarse/low-fidelity runs
+# Inherits the standard Lightning trainer and overrides a few knobs
+
+defaults:
+  - lightning
+
+# Use a fraction of batches to shorten epochs significantly
+limit_train_batches: 0.2   # 20% of training batches
+limit_val_batches: 0.5     # keep validation more stable
+limit_test_batches: 1.0
+
+# Shorter runs by default (still overrideable via CLI)
+epochs: 5
+
+# Reduce I/O during fast screening
+enable_checkpointing: false
+
+# Keep early stopping for quick exits on plateau
+early_stopping:
+  enabled: true
+  monitor: val_f1
+  mode: max
+  patience: ${trainer.patience}
+  min_delta: 0.0
+
+# TODO step one of fast trainer. fast helps with some HPO 
