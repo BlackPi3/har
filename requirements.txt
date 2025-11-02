@@ -9,6 +9,10 @@ wandb>=0.17.0
 optuna>=3.6.0
 hydra-optuna-sweeper
 
+# RDB storage (Optuna) deps — align with container (SQLAlchemy 2.x compatible Alembic)
+SQLAlchemy>=2,<3
+alembic>=1.12,<2
+
 # Data handling
 pandas>=1.3.0
 PyYAML>=5.4.0
