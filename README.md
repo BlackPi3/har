@@ -6,7 +6,9 @@ Unified, Hydra-configured training pipeline for pose-to-IMU regression + activit
 ```
 conf/                # Hydra config root (data/, model/, experiment/, optim/, trainer/)
 experiments/
-  run.py             # Single entrypoint for single runs and sweeps (Hydra)
+  run_trial.py       # Canonical single-trial entrypoint (Hydra)
+  run_optuna.py      # Native Optuna orchestrator (per-trial subprocess)
+  slurm_optuna.sh    # SLURM launcher for the orchestrator (scratch-friendly)
 src/
   data.py            # Dataloader factory (by dataset name)
   lightning_module.py# HARLightningModule implementation
@@ -18,7 +20,7 @@ datasets/            # Actual data directory (subject folders, not tracked)
 ```
 
 ## Key Ideas
-* Single command entrypoint (`experiments/run.py`)
+* Single command entrypoint (`experiments/run_trial.py`)
 * Single HPO entrypoint (`experiments/run_optuna.py`)
 * Configuration-first (Hydra): compose + override at CLI
 * Single Lightning training backend (legacy removed)
@@ -46,23 +48,23 @@ If your subjects are directly under `<data_dir>/w01`, adjust or set `data.data_d
 
 ## Run (Basic)
 ```bash
-python experiments/run.py scenario=scenario2
+python experiments/run_trial.py scenario=scenario2
 ```
 Common overrides:
 ```bash
-python experiments/run.py trainer.epochs=50 optim.lr=5e-4 \
+python experiments/run_trial.py trainer.epochs=50 optim.lr=5e-4 \
   model.regressor.sequence_length=256 experiment.alpha=1.5
 ```
 
 Short smoke test (2 epochs):
 ```bash
-python experiments/run.py trainer.epochs=2
+python experiments/run_trial.py trainer.epochs=2
 ```
 
 ## Fast Debug Run
 Use the tiny debug split to validate end-to-end behavior quickly:
 ```bash
-python experiments/run.py data=mmfit_debug scenario=debug trainer.epochs=2
+python experiments/run_trial.py data=mmfit_debug scenario=debug trainer.epochs=2
 ```
 What this does:
 * Restricts subjects to 1 per split
@@ -71,18 +73,18 @@ What this does:
 
 Ultra-fast plumbing smoke (no checkpoints / early stopping):
 ```bash
-python experiments/run.py data=mmfit_debug scenario=debug trainer.epochs=1 trainer.enable_checkpointing=false trainer.early_stopping.enabled=false
+python experiments/run_trial.py data=mmfit_debug scenario=debug trainer.epochs=1 trainer.enable_checkpointing=false trainer.early_stopping.enabled=false
 ```
 
 Faster epochs without changing the dataset size (use a fraction of batches):
 ```bash
-python experiments/run.py trainer.epochs=2 trainer.limit_train_batches=0.1 trainer.limit_val_batches=0.25
+python experiments/run_trial.py trainer.epochs=2 trainer.limit_train_batches=0.1 trainer.limit_val_batches=0.25
 ```
 
 ## Determinism / Seeding
 Global seed configured in `conf/conf.yaml` under `seed:`. Override per run:
 ```bash
-python experiments/run.py seed=42
+python experiments/run_trial.py seed=42
 ```
 
 ## Config Anatomy
@@ -116,15 +118,15 @@ Planned near-term improvements (see `ROADMAP.md`): debug subset config, W&B logg
 ## Weights & Biases Logging (Optional)
 Enable W&B logging via Hydra overrides:
 ```bash
-python experiments/run.py trainer.logger=wandb trainer.wandb.enabled=true trainer.wandb.project=har
+python experiments/run_trial.py trainer.logger=wandb trainer.wandb.enabled=true trainer.wandb.project=har
 ```
 Additional useful overrides:
 ```bash
 # Offline mode (no network)
-python experiments/run.py trainer.logger=wandb trainer.wandb.enabled=true trainer.wandb.mode=offline
+python experiments/run_trial.py trainer.logger=wandb trainer.wandb.enabled=true trainer.wandb.mode=offline
 
 # Add grouping / tags
-python experiments/run.py trainer.logger=wandb trainer.wandb.enabled=true \
+python experiments/run_trial.py trainer.logger=wandb trainer.wandb.enabled=true \
   trainer.wandb.group=scenario2 trainer.wandb.tags='["mmfit","alpha1.0"]'
 ```
 If `wandb` is not installed the run will continue without a logger and print a warning.
@@ -138,10 +140,10 @@ Logged items:
 * Final summary metrics (also in `results.json`).
 
 ## Hyperparameter Optimization (Optuna)
-Use the HPO orchestrator to run sequential Optuna trials. The search space is defined in YAML and maps Hydra keys to distributions.
+Use the HPO orchestrator to run sequential Optuna trials. The search space is defined in code (see `experiments/run_optuna.py::build_space`) and maps Hydra keys to distributions.
 
 ### Sweep outputs (SLURM)
-When launched via `experiments/slurm_sweep.sh`, all sweep artifacts are written into a single directory on scratch:
+When launched via `experiments/slurm_optuna.sh`, all sweep artifacts are written into a single directory on scratch:
 
 - Root: `/netscratch/$USER/experiments/output/<study_name>/`
   - Per‑trial Hydra run dirs: `trial_<N>/...`
@@ -150,19 +152,22 @@ When launched via `experiments/slurm_sweep.sh`, all sweep artifacts are written 
 
 Environment overrides:
 
-- `STUDY_NAME` (default: `scenario2_mmfit`)
-- `OUTPUT_ROOT` (default: `/netscratch/$USER/experiments/output`)
+- `HPO` (default: `scenario2_mmfit`) – used to derive the study name
+- `STUDY_NAME` (defaults to `$HPO`)
+- `OUTPUT_ROOT` (defaults to `/netscratch/$USER/experiments/output/$STUDY_NAME`)
+- `STORAGE` (defaults to `$OUTPUT_ROOT/$STUDY_NAME.db`)
 
 Example submit:
 
 ```bash
-STUDY_NAME=scenario2_mmfit OUTPUT_ROOT=/netscratch/$USER/experiments/output \
-sbatch experiments/slurm_sweep.sh
+HPO=scenario2_mmfit N_TRIALS=50 \
+OVERRIDES="env=remote data=mmfit scenario=scenario2 trainer.epochs=30" \
+sbatch experiments/slurm_optuna.sh
 ```
 
 Quick facts:
-- Default search space: `conf/hpo/scenario2_mmfit.yaml` (you can omit `--search-space`)
-- Default output root: `experiments/outputs/hpo/<study_name>/trial_XXX/`
+- Search space is defined in `experiments/run_optuna.py::build_space` (edit there to customize)
+- Output root defaults to `/netscratch/$USER/experiments/output/<study_name>/` unless `--output-root` is provided
 - Resumable: Passing the same `--study-name` and `--storage` resumes the study
 - Objective: `--metric {val_f1|val_loss}` with `--direction {maximize|minimize}`
 - Reproducibility: fixed `--seed` is propagated to all trials
@@ -219,8 +224,8 @@ Quick facts:
   ```
 
 - Outputs and artifacts
-  - Per‑trial run dirs: `experiments/outputs/hpo/<study_name>/trial_XXX/` with a full Hydra config and `results.json`
-  - Study summary: `experiments/outputs/hpo/<study_name>/best.json` and `trials.csv`
+  - Per‑trial run dirs: `<output_root>/trial_XXX/` (default scratch path: `/netscratch/$USER/experiments/output/<study_name>/trial_XXX/`) with a full Hydra config and `results.json`
+  - Study summary: `<output_root>/best.json` and `<output_root>/trials.csv`
   - CLI prints best metric and params on completion
 
 - Fairness guidelines (recommended)
@@ -229,11 +234,11 @@ Quick facts:
   - Use subject‑independent splits and never include test data during HPO
 
 - Re‑run best config for testing
-  1) Read `experiments/outputs/hpo/<study_name>/best.json` and copy the `best_params` as Hydra overrides.
+  1) Read `<output_root>/best.json` (default: `/netscratch/$USER/experiments/output/<study_name>/best.json`) and copy the `best_params` as Hydra overrides.
   2) Train and evaluate with multiple seeds:
   ```bash
   # Example using printed best params (replace with your values)
-  python experiments/run.py \
+  python experiments/run_trial.py \
     experiment=scenario2 data=mmfit \
     optim.lr=3e-4 optim.weight_decay=1e-4 \
     data.sensor_window_length=256 \
@@ -248,23 +253,24 @@ If your cluster provides a container or preinstalled PyTorch image and no conda,
 
 ```bash
 # Edit SBATCH resources inside if needed; override via env vars as shown
-STUDY_NAME=mmfit_sc2 N_TRIALS=50 \
-OUTPUT_ROOT=/netscratch/$USER/experiments/output/hpo \
-STORAGE=/netscratch/$USER/experiments/optuna/mmfit_sc2.db \
-OVERRIDES="env=remote data=mmfit experiment=scenario2 trainer.epochs=30" \
-sbatch experiments/submit_hpo_slurm.sh
+HPO=mmfit_sc2 N_TRIALS=50 \
+OUTPUT_ROOT=/netscratch/$USER/experiments/output/mmfit_sc2 \
+STORAGE=/netscratch/$USER/experiments/output/mmfit_sc2/mmfit_sc2.db \
+OVERRIDES="env=remote data=mmfit scenario=scenario2 trainer.epochs=30" \
+sbatch experiments/slurm_optuna.sh
 ```
 
 Notes:
-- No conda required. By default the script adds the repo to PYTHONPATH so `import src` works. Set `USE_PIP_INSTALL=1` to run `pip install -e .` in the job.
-- Set `CONTAINER_IMAGE` to use a Slurm containerized job: `CONTAINER_IMAGE=docker://pytorch/pytorch:2.3.1-cuda12.1-cudnn8-runtime`.
-- Always override `--output-root` and `--storage` to point to your cluster scratch (e.g., `/netscratch/$USER/...`).
+- No conda required. The script installs the project in the container with `pip install -e .` if needed.
+- Set `CONTAINER_IMAGE` to use a Slurm containerized job: `CONTAINER_IMAGE=docker://pytorch/pytorch:2.3.1-cuda12.1-cudnn8-runtime` (or your cluster image path).
+- By default outputs and the Optuna DB are placed under `/netscratch/$USER/experiments/output/<study>/`. Adjust `OUTPUT_ROOT`/`STORAGE` as needed.
 
 ### Single entrypoints and legacy scripts
 - Preferred entrypoints:
-  - Training: `experiments/run.py`
+  - Training: `experiments/run_trial.py` (module form: `python -m experiments.run_trial ...`)
   - HPO: `experiments/run_optuna.py`
-- The folder `experiments/scenario2/` contains older, scenario-specific sweep utilities (e.g., `run_hyperparameter_search.py`, submit scripts). These are no longer required now that HPO is unified under `experiments/run_optuna.py`. You can safely ignore or remove that folder to keep a single point of entry. If you rely on any plotting/utilities there, consider migrating them into a neutral location (e.g., `experiments/analysis/`).
+- Legacy compatibility: `experiments/run.py` still works for single runs but `run_trial.py` is the canonical entrypoint going forward.
+- The older sweeper-based SLURM script is deprecated. Use `experiments/slurm_optuna.sh` instead. A shim `slurm_sweep.sh` may exist but simply forwards to the new script.
 
 ## Packaging & Imports (Why `import src` Works Here)
 This repository intentionally exposes a top-level package named `src` (because `src/__init__.py` exists). Normally, "src layout" projects nest the real package (e.g., `src/har/`) and you would import `har`. We kept `src` directly for lightweight research iteration.
@@ -297,7 +303,7 @@ Key points / how to avoid future confusion:
 Troubleshooting checklist if `ModuleNotFoundError: No module named 'src'` reappears:
 * Confirm installation: `pip show har` (or whatever `[project].name` is).
 * Inspect site-packages link: `python -c "import src, inspect; print(src.__file__)"`.
-* Ensure no stale wheel in a different environment (reactivate env, reinstall).
+* Ensure no stale wheel in a different environment (reactivate env, reinstall). If needed, run as a module: `python -m experiments.run_trial ...`.
 
 This section documents the rationale so we do not repeat the previous trial-and-error phase.
 
@@ -320,7 +326,7 @@ pip install -U pip
 pip install -e .            # required so `src/` is importable
 ```
 
-If you run without editable install and see `ModuleNotFoundError: No module named 'src'`, either install with `pip install -e .` or invoke as a module: `python -m experiments.run ...`.
+If you run without editable install and see `ModuleNotFoundError: No module named 'src'`, either install with `pip install -e .` or invoke as a module: `python -m experiments.run_trial ...`.
 
 ## Data
 
@@ -334,10 +340,10 @@ Two equivalent ways:
 
 ```bash
 # Module form (works without editable install)
-python -m experiments.run data=mmfit_debug trainer.epochs=2
+python -m experiments.run_trial data=mmfit_debug trainer.epochs=2
 
 # Script form (requires pip install -e . so `src/` is importable)
-python experiments/run.py scenario=scenario2 trainer.epochs=5 optim.lr=5e-4
+python experiments/run_trial.py scenario=scenario2 trainer.epochs=5 optim.lr=5e-4
 ```
 
 Common overrides:
@@ -423,7 +429,7 @@ Notes:
 ## Troubleshooting
 
 - `ModuleNotFoundError: No module named 'src'`
-  - Run `pip install -e .` in your environment or use `python -m experiments.run ...`.
+  - Run `pip install -e .` in your environment or use `python -m experiments.run_trial ...`.
 - No data found
   - Ensure `env.data_dir` and `data.dataset_name` point to an existing folder.
 - W&B not installed
