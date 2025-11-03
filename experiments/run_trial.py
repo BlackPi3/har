@@ -87,6 +87,21 @@ def _build_cfg(overrides: List[str]) -> SimpleNamespace:
     # Load selected groups akin to Hydra defaults
     env_cfg = _load_yaml(REPO_ROOT / f"conf/env/{env_sel}.yaml")
     data_cfg = _load_yaml(REPO_ROOT / f"conf/data/{data_sel}.yaml")
+    # Minimal resolver for Hydra-style defaults in data configs (e.g., mmfit_debug -> mmfit)
+    if isinstance(data_cfg, dict) and data_cfg.get("defaults"):
+        base_data = {}
+        for item in data_cfg.get("defaults", []) or []:
+            ref = None
+            if isinstance(item, str):
+                ref = item
+            elif isinstance(item, dict) and item:
+                ref = list(item.keys())[0]
+            if isinstance(ref, str):
+                ref_yaml = _load_yaml(REPO_ROOT / f"conf/data/{ref}.yaml")
+                base_data = merge_dicts(base_data, ref_yaml)
+        # Overlay the rest of current file on top of merged base
+        data_cfg = {k: v for k, v in (data_cfg or {}).items() if k != "defaults"}
+        data_cfg = merge_dicts(base_data, data_cfg)
     reg_cfg = _load_yaml(REPO_ROOT / "conf/model/regressor/regressor.yaml")
     fe_cfg = _load_yaml(REPO_ROOT / "conf/model/feature_extractor/feature_extractor.yaml")
     clf_cfg = _load_yaml(REPO_ROOT / "conf/model/classifier/classifier.yaml")
@@ -106,10 +121,20 @@ def _build_cfg(overrides: List[str]) -> SimpleNamespace:
     cfg_dict["optim"] = optim_cfg or {}
     cfg_dict["trainer"] = merge_dicts(trainer_cfg or {}, cfg_dict.get("trainer", {}))
 
+    # If dataset has a named subfolder under data_dir (e.g., mmfit), append it if not already included
+    ds_name = cfg_dict.get("dataset_name")
+    dd = cfg_dict.get("data_dir")
+    if isinstance(ds_name, str) and isinstance(dd, str) and dd:
+        # Only append if path does not already end with dataset name
+        if Path(dd).name != ds_name:
+            cfg_dict["data_dir"] = str((Path(dd) / ds_name))
+
     # Apply overrides last
     cfg_dict = _apply_overrides(cfg_dict, overrides)
 
-    # Device auto-detect if not explicitly set
+    # Device/cluster auto-detect if not explicitly set
+    is_cluster = bool(os.environ.get("SLURM_JOB_ID") or os.environ.get("SLURM_CPUS_ON_NODE"))
+    cfg_dict["cluster"] = is_cluster
     if not cfg_dict.get("device") or cfg_dict.get("device") in ("auto", None, ""):
         if torch.cuda.is_available():
             cfg_dict["device"] = "cuda"
