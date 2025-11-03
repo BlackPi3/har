@@ -57,6 +57,9 @@ def _apply_overrides(cfg: Dict[str, Any], overrides: List[str]) -> Dict[str, Any
     return cfg
 
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
 def _load_yaml(path: Path) -> Dict[str, Any]:
     if not path.exists():
         return {}
@@ -66,7 +69,7 @@ def _load_yaml(path: Path) -> Dict[str, Any]:
 
 def _build_cfg(overrides: List[str]) -> SimpleNamespace:
     # Base config
-    base = _load_yaml(Path("conf/conf.yaml"))
+    base = _load_yaml(REPO_ROOT / "conf/conf.yaml")
 
     # Determine env/data selections from overrides (defaults to conf/conf.yaml values via Hydra; here we default explicitly)
     env_sel = None
@@ -82,13 +85,13 @@ def _build_cfg(overrides: List[str]) -> SimpleNamespace:
         data_sel = "mmfit"
 
     # Load selected groups akin to Hydra defaults
-    env_cfg = _load_yaml(Path(f"conf/env/{env_sel}.yaml"))
-    data_cfg = _load_yaml(Path(f"conf/data/{data_sel}.yaml"))
-    reg_cfg = _load_yaml(Path("conf/model/regressor/regressor.yaml"))
-    fe_cfg = _load_yaml(Path("conf/model/feature_extractor/feature_extractor.yaml"))
-    clf_cfg = _load_yaml(Path("conf/model/classifier/classifier.yaml"))
-    optim_cfg = _load_yaml(Path("conf/optim/adam.yaml"))
-    trainer_cfg = _load_yaml(Path("conf/trainer/lightning.yaml"))
+    env_cfg = _load_yaml(REPO_ROOT / f"conf/env/{env_sel}.yaml")
+    data_cfg = _load_yaml(REPO_ROOT / f"conf/data/{data_sel}.yaml")
+    reg_cfg = _load_yaml(REPO_ROOT / "conf/model/regressor/regressor.yaml")
+    fe_cfg = _load_yaml(REPO_ROOT / "conf/model/feature_extractor/feature_extractor.yaml")
+    clf_cfg = _load_yaml(REPO_ROOT / "conf/model/classifier/classifier.yaml")
+    optim_cfg = _load_yaml(REPO_ROOT / "conf/optim/adam.yaml")
+    trainer_cfg = _load_yaml(REPO_ROOT / "conf/trainer/lightning.yaml")
 
     # Compose a single dict
     cfg_dict: Dict[str, Any] = {}
@@ -217,9 +220,8 @@ def _write_results(run_dir: Path, history) -> None:
 
 def main():
     overrides = sys.argv[1:]
-    run_dir = _ensure_run_dir(overrides)
-
     cfg = _build_cfg(overrides)
+    run_dir = _ensure_run_dir(overrides)
 
     try:
         dls = get_dataloaders(getattr(cfg, "dataset_name", "mmfit"), cfg)
