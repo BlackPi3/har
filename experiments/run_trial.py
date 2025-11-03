@@ -252,8 +252,7 @@ def main():
         dls = get_dataloaders(getattr(cfg, "dataset_name", "mmfit"), cfg)
         models = _build_models(cfg)
         optimizer, scheduler = _build_optim(cfg, models)
-
-        epochs = cfg.trainer.get("epochs", 1)
+        epochs = getattr(cfg.trainer, "epochs", 1)
         device = cfg.device
         trainer = Trainer(models=models, dataloaders=dls, optimizer=optimizer, scheduler=scheduler, cfg=cfg, device=device)
         history = trainer.fit(epochs)
