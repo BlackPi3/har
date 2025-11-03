@@ -246,6 +246,12 @@ def _write_results(run_dir: Path, history) -> None:
 def main():
     overrides = sys.argv[1:]
     cfg = _build_cfg(overrides)
+    # Hoist commonly used fields expected at top-level by Trainer
+    try:
+        if hasattr(cfg, "trainer") and hasattr(cfg.trainer, "patience"):
+            cfg.patience = getattr(cfg.trainer, "patience", 10)
+    except Exception:
+        pass
     run_dir = _ensure_run_dir(overrides)
 
     try:
