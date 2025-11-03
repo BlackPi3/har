@@ -18,8 +18,8 @@ Usage examples:
         --space-config conf/hpo/scenario2_mmfit.yaml \
         --metric val_f1 --direction maximize \
         --output-root /netscratch/$USER/experiments/output/scenario2_mmfit \
-        -- \
-        env=remote data=mmfit scenario=scenario2 trainer.epochs=5
+    -- \
+    env=remote data=mmfit trainer.epochs=5
 
 Notes:
     - Arguments after "--" are forwarded as Hydra overrides to experiments.run_trial.
