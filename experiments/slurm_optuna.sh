@@ -42,10 +42,14 @@ srun \
   --container-image="$CONTAINER_IMAGE" \
   --container-workdir="$PROJECT_ROOT" \
   --container-mounts="$PROJECT_ROOT":"$PROJECT_ROOT",/netscratch/$USER:/netscratch/$USER,/ds:/ds:ro \
-  
-  python -m experiments.run_optuna \
-    --n-trials '"$N_TRIALS"' \
-    --storage '"$STORAGE"' \
-    --output-root '"$OUTPUT_ROOT"' \
-    --space-config '"$SPACE_CONFIG"' \
-    -- -- $OVERRIDES
+  bash -lc '
+    set -euo pipefail
+    # Ensure project is importable inside the container (no-op if already installed)
+    python -m pip install --user -e . -q || true
+    python -m experiments.run_optuna \
+      --n-trials '"$N_TRIALS"' \
+      --storage '"$STORAGE"' \
+      --output-root '"$OUTPUT_ROOT"' \
+      --space-config '"$SPACE_CONFIG"' \
+      -- -- $OVERRIDES
+  '
