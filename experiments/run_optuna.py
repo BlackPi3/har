@@ -18,8 +18,7 @@ Usage examples:
         --space-config conf/hpo/scenario2_mmfit.yaml \
         --metric val_f1 --direction maximize \
         --output-root /netscratch/$USER/experiments/output/scenario2_mmfit \
-    -- \
-    env=remote data=mmfit trainer.epochs=5
+        --env remote --data mmfit --epochs 5
 
 Notes:
     - Arguments after "--" are forwarded as Hydra overrides to experiments.run_trial.
@@ -85,8 +84,14 @@ def _parse_number(token: str):
 def _parse_sweeper_spec(spec: str, trial: optuna.trial.Trial):
     s = spec.strip().replace(" ", "")
     # tag(log, interval(a,b))
-    if s.startswith("tag(log,interval(") and s.endswith(")"):
-        inner = s[len("tag(log,interval("):-1]
+    if s.startswith("tag(log,interval("):
+        # Expecting trailing "))" (closing interval and tag). Be resilient if only one ")" present.
+        if s.endswith("))"):
+            inner = s[len("tag(log,interval("):-2]
+        elif s.endswith(")"):
+            inner = s[len("tag(log,interval("):-1]
+        else:
+            inner = s[len("tag(log,interval(") :]
         lo, hi = inner.split(",")
         return lambda name: trial.suggest_float(name, float(lo), float(hi), log=True)
     # interval(a,b)
@@ -214,8 +219,10 @@ def main():
     parser.add_argument("--prune", action="store_true", help="Enable MedianPruner")
     parser.add_argument("--space-config", type=str, default=None, help="Hydra sweeper YAML defining the search space (conf/hpo/*.yaml)")
     parser.add_argument("--dry", action="store_true", help="Print commands without running")
-    parser.add_argument("--", dest="sep", action="store_true")
-    parser.add_argument("overrides", nargs=argparse.REMAINDER, help="Hydra overrides after --")
+    # Explicit run-time configuration (avoid free-form overrides for simplicity)
+    parser.add_argument("--env", type=str, default="remote", help="Hydra env choice (e.g., local, remote)")
+    parser.add_argument("--data", type=str, default="mmfit", help="Dataset config choice (e.g., mmfit, mmfit_debug)")
+    parser.add_argument("--epochs", type=int, default=None, help="Trainer epochs override; if omitted, use config default")
 
     args = parser.parse_args()
 
@@ -249,10 +256,14 @@ def main():
                                 storage=storage_url, load_if_exists=True, sampler=sampler, pruner=pruner)
 
     base_cmd = [args.python, "-m", args.module]
-    # Default overrides if none provided
-    hydra_overrides = args.overrides if args.overrides else [
-        "env=remote", "data=mmfit", f"seed={args.seed}",
+    # Build explicit Hydra overrides from flags
+    hydra_overrides = [
+        f"env={args.env}",
+        f"data={args.data}",
+        f"seed={args.seed}",
     ]
+    if args.epochs is not None:
+        hydra_overrides.append(f"trainer.epochs={args.epochs}")
 
     # YAML path already resolved above; fail-fast happened earlier
 

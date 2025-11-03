@@ -20,8 +20,10 @@ SPACE_CONFIG=${SPACE_CONFIG:-conf/hpo/$HPO.yaml}
 OUTPUT_ROOT=${OUTPUT_ROOT:-/netscratch/$USER/experiments/output/$HPO}
 STORAGE=${STORAGE:-$OUTPUT_ROOT/$HPO.db}
 
-# Minimal Hydra overrides forwarded to each trial
-OVERRIDES=${OVERRIDES:-env=remote data=mmfit_debug trainer.epochs=1}
+# Explicit run-time config (no aggregated overrides)
+ENV_NAME=${ENV_NAME:-remote}
+DATA_NAME=${DATA_NAME:-mmfit_debug}
+EPOCHS=${EPOCHS:-1}
 
 # Logs
 set -euo pipefail
@@ -42,14 +44,15 @@ srun \
   --container-image="$CONTAINER_IMAGE" \
   --container-workdir="$PROJECT_ROOT" \
   --container-mounts="$PROJECT_ROOT":"$PROJECT_ROOT",/netscratch/$USER:/netscratch/$USER,/ds:/ds:ro \
-  bash -lc '
+  bash -lc "
     set -euo pipefail
-    # Ensure project is importable inside the container (no-op if already installed)
-    python -m pip install --user -e . -q || true
     python -m experiments.run_optuna \
-      --n-trials '"$N_TRIALS"' \
-      --storage '"$STORAGE"' \
-      --output-root '"$OUTPUT_ROOT"' \
-      --space-config '"$SPACE_CONFIG"' \
-      -- -- $OVERRIDES
-  '
+      --n-trials $N_TRIALS \
+      --storage '$STORAGE' \
+      --output-root '$OUTPUT_ROOT' \
+      --space-config '$SPACE_CONFIG' \
+      -- \
+      --env $ENV_NAME \
+      --data $DATA_NAME \
+      --epochs $EPOCHS
+  "
