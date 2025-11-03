@@ -15,7 +15,7 @@ train_subjects: ["w01","w02","w03","w04","w06","w07","w08","w16","w17","w18","w0
 val_subjects:   ["w14","w15","w19","w20"]
 test_subjects:  ["w09","w10","w11","w13"]
 
-batch_size: 1024
+batch_size: 2048
 
 sensor_window_length: 300
 sampling_rate_hz: 100        # Hz; assumed standard across datasets for now

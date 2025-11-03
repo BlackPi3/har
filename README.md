@@ -140,7 +140,7 @@ Logged items:
 * Final summary metrics (also in `results.json`).
 
 ## Hyperparameter Optimization (Optuna)
-Use the HPO orchestrator to run sequential Optuna trials. The search space is defined in code (see `experiments/run_optuna.py::build_space`) and maps Hydra keys to distributions.
+Use the HPO orchestrator to run sequential Optuna trials. The search space is defined only via YAML files under `conf/hpo/` (Hydra sweeper-style). Pass `--space-config conf/hpo/<name>.yaml` or set `HPO=<name>` to auto-pick `conf/hpo/$HPO.yaml`.
 
 ### Sweep outputs (SLURM)
 When launched via `experiments/slurm_optuna.sh`, all sweep artifacts are written into a single directory on scratch:
@@ -161,12 +161,12 @@ Example submit:
 
 ```bash
 HPO=scenario2_mmfit N_TRIALS=50 \
-OVERRIDES="env=remote data=mmfit scenario=scenario2 trainer.epochs=30" \
+OVERRIDES="env=remote data=mmfit trainer.epochs=30" \
 sbatch experiments/slurm_optuna.sh
 ```
 
 Quick facts:
-- Search space is defined in `experiments/run_optuna.py::build_space` (edit there to customize)
+- Search space is provided by `conf/hpo/*.yaml` (Hydra sweeper-style). The orchestrator parses `interval`, `tag(log, interval)`, `choice`, and `range` into Optuna distributions.
 - Output root defaults to `/netscratch/$USER/experiments/output/<study_name>/` unless `--output-root` is provided
 - Resumable: Passing the same `--study-name` and `--storage` resumes the study
 - Objective: `--metric {val_f1|val_loss}` with `--direction {maximize|minimize}`
@@ -185,7 +185,8 @@ Quick facts:
     --n-trials 10 \
     --metric val_f1 --direction maximize \
     --study-name mmfit_sc2_debug \
-    data=mmfit_debug experiment=scenario2 trainer.epochs=5
+    --space-config conf/hpo/scenario2_mmfit.yaml \
+    data=mmfit_debug trainer.epochs=5
   ```
 
 - Typical search (full split)
@@ -196,7 +197,8 @@ Quick facts:
     --metric val_f1 --direction maximize \
     --study-name mmfit_sc2 \
     --storage experiments/outputs/optuna/mmfit_sc2.db \
-    data=mmfit experiment=scenario2 trainer.epochs=30
+     --space-config conf/hpo/scenario2_mmfit.yaml \
+    data=mmfit trainer.epochs=30
   ```
 
 - Resume a study (same name + storage)
@@ -207,7 +209,8 @@ Quick facts:
     --metric val_f1 --direction maximize \
     --study-name mmfit_sc2 \
     --storage experiments/outputs/optuna/mmfit_sc2.db \
-    data=mmfit experiment=scenario2 trainer.epochs=30
+    --space-config conf/hpo/scenario2_mmfit.yaml \
+    data=mmfit trainer.epochs=30
   # Adds 25 more trials onto the existing study
   ```
 
@@ -218,7 +221,8 @@ Quick facts:
     --n-trials 10 \
     --metric val_f1 --direction maximize \
     --study-name mmfit_sc2_wandb \
-    data=mmfit_debug experiment=scenario2 trainer.epochs=5 \
+    --space-config conf/hpo/scenario2_mmfit.yaml \
+    data=mmfit_debug trainer.epochs=5 \
     trainer.logger=wandb trainer.wandb.enabled=true \
     trainer.wandb.project=har trainer.wandb.group=optuna-sc2
   ```
@@ -256,7 +260,7 @@ If your cluster provides a container or preinstalled PyTorch image and no conda,
 HPO=mmfit_sc2 N_TRIALS=50 \
 OUTPUT_ROOT=/netscratch/$USER/experiments/output/mmfit_sc2 \
 STORAGE=/netscratch/$USER/experiments/output/mmfit_sc2/mmfit_sc2.db \
-OVERRIDES="env=remote data=mmfit scenario=scenario2 trainer.epochs=30" \
+OVERRIDES="env=remote data=mmfit trainer.epochs=30" \
 sbatch experiments/slurm_optuna.sh
 ```
 

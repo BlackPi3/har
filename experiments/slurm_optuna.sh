@@ -13,17 +13,30 @@ CONTAINER_IMAGE=${CONTAINER_IMAGE:-/netscratch/zolfaghari/images/har.sqsh}
 ########################################
 # HPO and config selection
 ########################################
-# Config-driven study name: mirror previous sweeper behavior where HPO config defined the study name
+# Choose mode: HPO (study via conf/hpo) or single trial (scenario via conf/scenario)
 HPO=${HPO:-scenario2_mmfit}
+SCENARIO=${SCENARIO:-scenario2}
 N_TRIALS=${N_TRIALS:-10}
-# Derive STUDY_NAME from selected HPO config unless explicitly provided
-STUDY_NAME=${STUDY_NAME:-$HPO}
-OUTPUT_ROOT=${OUTPUT_ROOT:-/netscratch/$USER/experiments/output/$STUDY_NAME}
-STORAGE=${STORAGE:-$OUTPUT_ROOT/$STUDY_NAME.db}
 
-# Hydra overrides passed to experiments.run_trial (space-separated tokens)
-# Keep only what is required for a single trial; no unused flags
-OVERRIDES=${OVERRIDES:-env=remote data=mmfit scenario=scenario2 trainer.epochs=5}
+if [ -n "$HPO" ] && [ -n "$SCENARIO" ]; then
+  echo "Error: Set either HPO=<name> (study) or SCENARIO=<name> (single trial), not both." >&2
+  exit 2
+fi
+
+# Common defaults
+OVERRIDES=${OVERRIDES:-env=remote data=mmfit trainer.epochs=5}
+
+# HPO defaults
+if [ -n "$HPO" ]; then
+  OUTPUT_ROOT=${OUTPUT_ROOT:-/netscratch/$USER/experiments/output/$HPO}
+  STORAGE=${STORAGE:-$OUTPUT_ROOT/$HPO.db}
+  SPACE_CONFIG=${SPACE_CONFIG:-conf/hpo/$HPO.yaml}
+fi
+
+# Single-trial defaults
+if [ -n "$SCENARIO" ]; then
+  OUTPUT_ROOT=${OUTPUT_ROOT:-/netscratch/$USER/experiments/output/$SCENARIO}
+fi
 
 # Logs
 set -euo pipefail
@@ -48,11 +61,29 @@ srun \
     set -euo pipefail
     # If the image already has the project installed, this is a no-op
     python -m pip install --user -e . -q || true
-    python -m experiments.run_optuna \
-      --n-trials '"$N_TRIALS"' \
-      --study-name '"$STUDY_NAME"' \
-      --storage '"$STORAGE"' \
-      --metric val_f1 --direction maximize \
-      --output-root '"$OUTPUT_ROOT"' \
-      -- -- $OVERRIDES
+    if [ -n "'"$HPO"'" ]; then
+      # HPO/study mode: require conf/hpo/$HPO.yaml
+      if [ ! -f "'"$SPACE_CONFIG"'" ]; then
+        echo "Missing space config: '"$SPACE_CONFIG"'" >&2
+        exit 3
+      fi
+      mkdir -p '"$OUTPUT_ROOT"'
+      python -m experiments.run_optuna \
+        --n-trials '"$N_TRIALS"' \
+        --storage '"$STORAGE"' \
+        --output-root '"$OUTPUT_ROOT"' \
+        --space-config '"$SPACE_CONFIG"' \
+        -- -- $OVERRIDES
+    elif [ -n "'"$SCENARIO"'" ]; then
+      # Single trial mode: run the scenario directly
+      RUN_DIR='"$OUTPUT_ROOT"'/'"$SCENARIO"'_'"$DATESTAMP"'
+      mkdir -p '"$OUTPUT_ROOT"'
+      python -m experiments.run_trial \
+        hydra.run.dir='"$RUN_DIR"' \
+        $OVERRIDES \
+        scenario='"$SCENARIO"'
+    else
+      echo "Error: Set HPO=<name> for study or SCENARIO=<name> for single trial." >&2
+      exit 2
+    fi
   '
