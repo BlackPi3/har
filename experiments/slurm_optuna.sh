@@ -51,7 +51,6 @@ srun \
       --storage '$STORAGE' \
       --output-root '$OUTPUT_ROOT' \
       --space-config '$SPACE_CONFIG' \
-      -- \
       --env $ENV_NAME \
       --data $DATA_NAME \
       --epochs $EPOCHS
