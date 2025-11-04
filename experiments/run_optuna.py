@@ -69,6 +69,11 @@ def build_space(trial: optuna.trial.Trial) -> Dict[str, Any]:
 
 def _parse_number(token: str):
     t = token.strip()
+    if yaml is not None:
+        try:
+            return yaml.safe_load(t)
+        except Exception:
+            pass
     try:
         # Try int first where appropriate
         if "." not in t and "e" not in t and "E" not in t:
@@ -76,7 +81,32 @@ def _parse_number(token: str):
         return float(t)
     except Exception:
         # Fallback to raw string
-        return t
+    mappings = {"true": True, "false": False, "null": None}
+    return mappings.get(t.lower(), t)
+
+
+def _split_args(inner: str):
+    args = []
+    depth = 0
+    current = []
+    brackets = {"(": ")", "[": "]", "{": "}"}
+    closing = {")", "]", "}"}
+    for ch in inner:
+        if ch in brackets:
+            depth += 1
+        elif ch in closing:
+            depth = max(depth - 1, 0)
+        if ch == "," and depth == 0:
+            arg = "".join(current).strip()
+            if arg:
+                args.append(arg)
+            current = []
+            continue
+        current.append(ch)
+    tail = "".join(current).strip()
+    if tail:
+        args.append(tail)
+    return args
 
 
 def _parse_sweeper_spec(spec: str, trial: optuna.trial.Trial):
@@ -109,7 +139,7 @@ def _parse_sweeper_spec(spec: str, trial: optuna.trial.Trial):
     # choice(v1,v2,...)
     if s.startswith("choice(") and s.endswith(")"):
         inner = s[len("choice("):-1]
-        raw_vals = [v for v in inner.split(",") if v]
+        raw_vals = _split_args(inner)
         values = [_parse_number(v) for v in raw_vals]
         return lambda name: trial.suggest_categorical(name, values)
     # Fallback: treat as categorical single value

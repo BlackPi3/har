@@ -224,8 +224,24 @@ def _build_models(cfg) -> Dict[str, torch.nn.Module]:
     f_in = getattr(clf_cfg, "f_in", 100)
     n_classes = getattr(clf_cfg, "n_classes", 11)
 
+    reg_cfg = cfg.model.regressor
+    reg_kwargs = dict(
+        joint_hidden_channels=getattr(reg_cfg, "joint_hidden_channels", None),
+        joint_kernel_sizes=getattr(reg_cfg, "joint_kernel_sizes", None),
+        joint_dilations=getattr(reg_cfg, "joint_dilations", None),
+        joint_dropouts=getattr(reg_cfg, "joint_dropouts", None),
+        temporal_hidden_channels=getattr(reg_cfg, "temporal_hidden_channels", None),
+        temporal_kernel_size=getattr(reg_cfg, "temporal_kernel_size", None),
+        temporal_dilation=getattr(reg_cfg, "temporal_dilation", None),
+        temporal_dropout=getattr(reg_cfg, "temporal_dropout", None),
+        fc_hidden=getattr(reg_cfg, "fc_hidden", None),
+        fc_dropout=getattr(reg_cfg, "fc_dropout", 0.0),
+        use_batch_norm=getattr(reg_cfg, "use_batch_norm", False),
+    )
+    reg_kwargs = {k: v for k, v in reg_kwargs.items() if v is not None}
+
     models = {
-        "pose2imu": Regressor(in_ch=in_ch, num_joints=num_joints, window_length=window_len).to(cfg.device),
+        "pose2imu": Regressor(in_ch=in_ch, num_joints=num_joints, window_length=window_len, **reg_kwargs).to(cfg.device),
         "fe": FeatureExtractor(**fe_args).to(cfg.device),
         "ac": ActivityClassifier(f_in=f_in, n_classes=n_classes).to(cfg.device),
     }

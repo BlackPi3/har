@@ -5,7 +5,7 @@ import torch.nn.init as init
 class TCNBlock(nn.Module):
     """Temporal Convolutional Network Block with residual connections."""
     
-    def __init__(self, in_ch, out_ch, num_joints, kernel_size, dilation, dropout):
+    def __init__(self, in_ch, out_ch, num_joints, kernel_size, dilation, dropout, use_batch_norm=False):
         super(TCNBlock, self).__init__()
         self.num_joints = num_joints
         if kernel_size == 1:
@@ -22,6 +22,8 @@ class TCNBlock(nn.Module):
         )
         self.dropout1 = nn.Dropout(dropout)
 
+        self.norm1 = nn.BatchNorm2d(out_ch) if use_batch_norm else nn.Identity()
+
         self.conv2 = nn.Conv2d(
             out_ch,
             out_ch,
@@ -30,6 +32,8 @@ class TCNBlock(nn.Module):
             dilation=dilation,
         )
         self.dropout2 = nn.Dropout(dropout)
+
+        self.norm2 = nn.BatchNorm2d(out_ch) if use_batch_norm else nn.Identity()
 
         self.leakyrelu = nn.LeakyReLU()
 
@@ -45,7 +49,14 @@ class TCNBlock(nn.Module):
     def forward(self, x):
         short_cut = self.conv0(x)
 
-        x = self.leakyrelu(self.dropout1(self.conv1(x)))
-        x = self.leakyrelu(self.dropout2(self.conv2(x)))
+        x = self.conv1(x)
+        x = self.norm1(x)
+        x = self.leakyrelu(x)
+        x = self.dropout1(x)
+
+        x = self.conv2(x)
+        x = self.norm2(x)
+        x = self.leakyrelu(x)
+        x = self.dropout2(x)
 
         return x + short_cut
