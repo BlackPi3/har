@@ -80,7 +80,7 @@ def _parse_number(token: str):
             return int(t)
         return float(t)
     except Exception:
-        # Fallback to raw string
+        pass
     mappings = {"true": True, "false": False, "null": None}
     return mappings.get(t.lower(), t)
 

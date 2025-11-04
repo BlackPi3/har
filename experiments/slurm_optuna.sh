@@ -15,7 +15,7 @@ CONTAINER_IMAGE=${CONTAINER_IMAGE:-/netscratch/zolfaghari/images/har.sqsh}
 ########################################
 # Defaults (override via environment variables as needed)
 HPO=${HPO:-scenario2_mmfit}
-N_TRIALS=${N_TRIALS:-20}
+N_TRIALS=${N_TRIALS:-60}
 SPACE_CONFIG=${SPACE_CONFIG:-conf/hpo/$HPO.yaml}
 OUTPUT_ROOT=${OUTPUT_ROOT:-/netscratch/zolfaghari/experiments/hpo/$HPO}
 STORAGE=${STORAGE:-$OUTPUT_ROOT/$HPO.db}
