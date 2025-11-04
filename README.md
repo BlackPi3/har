@@ -143,10 +143,10 @@ Logged items:
 Use the HPO orchestrator to run sequential Optuna trials. The search space is defined only via YAML files under `conf/hpo/` (Hydra sweeper-style). Pass `--space-config conf/hpo/<name>.yaml` or set `HPO=<name>` to auto-pick `conf/hpo/$HPO.yaml`.
 
 ### Sweep outputs (SLURM)
-When launched via `experiments/slurm_optuna.sh`, all sweep artifacts are written into a single directory on scratch:
+When launched via `experiments/slurm_optuna.sh`, all sweep artifacts are written into a single directory under the repository:
 
-- Root: `/netscratch/$USER/experiments/output/<study_name>/`
-  - Per‑trial Hydra run dirs: `trial_<N>/...`
+- Root: `<project>/experiments/hpo/<study_name>/`
+  - Per‑trial Hydra run dirs: `trials/trial_<N>/...`
   - Optuna SQLite database: `<study_name>.db`
   - Aggregates: `trials.csv`, `best.json`
 
@@ -154,7 +154,7 @@ Environment overrides:
 
 - `HPO` (default: `scenario2_mmfit`) – used to derive the study name
 - `STUDY_NAME` (defaults to `$HPO`)
-- `OUTPUT_ROOT` (defaults to `/netscratch/$USER/experiments/output/$STUDY_NAME`)
+- `OUTPUT_ROOT` (defaults to `$PROJECT_ROOT/experiments/hpo/$STUDY_NAME`)
 - `STORAGE` (defaults to `$OUTPUT_ROOT/$STUDY_NAME.db`)
 
 Example submit:
@@ -167,7 +167,7 @@ sbatch experiments/slurm_optuna.sh
 
 Quick facts:
 - Search space is provided by `conf/hpo/*.yaml` (Hydra sweeper-style). The orchestrator parses `interval`, `tag(log, interval)`, `choice`, and `range` into Optuna distributions.
-- Output root defaults to `/netscratch/$USER/experiments/output/<study_name>/` unless `--output-root` is provided
+- Output root defaults to `experiments/hpo/<study_name>/` unless `--output-root` is provided
 - Resumable: Passing the same `--study-name` and `--storage` resumes the study
 - Objective: `--metric {val_f1|val_loss}` with `--direction {maximize|minimize}`
 - Reproducibility: fixed `--seed` is propagated to all trials
@@ -196,8 +196,8 @@ Quick facts:
     --n-trials 50 \
     --metric val_f1 --direction maximize \
     --study-name mmfit_sc2 \
-    --storage experiments/outputs/optuna/mmfit_sc2.db \
-     --space-config conf/hpo/scenario2_mmfit.yaml \
+    --storage experiments/hpo/mmfit_sc2/mmfit_sc2.db \
+    --space-config conf/hpo/scenario2_mmfit.yaml \
     data=mmfit trainer.epochs=30
   ```
 
@@ -208,7 +208,7 @@ Quick facts:
     --n-trials 25 \
     --metric val_f1 --direction maximize \
     --study-name mmfit_sc2 \
-    --storage experiments/outputs/optuna/mmfit_sc2.db \
+    --storage experiments/hpo/mmfit_sc2/mmfit_sc2.db \
     --space-config conf/hpo/scenario2_mmfit.yaml \
     data=mmfit trainer.epochs=30
   # Adds 25 more trials onto the existing study
@@ -228,7 +228,7 @@ Quick facts:
   ```
 
 - Outputs and artifacts
-  - Per‑trial run dirs: `<output_root>/trial_XXX/` (default scratch path: `/netscratch/$USER/experiments/output/<study_name>/trial_XXX/`) with a full Hydra config and `results.json`
+  - Per‑trial run dirs: `<output_root>/trials/trial_XXX/` (default repo path: `experiments/hpo/<study_name>/trials/trial_XXX/`) with a full Hydra config and `results.json`
   - Study summary: `<output_root>/best.json` and `<output_root>/trials.csv`
   - CLI prints best metric and params on completion
 
@@ -238,7 +238,7 @@ Quick facts:
   - Use subject‑independent splits and never include test data during HPO
 
 - Re‑run best config for testing
-  1) Read `<output_root>/best.json` (default: `/netscratch/$USER/experiments/output/<study_name>/best.json`) and copy the `best_params` as Hydra overrides.
+  1) Read `<output_root>/best.json` (default: `experiments/hpo/<study_name>/best.json`) and copy the `best_params` as Hydra overrides.
   2) Train and evaluate with multiple seeds:
   ```bash
   # Example using printed best params (replace with your values)
@@ -258,8 +258,8 @@ If your cluster provides a container or preinstalled PyTorch image and no conda,
 ```bash
 # Edit SBATCH resources inside if needed; override via env vars as shown
 HPO=mmfit_sc2 N_TRIALS=50 \
-OUTPUT_ROOT=/netscratch/$USER/experiments/output/mmfit_sc2 \
-STORAGE=/netscratch/$USER/experiments/output/mmfit_sc2/mmfit_sc2.db \
+OUTPUT_ROOT=$PROJECT_ROOT/experiments/hpo/mmfit_sc2 \
+STORAGE=$OUTPUT_ROOT/mmfit_sc2.db \
 OVERRIDES="env=remote data=mmfit trainer.epochs=30" \
 sbatch experiments/slurm_optuna.sh
 ```
@@ -267,7 +267,7 @@ sbatch experiments/slurm_optuna.sh
 Notes:
 - No conda required. The script installs the project in the container with `pip install -e .` if needed.
 - Set `CONTAINER_IMAGE` to use a Slurm containerized job: `CONTAINER_IMAGE=docker://pytorch/pytorch:2.3.1-cuda12.1-cudnn8-runtime` (or your cluster image path).
-- By default outputs and the Optuna DB are placed under `/netscratch/$USER/experiments/output/<study>/`. Adjust `OUTPUT_ROOT`/`STORAGE` as needed.
+- By default outputs and the Optuna DB are placed under `experiments/hpo/<study>/`. Adjust `OUTPUT_ROOT`/`STORAGE` as needed.
 
 ### Single entrypoints and legacy scripts
 - Preferred entrypoints:

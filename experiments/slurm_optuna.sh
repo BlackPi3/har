@@ -17,7 +17,7 @@ CONTAINER_IMAGE=${CONTAINER_IMAGE:-/netscratch/zolfaghari/images/har.sqsh}
 HPO=${HPO:-scenario2_mmfit}
 N_TRIALS=${N_TRIALS:-1}
 SPACE_CONFIG=${SPACE_CONFIG:-conf/hpo/$HPO.yaml}
-OUTPUT_ROOT=${OUTPUT_ROOT:-/netscratch/$USER/experiments/output/$HPO}
+OUTPUT_ROOT=${OUTPUT_ROOT:-$PROJECT_ROOT/experiments/hpo/$HPO}
 STORAGE=${STORAGE:-$OUTPUT_ROOT/$HPO.db}
 
 # Explicit run-time config (no aggregated overrides)

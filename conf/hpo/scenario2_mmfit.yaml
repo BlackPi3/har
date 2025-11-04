@@ -14,8 +14,8 @@ hydra:
     direction: ${hpo.mode}
     # Study name with a robust fallback: prefer env STUDY_NAME, else this file's canonical name
     study_name: scenario2_mmfit
-    # Store Optuna DB alongside trials in scratch, per-study folder
-    storage: "sqlite:////netscratch/zolfaghari/experiments/output/${hpo.study_name}/${hpo.study_name}.db"
+    # Store Optuna DB alongside trials inside the repo
+    storage: "sqlite:///experiments/hpo/${hpo.study_name}/${hpo.study_name}.db"
     params:
       # Optimizer
       optim.lr: tag(log, interval(1e-5, 1e-2))
@@ -33,5 +33,5 @@ hydra:
 
   sweep:
     # Place all trials under a unified per-study directory
-    dir: "/netscratch/zolfaghari/experiments/output/${hpo.study_name}"
+    dir: "experiments/hpo/${hpo.study_name}/trials"
     subdir: trial_${hydra.job.num}

@@ -17,13 +17,13 @@ Usage examples:
         --study-name scenario2_mmfit \
         --space-config conf/hpo/scenario2_mmfit.yaml \
         --metric val_f1 --direction maximize \
-        --output-root /netscratch/$USER/experiments/output/scenario2_mmfit \
+        --output-root experiments/hpo/scenario2_mmfit \
         --env remote --data mmfit --epochs 5
 
 Notes:
     - Arguments after "--" are forwarded as Hydra overrides to experiments.run_trial.
     - If --storage is a filesystem path, it's converted to a SQLite URL.
-    - Each trial runs under: <output_root>/trial_<N>/
+    - Each trial runs under: <output_root>/trials/trial_<N>/
 """
 from __future__ import annotations
 import argparse
@@ -59,9 +59,7 @@ def to_sqlite_url(storage: str) -> str:
 
 
 def default_output_root(study: str) -> Path:
-    ns = os.environ.get("USER") or "user"
-    base = Path(f"/netscratch/{ns}/experiments/output/{study}")
-    return base
+    return Path("experiments") / "hpo" / study
 
 
 def build_space(trial: optuna.trial.Trial) -> Dict[str, Any]:
@@ -269,7 +267,7 @@ def main():
 
     def objective(trial: optuna.trial.Trial) -> float:
         params = build_space_from_yaml(trial, space_yaml_path)
-        trial_dir = out_root / f"trial_{trial.number:04d}"
+        trial_dir = out_root / "trials" / f"trial_{trial.number:04d}"
 
         # Convert params dict to hydra-style overrides
         trial_overrides = hydra_overrides + [f"{k}={v}" for k, v in params.items()]
