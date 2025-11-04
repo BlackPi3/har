@@ -22,7 +22,7 @@ BEST_OVERRIDES=${BEST_OVERRIDES:-}
 RUN_LABEL=${RUN_LABEL:-}
 
 # Output layout: experiments/best_run/<scenario>/<data>/<timestamp>/
-OUTPUT_ROOT=${OUTPUT_ROOT:-$PROJECT_ROOT/experiments/best_run/$SCENARIO_NAME/$DATA_NAME}
+OUTPUT_ROOT=${OUTPUT_ROOT:-/netscratch/zolfaghari/experiments/best_run/$SCENARIO_NAME/$DATA_NAME}
 RUN_STAMP=$(date +%Y%m%d-%H%M%S)
 RUN_DIR=${RUN_DIR:-$OUTPUT_ROOT/$RUN_STAMP}
 
