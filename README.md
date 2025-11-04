@@ -269,6 +269,17 @@ Notes:
 - Set `CONTAINER_IMAGE` to use a Slurm containerized job: `CONTAINER_IMAGE=docker://pytorch/pytorch:2.3.1-cuda12.1-cudnn8-runtime` (or your cluster image path).
 - By default outputs and the Optuna DB are placed under `experiments/hpo/<study>/`. Adjust `OUTPUT_ROOT`/`STORAGE` as needed.
 
+To run a single long-form training job with the tuned hyperparameters, use the companion script (defaults shown):
+
+```bash
+BEST_OVERRIDES="optim.lr=0.0026421464 optim.weight_decay=0.00018897 scenario.alpha=10 scenario.beta=10 data.sensor_window_length=400 data.stride_seconds=0.1 model.feature_extractor.n_filters=24 model.feature_extractor.filter_size=7" \
+RUN_LABEL=apex \
+EPOCHS=200 SEED=0 \
+sbatch experiments/slurm_best.sh
+```
+
+Set `BEST_OVERRIDES` to the tuned hyperparameters you want to run. The script passes those overrides to `experiments.run_trial` and stores artifacts under `experiments/best_run/<scenario>/<dataset>/<timestamp>/` (plots, metrics CSV/JSON, resolved config, checkpoints). Override `ENV_NAME`, `DATA_NAME`, `SCENARIO_NAME`, `EPOCHS`, `SEED`, or `RUN_DIR` as needed; `RUN_LABEL` just tags the log filenames.
+
 ### Single entrypoints and legacy scripts
 - Preferred entrypoints:
   - Training: `experiments/run_trial.py` (module form: `python -m experiments.run_trial ...`)

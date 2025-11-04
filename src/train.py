@@ -76,24 +76,59 @@ class Trainer:
                 preds.extend(p)
                 trues.extend(labels.cpu().numpy())
 
-        avg_loss = total / len(self.dl[split])
-        return avg_loss, f1_score(trues, preds, average="macro"), mse_acc / len(self.dl[split]), sim_acc / len(self.dl[split]), act_acc / len(self.dl[split])
+        denom = max(len(self.dl[split]), 1)
+        avg_loss = total / denom
+        mse_avg = mse_acc / denom
+        sim_avg = sim_acc / denom
+        act_avg = act_acc / denom
+
+        if trues:
+            trues_arr = np.asarray(trues)
+            preds_arr = np.asarray(preds)
+            acc = float((preds_arr == trues_arr).mean())
+            f1 = float(f1_score(trues_arr, preds_arr, average="macro"))
+        else:
+            acc = 0.0
+            f1 = 0.0
+
+        return avg_loss, f1, mse_avg, sim_avg, act_avg, acc
 
     def fit(self, epochs):
-        best = {"f1": -np.inf, "state": None}
-        history = {"train_loss": [], "val_loss": [], "train_f1": [], "val_f1": []}
+        best = {"f1": -np.inf, "state": None, "epoch": None}
+        history = {
+            "train_loss": [],
+            "val_loss": [],
+            "train_f1": [],
+            "val_f1": [],
+            "train_acc": [],
+            "val_acc": [],
+            "train_mse": [],
+            "val_mse": [],
+            "train_sim_loss": [],
+            "val_sim_loss": [],
+            "train_act_loss": [],
+            "val_act_loss": [],
+        }
         
         print(f"Starting training for {epochs} epochs...")
         print("-" * 70)
         
         for epoch in range(epochs):
-            tr_loss, tr_f1, tr_mse, tr_sim, tr_act = self._run_epoch("train")
-            val_loss, val_f1, val_mse, val_sim, val_act = self._run_epoch("val")
+            tr_loss, tr_f1, tr_mse, tr_sim, tr_act, tr_acc = self._run_epoch("train")
+            val_loss, val_f1, val_mse, val_sim, val_act, val_acc = self._run_epoch("val")
             
             history["train_loss"].append(tr_loss)
             history["val_loss"].append(val_loss)
             history["train_f1"].append(tr_f1)
             history["val_f1"].append(val_f1)
+            history["train_acc"].append(tr_acc)
+            history["val_acc"].append(val_acc)
+            history["train_mse"].append(tr_mse)
+            history["val_mse"].append(val_mse)
+            history["train_sim_loss"].append(tr_sim)
+            history["val_sim_loss"].append(val_sim)
+            history["train_act_loss"].append(tr_act)
+            history["val_act_loss"].append(val_act)
             
             # Print epoch progress
             print(f"Epoch {epoch+1:3d}/{epochs} | "
@@ -109,6 +144,7 @@ class Trainer:
             if val_f1 > best["f1"]:
                 best["f1"] = val_f1
                 best["state"] = {k: copy.deepcopy(m.state_dict()) for k, m in self.models.items()}
+                best["epoch"] = epoch
                 print(f"    → New best Val F1: {val_f1:.4f}")
             
             if (epoch - np.argmax(history["val_f1"])) >= self.cfg.patience:
@@ -122,5 +158,8 @@ class Trainer:
         if best["state"]:
             for k, m in self.models.items():
                 m.load_state_dict(best["state"][k])
+        self.best_state = best["state"]
+        self.best_epoch = best["epoch"]
+        self.best_score = best["f1"]
         return history
 # ...existing code...

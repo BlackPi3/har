@@ -1,8 +1,8 @@
 ## Temporal feature extractor configuration
 type: temporal_feature_extractor
 input_channels: 3
-n_filters: 9
-filter_size: 5
+n_filters: 24
+filter_size: 7
 n_dense: 100
 window_size: ${data.sensor_window_length}
 drop_prob: 0.2

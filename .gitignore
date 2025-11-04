@@ -26,13 +26,12 @@ legacy/
 
 # Experiment outputs
 outputs/
-experiments/output/
-experiments/optuna/
 experiments/hpo/*/*.db
 experiments/hpo/*/best.json
 experiments/hpo/*/trials.csv
 experiments/hpo/*/trials/
 experiments/hpo/*/vis/
+experiments/best_run/
 *.log
 multirun
 

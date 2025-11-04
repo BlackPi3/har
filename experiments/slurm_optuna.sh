@@ -4,7 +4,7 @@
 #SBATCH --gpus=1
 #SBATCH --cpus-per-gpu=8
 #SBATCH --mem=48G
-#SBATCH -t 00:45:00
+#SBATCH -t 06:00:00
 
 # Container + project paths
 PROJECT_ROOT=${PROJECT_ROOT:-/home/zolfaghari/har}
@@ -15,15 +15,15 @@ CONTAINER_IMAGE=${CONTAINER_IMAGE:-/netscratch/zolfaghari/images/har.sqsh}
 ########################################
 # Defaults (override via environment variables as needed)
 HPO=${HPO:-scenario2_mmfit}
-N_TRIALS=${N_TRIALS:-1}
+N_TRIALS=${N_TRIALS:-20}
 SPACE_CONFIG=${SPACE_CONFIG:-conf/hpo/$HPO.yaml}
 OUTPUT_ROOT=${OUTPUT_ROOT:-$PROJECT_ROOT/experiments/hpo/$HPO}
 STORAGE=${STORAGE:-$OUTPUT_ROOT/$HPO.db}
 
 # Explicit run-time config (no aggregated overrides)
 ENV_NAME=${ENV_NAME:-remote}
-DATA_NAME=${DATA_NAME:-mmfit_debug}
-EPOCHS=${EPOCHS:-1}
+DATA_NAME=${DATA_NAME:-mmfit}
+EPOCHS=${EPOCHS:-50}
 
 # Logs
 set -euo pipefail
