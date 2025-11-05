@@ -140,8 +140,25 @@ def _parse_sweeper_spec(spec: str, trial: optuna.trial.Trial):
     if s.startswith("choice(") and s.endswith(")"):
         inner = s[len("choice("):-1]
         raw_vals = _split_args(inner)
-        values = [_parse_number(v) for v in raw_vals]
-        return lambda name: trial.suggest_categorical(name, values)
+        parsed_vals = [_parse_number(v) for v in raw_vals]
+        needs_serialization = any(isinstance(val, (list, tuple, dict)) for val in parsed_vals)
+        if not needs_serialization:
+            return lambda name: trial.suggest_categorical(name, parsed_vals)
+
+        serialized_choices = []
+        mapping = {}
+        for val in parsed_vals:
+            decoded = list(val) if isinstance(val, tuple) else val
+            if isinstance(decoded, (list, dict)):
+                serialized = json.dumps(decoded)
+                serialized_choices.append(serialized)
+                mapping[serialized] = decoded
+            else:
+                serialized_choices.append(decoded)
+        def suggest(name):
+            picked = trial.suggest_categorical(name, serialized_choices)
+            return mapping.get(picked, picked)
+        return suggest
     # Fallback: treat as categorical single value
     return lambda name: trial.suggest_categorical(name, [spec])
 
