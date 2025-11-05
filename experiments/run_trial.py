@@ -81,6 +81,8 @@ def _apply_overrides(cfg: Dict[str, Any], overrides: List[str]) -> Dict[str, Any
             cfg["alpha"] = val
         if k == "scenario.beta":
             cfg["beta"] = val
+        if k == "scenario.gamma":
+            cfg["gamma"] = val
         parts = k.split(".")
         d = cfg
         for p in parts[:-1]:

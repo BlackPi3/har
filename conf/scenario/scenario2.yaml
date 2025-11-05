@@ -4,6 +4,7 @@ experiment_name: scenario2
 # Loss weighting coefficients consumed by legacy Trainer (mapped to scenario2_alpha/beta)
 alpha: 10   # weight for activity classification component
 beta: 10    # weight for feature similarity component
+gamma: 1    # weight for regression (MSE) component
 
 use_simulated_data: false
   

@@ -6,7 +6,7 @@ Combines three model components:
 - ac (activity classifier): embedding -> activity logits
 
 Loss Components (combined):
-  total = mse(sim_acc, real_acc) + alpha * (CE(real_logits, y) + CE(sim_logits, y)) + beta * feature_similarity_loss
+  total = gamma * mse(sim_acc, real_acc) + alpha * (CE(real_logits, y) + CE(sim_logits, y)) + beta * feature_similarity_loss
 Where feature_similarity_loss = mean(1 - cosine_sim(fe(sim_acc), fe(real_acc))) when beta > 0 else 0.
 
 Logged Metrics (per epoch):
@@ -34,15 +34,18 @@ class HARLightningModule(pl.LightningModule):
                 return float(default)
         alpha = _get_from(getattr(cfg, 'scenario', object()), 'alpha', 1.0)
         beta = _get_from(getattr(cfg, 'scenario', object()), 'beta', 0.0)
+        gamma = _get_from(getattr(cfg, 'scenario', object()), 'gamma', 1.0)
         # Fallback to legacy cfg.experiment if present
         try:
             alpha = float(getattr(cfg.experiment, 'alpha', alpha))
             beta = float(getattr(cfg.experiment, 'beta', beta))
+            gamma = float(getattr(cfg.experiment, 'gamma', gamma))
         except Exception:
             pass
         self.save_hyperparameters({
             'alpha': alpha,
             'beta': beta,
+            'gamma': gamma,
             'lr': float(getattr(ns, 'lr', 1e-3)),
             'weight_decay': float(getattr(ns, 'weight_decay', 0.0)),
             'patience': int(getattr(ns, 'patience', 10)),
@@ -52,6 +55,7 @@ class HARLightningModule(pl.LightningModule):
         self.ac = models['ac']
         self.alpha = self.hparams['alpha']
         self.beta = self.hparams['beta']
+        self.gamma = self.hparams['gamma']
         self.lr = self.hparams['lr']
         self.weight_decay = self.hparams['weight_decay']
         self.patience = self.hparams['patience']
@@ -84,7 +88,7 @@ class HARLightningModule(pl.LightningModule):
         logits_real = self.ac(real_feat)
         logits_sim = self.ac(sim_feat)
         act_loss = self.ce(logits_real, labels) + self.ce(logits_sim, labels)
-        total = mse_loss + self.alpha * act_loss + self.beta * sim_loss
+        total = self.gamma * mse_loss + self.alpha * act_loss + self.beta * sim_loss
         return total, mse_loss.detach(), sim_loss.detach(), act_loss.detach(), logits_real, labels
 
     def training_step(self, batch, batch_idx):  # type: ignore[override]

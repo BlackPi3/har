@@ -34,6 +34,7 @@ class Trainer:
         # Use scenario-specific naming; fall back to generic if present
         self.alpha = getattr(cfg, "scenario2_alpha", getattr(cfg, "alpha", 1.0))
         self.beta = getattr(cfg, "scenario2_beta", getattr(cfg, "beta", 0.0))
+        self.gamma = getattr(cfg, "scenario2_gamma", getattr(cfg, "gamma", 1.0))
         self.patience = getattr(cfg, "patience", 10)  # fallback
 
     def _cosine(self, a, b):
@@ -51,7 +52,7 @@ class Trainer:
         logits_sim = self.models["ac"](sim_feat)
         ce = torch.nn.CrossEntropyLoss()
         act_loss = ce(logits_real, labels) + ce(logits_sim, labels)
-        total = mse + self.alpha * act_loss + self.beta * sim_loss
+        total = self.gamma * mse + self.alpha * act_loss + self.beta * sim_loss
         return total, mse.item(), sim_loss if isinstance(sim_loss, float) else sim_loss.item(), act_loss.item(), logits_real, labels
 
     def _run_epoch(self, split="train"):
