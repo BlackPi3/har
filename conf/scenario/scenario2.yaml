@@ -1,10 +1,51 @@
+defaults:
+  - _self_
+
 ## Scenario 2 experiment configuration
 experiment_name: scenario2
 
-# Loss weighting coefficients consumed by legacy Trainer (mapped to scenario2_alpha/beta)
+# Loss weighting coefficients consumed by the manual Trainer
 alpha: 10   # weight for activity classification component
 beta: 10    # weight for feature similarity component
 gamma: 1    # weight for regression (MSE) component
 
-use_simulated_data: false
-  
+model:
+  regressor:
+    input_channels: 3
+    num_joints: 3
+    sequence_length: 400
+    joint_hidden_channels: [32, 32, 32, 16]
+    joint_kernel_sizes: [5, 5, 5, 1]
+    joint_dilations: [1, 2, 4, 1]
+    joint_dropouts: [0.0, 0.2, 0.2, 0.2]
+    temporal_hidden_channels: 32
+    temporal_kernel_size: 5
+    temporal_dilation: 1
+    temporal_dropout: 0.1
+    fc_hidden: 64
+    fc_dropout: 0.1
+    use_batch_norm: true
+  feature_extractor:
+    input_channels: 3
+    n_filters: 24
+    filter_size: 7
+    n_dense: 100
+    drop_prob: 0.2
+    pool_size: 2
+  classifier:
+    f_in: 100
+    n_classes: 11
+
+optim:
+  name: adam
+  lr: 0.001
+  weight_decay: 0.0
+  scheduler:
+    name: reduce_on_plateau
+    mode: min
+    factor: 0.1
+    patience: 10
+
+trainer:
+  epochs: 100
+  patience: 10

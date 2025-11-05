@@ -51,10 +51,11 @@ If your subjects are directly under `<data_dir>/w01`, adjust or set `data.data_d
 ```bash
 python experiments/run_trial.py scenario=scenario2
 ```
+Scenario defaults to `scenario2`; pass `scenario=<name>` to swap flows or overrides bundled hyperparameters.
 Common overrides:
 ```bash
 python experiments/run_trial.py trainer.epochs=50 optim.lr=5e-4 \
-  model.regressor.sequence_length=256 experiment.alpha=1.5
+  model.regressor.sequence_length=256 scenario.alpha=1.5
 ```
 
 Short smoke test (2 epochs):
@@ -89,13 +90,14 @@ python experiments/run_trial.py seed=42
 ```
 
 ## Config Anatomy
-Root defaults file (`conf/conf.yaml`) defines a `defaults:` list specifying which groups load (data, model components, experiment, optim, trainer, etc.). You override any leaf via dotted syntax.
+Root defaults file (`conf/conf.yaml`) defines a `defaults:` list specifying which groups load (data, model components, optim, trainer, etc.). Individual scenarios (e.g. `conf/scenario/scenario2.yaml`) now act as composite overlays: they gather the loss weights, optimiser settings, regressor/feature-extractor knobs, and a few data conveniences in one editable spot. When you launch with `scenario=scenario2`, those overrides are merged on top of the shared defaults.
 
 Accepted dataset name keys inside `conf/data/*.yaml`: `name`, `dataset_name`, or `dataset_name` (current MM-Fit file uses `dataset_name`).
 
 Example overrides:
-* Change dataset split file: `data=mmfit` (switch group member)
-* Adjust learning rate: `optim.lr=3e-4`
+* Switch dataset split: `data=mmfit`
+* Swap scenario (and all bundled knobs): `scenario=debug`
+* Quick tweak on top of the scenario: `optim.lr=3e-4` or `model.regressor.fc_hidden=128`
 * Reduce epochs: `trainer.epochs=10`
 
 Hydra stores the fully resolved config in each run dir; we also write `results.json` containing final metrics.
@@ -175,7 +177,7 @@ Quick facts:
 
 - Search space: `conf/hpo/scenario2_mmfit.yaml`
   - Canonical window length: `data.sensor_window_length` (models inherit via interpolation)
-  - Core knobs: `optim.lr` (log), `optim.weight_decay` (log), `experiment.alpha`, `experiment.beta`
+  - Core knobs: `optim.lr` (log), `optim.weight_decay` (log), `scenario.alpha`, `scenario.beta`
   - Model FE capacity: `model.feature_extractor.n_filters`, `model.feature_extractor.filter_size`
   - Throughput: `data.batch_size` (coarse steps)
 
@@ -244,11 +246,11 @@ Quick facts:
   ```bash
   # Example using printed best params (replace with your values)
   python experiments/run_trial.py \
-    experiment=scenario2 data=mmfit \
+    scenario=scenario2 data=mmfit \
     optim.lr=3e-4 optim.weight_decay=1e-4 \
     data.sensor_window_length=256 \
     model.feature_extractor.n_filters=16 model.feature_extractor.filter_size=5 \
-    experiment.alpha=1.2 experiment.beta=0.3 \
+    scenario.alpha=1.2 scenario.beta=0.3 \
     trainer.epochs=50 seed=0
   # Repeat with seed=1..4 and report mean ± std
   ```
@@ -369,7 +371,7 @@ Common overrides:
 - Data: `data.dataset_name=mmfit` and optionally `env.data_dir=/absolute/path`.
 - Training: `trainer.epochs=100 trainer.patience=10`
 - Optimizer: `optim.lr=1e-3 optim.weight_decay=1e-4`
-- Experiment knobs: `experiment.alpha=... experiment.beta=...`
+- Scenario knobs: `scenario.alpha=... scenario.beta=...`
 - Window length used by data factory: `data.sensor_window_length=256`
 
 Hydra run directory: each run executes in its own working directory (printed at start) and writes outputs there.

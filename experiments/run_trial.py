@@ -7,7 +7,7 @@ applies simple key=value overrides (dot-paths supported), runs training, and
 writes results.json into the requested run directory.
 
 Usage:
-  python -m experiments.run_trial env=remote data=mmfit_debug trainer.epochs=1 optim.lr=1e-3
+  python -m experiments.run_trial scenario=scenario2 env=remote data=mmfit_debug trainer.epochs=1 optim.lr=1e-3
 """
 from __future__ import annotations
 import sys
@@ -103,6 +103,35 @@ def _load_yaml(path: Path) -> Dict[str, Any]:
         return yaml.safe_load(f) or {}
 
 
+def _load_composite_yaml(root: Path, name: str, visited: set[str] | None = None) -> Dict[str, Any]:
+    """Load a YAML file that may declare simple Hydra-style defaults within the same directory."""
+    visited = visited or set()
+    if not name or name in visited:
+        return {}
+    visited.add(name)
+
+    path = root / f"{name}.yaml"
+    data = _load_yaml(path)
+    if not data:
+        return {}
+
+    defaults = data.get("defaults", []) or []
+    merged: Dict[str, Any] = {}
+    for item in defaults:
+        # Skip special _self_ marker; only simple string references are supported
+        if isinstance(item, str):
+            if item == "_self_":
+                continue
+            merged = merge_dicts(merged, _load_composite_yaml(root, item, visited))
+        elif isinstance(item, dict) and item:
+            # Handle dict syntax like {"scenario": "base"} by consuming the value
+            ref = next(iter(item.values()))
+            if isinstance(ref, str):
+                merged = merge_dicts(merged, _load_composite_yaml(root, ref, visited))
+    data = {k: v for k, v in data.items() if k != "defaults"}
+    return merge_dicts(merged, data)
+
+
 def _build_cfg(overrides: List[str]) -> SimpleNamespace:
     # Base config
     base = _load_yaml(REPO_ROOT / "conf/conf.yaml")
@@ -110,15 +139,20 @@ def _build_cfg(overrides: List[str]) -> SimpleNamespace:
     # Determine env/data selections from overrides (defaults to conf/conf.yaml values via Hydra; here we default explicitly)
     env_sel = None
     data_sel = None
+    scenario_sel = None
     for o in overrides:
         if o.startswith("env="):
             env_sel = o.split("=", 1)[1]
         elif o.startswith("data="):
             data_sel = o.split("=", 1)[1]
+        elif o.startswith("scenario="):
+            scenario_sel = o.split("=", 1)[1]
     if env_sel is None:
         env_sel = "local"
     if data_sel is None:
         data_sel = "mmfit"
+    if scenario_sel is None:
+        scenario_sel = "scenario2"
 
     # Load selected groups akin to Hydra defaults
     env_cfg = _load_yaml(REPO_ROOT / f"conf/env/{env_sel}.yaml")
@@ -138,6 +172,8 @@ def _build_cfg(overrides: List[str]) -> SimpleNamespace:
         # Overlay the rest of current file on top of merged base
         data_cfg = {k: v for k, v in (data_cfg or {}).items() if k != "defaults"}
         data_cfg = merge_dicts(base_data, data_cfg)
+    scenario_cfg = _load_composite_yaml(REPO_ROOT / "conf/scenario", scenario_sel)
+
     reg_cfg = _load_yaml(REPO_ROOT / "conf/model/regressor/regressor.yaml")
     fe_cfg = _load_yaml(REPO_ROOT / "conf/model/feature_extractor/feature_extractor.yaml")
     clf_cfg = _load_yaml(REPO_ROOT / "conf/model/classifier/classifier.yaml")
@@ -156,6 +192,9 @@ def _build_cfg(overrides: List[str]) -> SimpleNamespace:
     }
     cfg_dict["optim"] = optim_cfg or {}
     cfg_dict["trainer"] = merge_dicts(trainer_cfg or {}, cfg_dict.get("trainer", {}))
+
+    # Merge scenario-level overrides last so they remain the single source of truth per flow
+    cfg_dict = merge_dicts(cfg_dict, scenario_cfg)
 
     # If dataset has a named subfolder under data_dir (e.g., mmfit), append it if not already included
     ds_name = cfg_dict.get("dataset_name")
