@@ -11,7 +11,8 @@ experiments/
   slurm_optuna.sh    # SLURM launcher for the orchestrator (scratch-friendly)
 src/
   data.py            # Dataloader factory (by dataset name)
-  lightning_module.py# HARLightningModule implementation
+  train_scenario2.py # Manual Trainer (current production flow)
+  lightning_unused.py# HARLightningModule implementation (unused placeholder)
   models/            # Regressor / FeatureExtractor / ActivityClassifier
   datasets/          # Dataset implementations (mmfit + others)
 docs/
@@ -23,7 +24,7 @@ datasets/            # Actual data directory (subject folders, not tracked)
 * Single command entrypoint (`experiments/run_trial.py`)
 * Single HPO entrypoint (`experiments/run_optuna.py`)
 * Configuration-first (Hydra): compose + override at CLI
-* Single Lightning training backend (legacy removed)
+* Single manual training flow (Lightning module kept for future use)
 * Multi-loss objective (MSE + alpha * classification + beta * feature-similarity)
 * Automatic run directory creation per launch (Hydra) under `experiments/outputs/DATE-TIME/`
 

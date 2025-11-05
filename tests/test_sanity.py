@@ -2,7 +2,7 @@ import torch
 from types import SimpleNamespace
 
 from src.models import Regressor, FeatureExtractor, ActivityClassifier
-from src.lightning_module import HARLightningModule
+from src.lightning_unused import HARLightningModule
 
 
 def test_forward_and_loss():

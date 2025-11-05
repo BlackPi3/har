@@ -3,7 +3,7 @@
 Status legend: ✅ Done | 🟡 Partial / In Progress | 🔜 Planned | ⏭️ Deferred / Reconsider
 
 ## 1. Lightning Modularization ✅
-`HARLightningModule` extracted to `src/lightning_module.py` with constructor using `cfg`, `ns`, and model dict. Runner imports it.
+`HARLightningModule` extracted to `src/lightning_unused.py` with constructor using `cfg`, `ns`, and model dict. Runner currently keeps it idle.
 
 ## 2. Config-Driven Trainer ✅
 `conf/trainer/default.yaml` supplies epochs, accelerator, devices, precision, deterministic flag, gradient clipping, checkpoint & early stopping blocks. Runner maps these to `pl.Trainer`.

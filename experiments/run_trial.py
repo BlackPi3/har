@@ -24,7 +24,7 @@ import torch
 from src.config import merge_dicts
 from src.data import get_dataloaders
 from src.models import Regressor, FeatureExtractor, ActivityClassifier
-from src.train import Trainer
+from src.train_scenario2 import Trainer
 
 try:
     import matplotlib.pyplot as plt  # type: ignore
