@@ -31,6 +31,13 @@ try:
 except Exception:  # pragma: no cover - optional dependency
     plt = None
 
+_SKIP_ARTIFACTS = str(
+    os.environ.get(
+        "RUN_TRIAL_SKIP_ARTIFACTS",
+        os.environ.get("RUN_TRIAL_SKIP_CHECKPOINTS", ""),
+    )
+).lower() in ("1", "true", "yes")
+
 
 def _dict_to_ns(d: Dict[str, Any]) -> SimpleNamespace:
     if isinstance(d, dict):
@@ -323,7 +330,7 @@ def _clean_history(history: Dict[str, List[Any]]) -> Dict[str, List[float]]:
     return clean
 
 
-def _write_results(run_dir: Path, history: Dict[str, List[Any]], best_epoch: int | None) -> None:
+def _write_results(run_dir: Path, history: Dict[str, List[Any]], best_epoch: int | None, include_history: bool) -> None:
     history = history or {}
     val_f1_hist = history.get("val_f1", []) or []
     val_loss_hist = history.get("val_loss", []) or []
@@ -335,11 +342,12 @@ def _write_results(run_dir: Path, history: Dict[str, List[Any]], best_epoch: int
         "best_val_loss": float(min(val_loss_hist)) if val_loss_hist else None,
     }
 
-    out = {
+    out: Dict[str, Any] = {
         "final_metrics": final,
         "best_epoch": (int(best_epoch) + 1) if isinstance(best_epoch, int) else None,
-        "history": _clean_history(history),
     }
+    if include_history:
+        out["history"] = _clean_history(history)
     (run_dir / "results.json").write_text(json.dumps(out, indent=2))
 
 
@@ -446,10 +454,14 @@ def main():
     best_state = getattr(trainer, "best_state", None) if trainer else None
     best_epoch = getattr(trainer, "best_epoch", None) if trainer else None
 
-    _write_results(run_dir, history, best_epoch)
-    _write_history_csv(run_dir, history)
-    _save_best_state(run_dir, best_state)
-    _save_plots(run_dir, history)
+    include_history = not _SKIP_ARTIFACTS
+    _write_results(run_dir, history, best_epoch, include_history=include_history)
+    if _SKIP_ARTIFACTS:
+        print("[run_trial] Artifact saving disabled for this run.")
+    else:
+        _write_history_csv(run_dir, history)
+        _save_best_state(run_dir, best_state)
+        _save_plots(run_dir, history)
     _write_config(run_dir, cfg)
 
 

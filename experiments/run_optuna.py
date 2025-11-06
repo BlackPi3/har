@@ -184,13 +184,17 @@ def build_space_from_yaml(trial: optuna.trial.Trial, yaml_path: Path) -> Dict[st
     return suggested
 
 
-def run_trial(cmd_base: list[str], run_dir: Path) -> Dict[str, Any]:
+def run_trial(cmd_base: list[str], run_dir: Path, skip_artifacts: bool = False) -> Dict[str, Any]:
     run_dir.mkdir(parents=True, exist_ok=True)
     # Force Hydra run dir and ensure chdir behavior
     overrides = [f"hydra.run.dir={str(run_dir)}"]
     full_cmd = cmd_base + overrides
     print("Launching:", " ".join(shlex.quote(p) for p in full_cmd))
-    proc = subprocess.run(full_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    env = os.environ.copy()
+    if skip_artifacts:
+        env["RUN_TRIAL_SKIP_ARTIFACTS"] = "1"
+        env.setdefault("RUN_TRIAL_SKIP_CHECKPOINTS", "1")
+    proc = subprocess.run(full_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
     print(proc.stdout)
     results_path = run_dir / "results.json"
     if not results_path.exists():
@@ -324,7 +328,7 @@ def main():
             print("DRY RUN:", " ".join(shlex.quote(x) for x in cmd))
             return 0.0
 
-        results = run_trial(cmd, trial_dir)
+        results = run_trial(cmd, trial_dir, skip_artifacts=True)
         if not results:
             # Failed run; assign a bad score so it's pruned from consideration
             return -1e9 if direction == "maximize" else 1e9
@@ -349,6 +353,7 @@ def main():
     summary = {
         "best_value": best.value,
         "best_params": best.params,
+        "best_trial_number": best.number,
         "direction": direction,
         "metric": metric,
         "storage": storage_url,
@@ -356,17 +361,6 @@ def main():
     }
     with (out_root / "best.json").open("w") as f:
         json.dump(summary, f, indent=2)
-
-    # Trials CSV
-    try:
-        import csv
-        with (out_root / "trials.csv").open("w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(["number", "value", "state", "params"])
-            for t in study.trials:
-                writer.writerow([t.number, t.value, str(t.state), json.dumps(t.params)])
-    except Exception:
-        pass
 
     print("HPO complete. Best:", json.dumps(summary, indent=2))
 
