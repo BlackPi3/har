@@ -13,7 +13,6 @@ from __future__ import annotations
 import sys
 import os
 import json
-import csv
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List
@@ -351,24 +350,6 @@ def _write_results(run_dir: Path, history: Dict[str, List[Any]], best_epoch: int
     (run_dir / "results.json").write_text(json.dumps(out, indent=2))
 
 
-def _write_history_csv(run_dir: Path, history: Dict[str, List[Any]]) -> None:
-    history = history or {}
-    keys = [k for k, v in history.items() if isinstance(v, list) and v]
-    if not keys:
-        return
-    length = max(len(history[k]) for k in keys)
-    csv_path = run_dir / "history.csv"
-    with csv_path.open("w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["epoch"] + keys)
-        for idx in range(length):
-            row = [idx + 1]
-            for key in keys:
-                values = history.get(key, [])
-                row.append(float(values[idx]) if idx < len(values) else "")
-            writer.writerow(row)
-
-
 def _save_best_state(run_dir: Path, best_state: Dict[str, Any] | None) -> None:
     if not best_state:
         return
@@ -459,7 +440,6 @@ def main():
     if _SKIP_ARTIFACTS:
         print("[run_trial] Artifact saving disabled for this run.")
     else:
-        _write_history_csv(run_dir, history)
         _save_best_state(run_dir, best_state)
         _save_plots(run_dir, history)
     _write_config(run_dir, cfg)

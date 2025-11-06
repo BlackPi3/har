@@ -67,5 +67,4 @@ srun \
     set -euo pipefail
     echo Running: $RUN_COMMAND
     eval \"$RUN_COMMAND\"
-    printf '%s\\n' \"$RUN_DIR\" > \"$OUTPUT_ROOT/latest_run.txt\"
   "
