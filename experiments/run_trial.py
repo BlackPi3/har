@@ -13,6 +13,7 @@ from __future__ import annotations
 import sys
 import os
 import json
+import math
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List
@@ -373,17 +374,21 @@ def _save_plots(run_dir: Path, history: Dict[str, List[Any]], best_epoch: int | 
     plot_dir = run_dir / "plots"
     plot_dir.mkdir(parents=True, exist_ok=True)
 
-    def _annotate_best_epoch():
-        if best_epoch_idx is None:
+    def _annotate_best_epoch(ax, show_label=True):
+        if best_epoch_idx is None or ax is None:
             return
         epoch_marker = best_epoch_idx + 1  # convert to 1-indexed for readability
-        plt.axvline(epoch_marker, color="#666666", linestyle="--", linewidth=1, alpha=0.8, label="Best Epoch")
-        y_min, y_max = plt.ylim()
-        if y_max > y_min:
-            text_y = y_max - 0.05 * (y_max - y_min)
-        else:
+        ax.axvline(epoch_marker, color="#666666", linestyle="--", linewidth=1, alpha=0.8)
+        if not show_label:
+            return
+        y_min, y_max = ax.get_ylim()
+        if not (math.isfinite(y_min) and math.isfinite(y_max)):
+            return
+        if y_max == y_min:
             text_y = y_max
-        plt.text(
+        else:
+            text_y = y_max - 0.05 * (y_max - y_min)
+        ax.text(
             epoch_marker,
             text_y,
             f"Best Epoch {epoch_marker}",
@@ -393,33 +398,98 @@ def _save_plots(run_dir: Path, history: Dict[str, List[Any]], best_epoch: int | 
             fontsize=8,
             color="#444444",
             bbox=dict(facecolor="white", edgecolor="none", alpha=0.7, pad=1),
+            clip_on=False,
         )
 
-    def _plot_pair(y1, y2, labels, title, filename):
+    def _maybe_set_log_scale(ax, values):
+        if ax is None or not values:
+            return False
+        positive_values = [v for v in values if v is not None and v > 0]
+        if not positive_values:
+            return False
+        ax.set_yscale("log")
+        return True
+
+    def _plot_pair(y1, y2, labels, title, filename, *, log_scale=False, use_dual_axis=False):
         if not y1 and not y2:
             return
-        plt.figure()
-        if y1:
-            plt.plot(epochs, y1, label=labels[0])
-        if y2:
-            plt.plot(epochs, y2, label=labels[1])
-        plt.xlabel("Epoch")
-        plt.ylabel(title)
-        plt.title(title)
-        _annotate_best_epoch()
-        if y1 and y2:
-            plt.legend()
-        plt.grid(True, linestyle="--", alpha=0.3)
-        plt.tight_layout()
-        plt.savefig(plot_dir / filename)
-        plt.close()
+        fig, ax1 = plt.subplots()
+        ax2 = ax1.twinx() if use_dual_axis and y1 and y2 else None
+        train_color = "#1f77b4"
+        val_color = "#ff7f0e"
 
-    _plot_pair(history.get("train_loss"), history.get("val_loss"), ("Train Loss", "Val Loss"), "Loss", "loss.png")
+        if y1:
+            ax1.plot(epochs, y1, label=labels[0], color=train_color)
+            ax1.set_ylabel(labels[0] if use_dual_axis else title)
+        if y2:
+            target_ax = ax2 if ax2 else ax1
+            target_ax.plot(epochs, y2, label=labels[1], color=val_color if ax2 else None)
+            if ax2:
+                ax2.set_ylabel(labels[1])
+
+        ax1.set_xlabel("Epoch")
+        ax1.set_title(title)
+
+        if log_scale:
+            applied = _maybe_set_log_scale(ax1, y1 if y1 else y2)
+            if ax2:
+                _maybe_set_log_scale(ax2, y2)
+            elif not applied and y2:
+                _maybe_set_log_scale(ax1, y2)
+
+        _annotate_best_epoch(ax1, show_label=True)
+        if ax2:
+            _annotate_best_epoch(ax2, show_label=False)
+
+        if y1 and y2:
+            if ax2:
+                lines, labels_combined = ax1.get_legend_handles_labels()
+                lines2, labels2 = ax2.get_legend_handles_labels()
+                ax1.legend(lines + lines2, labels_combined + labels2, loc="best")
+            else:
+                ax1.legend(loc="best")
+
+        ax1.grid(True, linestyle="--", alpha=0.3)
+        fig.tight_layout()
+        fig.savefig(plot_dir / filename)
+        plt.close(fig)
+
+    _plot_pair(
+        history.get("train_loss"),
+        history.get("val_loss"),
+        ("Train Loss", "Val Loss"),
+        "Loss",
+        "loss.png",
+        log_scale=True,
+        use_dual_axis=True,
+    )
     _plot_pair(history.get("train_f1"), history.get("val_f1"), ("Train F1", "Val F1"), "Macro F1", "f1.png")
     _plot_pair(history.get("train_acc"), history.get("val_acc"), ("Train Accuracy", "Val Accuracy"), "Accuracy", "accuracy.png")
-    _plot_pair(history.get("train_mse"), history.get("val_mse"), ("Train MSE", "Val MSE"), "MSE", "mse.png")
-    _plot_pair(history.get("train_sim_loss"), history.get("val_sim_loss"), ("Train Sim Loss", "Val Sim Loss"), "Simulation Loss", "sim_loss.png")
-    _plot_pair(history.get("train_act_loss"), history.get("val_act_loss"), ("Train Act Loss", "Val Act Loss"), "Activity Loss", "act_loss.png")
+    _plot_pair(
+        history.get("train_mse"),
+        history.get("val_mse"),
+        ("Train MSE", "Val MSE"),
+        "MSE",
+        "mse.png",
+        use_dual_axis=True,
+    )
+    _plot_pair(
+        history.get("train_sim_loss"),
+        history.get("val_sim_loss"),
+        ("Train Sim Loss", "Val Sim Loss"),
+        "Simulation Loss",
+        "sim_loss.png",
+        use_dual_axis=True,
+    )
+    _plot_pair(
+        history.get("train_act_loss"),
+        history.get("val_act_loss"),
+        ("Train Act Loss", "Val Act Loss"),
+        "Activity Loss",
+        "act_loss.png",
+        log_scale=True,
+        use_dual_axis=True,
+    )
 
 
 def _write_config(run_dir: Path, cfg: SimpleNamespace) -> None:

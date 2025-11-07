@@ -20,14 +20,17 @@ hydra:
       # Optimizer
       optim.lr: tag(log, interval(1e-5, 1e-2))
       optim.weight_decay: tag(log, interval(1e-6, 1e-2))
+      optim.warmup_epochs: choice(0, 3, 5, 8)
+      optim.warmup_start_factor: interval(0.05, 0.5)
 
       # Scenario2-specific loss coefficients
-      scenario.alpha: choice(0, 1, 10, 100)
-      scenario.beta: choice(0, 1, 10, 100)
+      scenario.alpha: choice(0, 0.1, 1, 10, 100)
+      scenario.beta: choice(0, 0.1, 1, 10, 100)
+      scenario.gamma: choice(0, 0.1, 1, 10, 100)
 
       # Data/model coupling (MM-Fit typical ranges)
-      data.sensor_window_length: choice(200, 300, 400, 500)
-      data.stride_seconds: choice(0.1, 0.2, 0.5)
+      data.sensor_window_length: choice(400, 450, 500, 550)
+      data.stride_seconds: choice(0.1, 0.15, 0.2)
       model.feature_extractor.n_filters: range(8, 32, 4)
       model.feature_extractor.filter_size: range(3, 9, 2)
       model.regressor.joint_hidden_channels: choice([32, 32, 32, 16], [48, 48, 32, 16], [64, 64, 32, 32])

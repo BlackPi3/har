@@ -36,6 +36,12 @@ class Trainer:
         self.beta = getattr(cfg, "scenario2_beta", getattr(cfg, "beta", 0.0))
         self.gamma = getattr(cfg, "scenario2_gamma", getattr(cfg, "gamma", 1.0))
         self.patience = getattr(cfg, "patience", 10)  # fallback
+        optim_cfg = getattr(cfg, "optim", None)
+        self.lr_warmup_epochs = int(getattr(optim_cfg, "warmup_epochs", 0) or 0) if optim_cfg else 0
+        start_factor = float(getattr(optim_cfg, "warmup_start_factor", 0.1) or 0.0) if optim_cfg else 0.0
+        self.lr_warmup_start_factor = float(min(max(start_factor, 0.0), 1.0))
+        self.base_lrs = [group["lr"] for group in self.optimizer.param_groups]
+        self._lr_warmup_finished = self.lr_warmup_epochs <= 0
 
     def _cosine(self, a, b):
         return (1 - F.cosine_similarity(a, b, dim=1)).mean()
@@ -54,6 +60,19 @@ class Trainer:
         act_loss = ce(logits_real, labels) + ce(logits_sim, labels)
         total = self.gamma * mse + self.alpha * act_loss + self.beta * sim_loss
         return total, mse.item(), sim_loss if isinstance(sim_loss, float) else sim_loss.item(), act_loss.item(), logits_real, labels
+
+    def _apply_lr_warmup(self, epoch: int) -> None:
+        if self._lr_warmup_finished:
+            return
+        if epoch >= self.lr_warmup_epochs:
+            for base_lr, group in zip(self.base_lrs, self.optimizer.param_groups):
+                group["lr"] = base_lr
+            self._lr_warmup_finished = True
+            return
+        progress = epoch / max(self.lr_warmup_epochs, 1)
+        factor = self.lr_warmup_start_factor + (1.0 - self.lr_warmup_start_factor) * progress
+        for base_lr, group in zip(self.base_lrs, self.optimizer.param_groups):
+            group["lr"] = base_lr * factor
 
     def _run_epoch(self, split="train"):
         is_train = split == "train"
@@ -115,8 +134,10 @@ class Trainer:
         print("-" * 70)
         
         for epoch in range(epochs):
+            self._apply_lr_warmup(epoch)
             tr_loss, tr_f1, tr_mse, tr_sim, tr_act, tr_acc = self._run_epoch("train")
             val_loss, val_f1, val_mse, val_sim, val_act, val_acc = self._run_epoch("val")
+            current_lr = self.optimizer.param_groups[0]["lr"]
             
             history["train_loss"].append(tr_loss)
             history["val_loss"].append(val_loss)
@@ -134,9 +155,10 @@ class Trainer:
             # Print epoch progress
             print(f"Epoch {epoch+1:3d}/{epochs} | "
                   f"Train Loss: {tr_loss:.4f} | Val Loss: {val_loss:.4f} | "
-                  f"Train F1: {tr_f1:.4f} | Val F1: {val_f1:.4f}")
+                  f"Train F1: {tr_f1:.4f} | Val F1: {val_f1:.4f} | "
+                  f"LR: {current_lr:.3e}")
             
-            if self.scheduler is not None:
+            if self.scheduler is not None and self._lr_warmup_finished:
                 try:
                     self.scheduler.step(val_loss)
                 except TypeError:
