@@ -37,8 +37,23 @@ export HYDRA_FULL_ERROR=1
 
 # Timestamped logs
 DATESTAMP=$(date +%d%m%y-%I%P)
-exec > >(tee -a "$LOGDIR/${DATESTAMP}.out")
-exec 2> >(tee -a "$LOGDIR/${DATESTAMP}.err" >&2)
+LOG_BASENAME="hpo-${DATESTAMP}"
+exec > >(tee -a "$LOGDIR/${LOG_BASENAME}.out")
+exec 2> >(tee -a "$LOGDIR/${LOG_BASENAME}.err" >&2)
+
+START_TIME=$(date +%s)
+log_runtime() {
+  local exit_code="$1"
+  local end_time elapsed h m s
+  end_time=$(date +%s)
+  elapsed=$((end_time - START_TIME))
+  h=$((elapsed / 3600))
+  m=$(((elapsed % 3600) / 60))
+  s=$((elapsed % 60))
+  printf 'Job finished (status: %s) in %02dh:%02dm:%02ds (%d seconds)\n' \
+    "$exit_code" "$h" "$m" "$s" "$elapsed"
+}
+trap 'log_runtime $?' EXIT
 
 srun \
   --container-image="$CONTAINER_IMAGE" \
