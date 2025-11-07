@@ -23,7 +23,7 @@ RUN_LABEL=${RUN_LABEL:-}
 
 # Output layout: experiments/best_run/<scenario>/<data>/<timestamp>/
 OUTPUT_ROOT=${OUTPUT_ROOT:-/netscratch/zolfaghari/experiments/best_run/$SCENARIO_NAME/$DATA_NAME}
-RUN_STAMP=$(date +%Y%m%d-%H%M%S)
+RUN_STAMP=$(date +%Y%m%d-%H%M)
 RUN_DIR=${RUN_DIR:-$OUTPUT_ROOT/$RUN_STAMP}
 
 # Logs

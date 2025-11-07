@@ -423,7 +423,7 @@ def _save_plots(run_dir: Path, history: Dict[str, List[Any]], best_epoch: int | 
             ax1.set_ylabel(labels[0] if use_dual_axis else title)
         if y2:
             target_ax = ax2 if ax2 else ax1
-            target_ax.plot(epochs, y2, label=labels[1], color=val_color if ax2 else None)
+            target_ax.plot(epochs, y2, label=labels[1], color=val_color)
             if ax2:
                 ax2.set_ylabel(labels[1])
 
