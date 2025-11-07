@@ -360,27 +360,53 @@ def _save_best_state(run_dir: Path, best_state: Dict[str, Any] | None) -> None:
         torch.save(state, ckpt_dir / f"{name}_best.pth")
 
 
-def _save_plots(run_dir: Path, history: Dict[str, List[Any]]) -> None:
+def _save_plots(run_dir: Path, history: Dict[str, List[Any]], best_epoch: int | None) -> None:
     if plt is None:
         return
     history = history or {}
-    epochs = range(1, len(history.get("train_loss", [])) + 1)
+    epochs = list(range(1, len(history.get("train_loss", [])) + 1))
     if not epochs:
         return
+    best_epoch_idx = int(best_epoch) if isinstance(best_epoch, int) else None
+    if best_epoch_idx is not None and best_epoch_idx >= len(epochs):
+        best_epoch_idx = None
     plot_dir = run_dir / "plots"
     plot_dir.mkdir(parents=True, exist_ok=True)
+
+    def _annotate_best_epoch():
+        if best_epoch_idx is None:
+            return
+        epoch_marker = best_epoch_idx + 1  # convert to 1-indexed for readability
+        plt.axvline(epoch_marker, color="#666666", linestyle="--", linewidth=1, alpha=0.8, label="Best Epoch")
+        y_min, y_max = plt.ylim()
+        if y_max > y_min:
+            text_y = y_max - 0.05 * (y_max - y_min)
+        else:
+            text_y = y_max
+        plt.text(
+            epoch_marker,
+            text_y,
+            f"Best Epoch {epoch_marker}",
+            rotation=90,
+            ha="right",
+            va="top",
+            fontsize=8,
+            color="#444444",
+            bbox=dict(facecolor="white", edgecolor="none", alpha=0.7, pad=1),
+        )
 
     def _plot_pair(y1, y2, labels, title, filename):
         if not y1 and not y2:
             return
         plt.figure()
         if y1:
-            plt.plot(list(epochs), y1, label=labels[0])
+            plt.plot(epochs, y1, label=labels[0])
         if y2:
-            plt.plot(list(epochs), y2, label=labels[1])
+            plt.plot(epochs, y2, label=labels[1])
         plt.xlabel("Epoch")
         plt.ylabel(title)
         plt.title(title)
+        _annotate_best_epoch()
         if y1 and y2:
             plt.legend()
         plt.grid(True, linestyle="--", alpha=0.3)
@@ -441,7 +467,7 @@ def main():
         print("[run_trial] Artifact saving disabled for this run.")
     else:
         _save_best_state(run_dir, best_state)
-        _save_plots(run_dir, history)
+        _save_plots(run_dir, history, best_epoch)
     _write_config(run_dir, cfg)
 
 
