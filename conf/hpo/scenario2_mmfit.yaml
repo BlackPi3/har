@@ -20,13 +20,13 @@ hydra:
       # Optimizer
       optim.lr: tag(log, interval(1e-5, 1e-2))
       optim.weight_decay: tag(log, interval(1e-6, 1e-2))
-      optim.warmup_epochs: choice(0, 3, 5, 8)
-      optim.warmup_start_factor: interval(0.05, 0.5)
+      optim.warmup_epochs: choice(8, 10, 12, 14)
+      optim.warmup_start_factor: choice(0.1, 0.15, 0.2, 0.25, 0.3)
 
       # Scenario2-specific loss coefficients
-      scenario.alpha: choice(0, 0.1, 1, 10, 100)
-      scenario.beta: choice(0, 0.1, 1, 10, 100)
-      scenario.gamma: choice(0, 0.1, 1, 10, 100)
+      scenario.alpha: choice(0, 0.01, 0.1, 1, 10, 100)
+      scenario.beta: choice(0, 0.01, 0.1, 1, 10, 100)
+      scenario.gamma: choice(0, 0.01, 0.1, 1, 10, 100)
 
       # Data/model coupling (MM-Fit typical ranges)
       data.sensor_window_length: choice(400, 450, 500, 550)
@@ -40,9 +40,9 @@ hydra:
       model.regressor.temporal_hidden_channels: choice(16, 24, 32, 48)
       model.regressor.temporal_kernel_size: choice(3, 5, 7)
       model.regressor.temporal_dilation: choice(1, 2, 3)
-      model.regressor.temporal_dropout: interval(0.05, 0.3)
+      model.regressor.temporal_dropout: choice(0.1, 0.2, 0.3, 0.4, 0.5)
       model.regressor.fc_hidden: choice(0, 64, 128)
-      model.regressor.fc_dropout: interval(0.0, 0.4)
+      model.regressor.fc_dropout: choice(0.05, 0.1, 0.15, 0.2, 0.25)
       model.regressor.use_batch_norm: choice(true, false)
 
   sweep:

@@ -26,11 +26,7 @@ legacy/
 
 # Experiment outputs
 outputs/
-experiments/hpo/*/*.db
-experiments/hpo/*/best.json
-experiments/hpo/*/trials.csv
-experiments/hpo/*/trials/
-experiments/hpo/*/vis/
+experiments/hpo/
 experiments/best_run/
 *.log
 multirun
