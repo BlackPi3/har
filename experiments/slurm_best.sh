@@ -33,7 +33,7 @@ mkdir -p "$LOGDIR"
 
 export HYDRA_FULL_ERROR=1
 
-DATESTAMP=$(date +%d%m%y-%I%P)
+DATESTAMP=$(date +%y%m%d-%H%M)
 LOG_BASENAME="trial-${DATESTAMP}"
 if [[ -n "$RUN_LABEL" ]]; then
   LOG_BASENAME+="_${RUN_LABEL}"

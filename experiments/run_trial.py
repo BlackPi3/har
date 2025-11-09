@@ -272,7 +272,7 @@ def _ensure_run_dir(cfg: SimpleNamespace, overrides: List[str]) -> Path:
         scenario = getattr(cfg, "scenario", getattr(cfg, "experiment_name", "scenario"))
         data_name = getattr(cfg, "data", getattr(cfg, "dataset_name", "dataset"))
 
-        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        timestamp = datetime.now().strftime("%y%m%d-%H%M%S")
         label = None
         if isinstance(run_cfg, SimpleNamespace):
             label = getattr(run_cfg, "label", None) or getattr(run_cfg, "name", None)

@@ -18,7 +18,7 @@ ModelCheckpoint + EarlyStopping integrated. Macro F1 via `torchmetrics.Multiclas
 Optional via trainer overrides. Logging scalars + final metrics works. Missing (future): learning rate logs, artifact upload, automatic git hash.
 
 ## 6. Hyperparameter Optimization (Optuna) ✅
-Implemented unified Optuna orchestrator `experiments/run_optuna.py` with YAML search space (`conf/hpo/scenario2_mmfit.yaml`). Trials call the single-run entrypoint, write `results.json`, and the study exports `best.json` + `trials.csv`. README includes quickstart and resume instructions. Future enhancements (optional): pruning/samplers selection, multi-objective, and distributed sweeps.
+Implemented unified Optuna orchestrator `experiments/run_hpo.py` with YAML search space (`conf/hpo/scenario2_mmfit.yaml`). Trials call the single-run entrypoint, write `results.json`, and the study exports `best.json` + `trials.csv`. README includes quickstart and resume instructions. Future enhancements (optional): pruning/samplers selection, multi-objective, and distributed sweeps.
 
 ## 7. Legacy Backend Parity ⏭️ (Deprecated Strategy)
 Legacy code retained under `legacy/` but parity comparison intentionally skipped—Lightning accepted as canonical.

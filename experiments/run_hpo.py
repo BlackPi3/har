@@ -12,7 +12,7 @@ Search space source of truth: conf/hpo/*.yaml
     - As a convenience, if conf/hpo/<study-name>.yaml exists, it will be used.
 
 Usage examples:
-    python experiments/run_optuna.py \
+    python experiments/run_hpo.py \
         --n-trials 10 \
         --study-name scenario2_mmfit \
         --space-config conf/hpo/scenario2_mmfit.yaml \

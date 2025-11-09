@@ -36,7 +36,7 @@ mkdir -p "$LOGDIR"
 export HYDRA_FULL_ERROR=1
 
 # Timestamped logs
-DATESTAMP=$(date +%d%m%y-%I%P)
+DATESTAMP=$(date +%y%m%d-%H%M)
 LOG_BASENAME="hpo-${DATESTAMP}"
 exec > >(tee -a "$LOGDIR/${LOG_BASENAME}.out")
 exec 2> >(tee -a "$LOGDIR/${LOG_BASENAME}.err" >&2)
@@ -61,7 +61,7 @@ srun \
   --container-mounts="$PROJECT_ROOT":"$PROJECT_ROOT",/netscratch/$USER:/netscratch/$USER,/ds:/ds:ro \
   bash -lc "
     set -euo pipefail
-    python -m experiments.run_optuna \
+    python -m experiments.run_hpo \
       --n-trials $N_TRIALS \
       --storage '$STORAGE' \
       --output-root '$OUTPUT_ROOT' \

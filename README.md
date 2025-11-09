@@ -7,8 +7,8 @@ Unified, Hydra-configured training pipeline for pose-to-IMU regression + activit
 conf/                # Hydra config root (data/, model/, experiment/, optim/, trainer/)
 experiments/
   run_trial.py       # Canonical single-trial entrypoint (Hydra)
-  run_optuna.py      # Native Optuna orchestrator (per-trial subprocess)
-  slurm_optuna.sh    # SLURM launcher for the orchestrator (scratch-friendly)
+  run_hpo.py         # Native Optuna orchestrator (per-trial subprocess)
+  slurm_hpo.sh       # SLURM launcher for the orchestrator (scratch-friendly)
 src/
   data.py            # Dataloader factory (by dataset name)
   train_scenario2.py # Manual Trainer (current production flow)
@@ -22,7 +22,7 @@ datasets/            # Actual data directory (subject folders, not tracked)
 
 ## Key Ideas
 * Single command entrypoint (`experiments/run_trial.py`)
-* Single HPO entrypoint (`experiments/run_optuna.py`)
+* Single HPO entrypoint (`experiments/run_hpo.py`)
 * Configuration-first (Hydra): compose + override at CLI
 * Single manual training flow (Lightning module kept for future use)
 * Multi-loss objective (MSE + alpha * classification + beta * feature-similarity)
@@ -146,7 +146,7 @@ Logged items:
 Use the HPO orchestrator to run sequential Optuna trials. The search space is defined only via YAML files under `conf/hpo/` (Hydra sweeper-style). Pass `--space-config conf/hpo/<name>.yaml` or set `HPO=<name>` to auto-pick `conf/hpo/$HPO.yaml`.
 
 ### Sweep outputs (SLURM)
-When launched via `experiments/slurm_optuna.sh`, all sweep artifacts are written into a single directory under the repository:
+When launched via `experiments/slurm_hpo.sh`, all sweep artifacts are written into a single directory under the repository:
 
 - Root: `<project>/experiments/hpo/<study_name>/`
   - Per‑trial Hydra run dirs: `trials/trial_<N>/...`
@@ -165,7 +165,7 @@ Example submit:
 ```bash
 HPO=scenario2_mmfit N_TRIALS=50 \
 OVERRIDES="env=remote data=mmfit trainer.epochs=30" \
-sbatch experiments/slurm_optuna.sh
+sbatch experiments/slurm_hpo.sh
 ```
 
 Quick facts:
@@ -184,7 +184,7 @@ Quick facts:
 - Quick debug search (tiny split, short epochs)
   ```bash
   conda activate har
-  python experiments/run_optuna.py \
+  python experiments/run_hpo.py \
     --n-trials 10 \
     --metric val_f1 --direction maximize \
     --study-name mmfit_sc2_debug \
@@ -195,7 +195,7 @@ Quick facts:
 - Typical search (full split)
   ```bash
   conda activate har
-  python experiments/run_optuna.py \
+  python experiments/run_hpo.py \
     --n-trials 50 \
     --metric val_f1 --direction maximize \
     --study-name mmfit_sc2 \
@@ -207,7 +207,7 @@ Quick facts:
 - Resume a study (same name + storage)
   ```bash
   conda activate har
-  python experiments/run_optuna.py \
+  python experiments/run_hpo.py \
     --n-trials 25 \
     --metric val_f1 --direction maximize \
     --study-name mmfit_sc2 \
@@ -220,7 +220,7 @@ Quick facts:
 - With W&B logging (optional; forwarded to each trial)
   ```bash
   conda activate har
-  python experiments/run_optuna.py \
+  python experiments/run_hpo.py \
     --n-trials 10 \
     --metric val_f1 --direction maximize \
     --study-name mmfit_sc2_wandb \
@@ -264,7 +264,7 @@ HPO=mmfit_sc2 N_TRIALS=50 \
 OUTPUT_ROOT=$PROJECT_ROOT/experiments/hpo/mmfit_sc2 \
 STORAGE=$OUTPUT_ROOT/mmfit_sc2.db \
 OVERRIDES="env=remote data=mmfit trainer.epochs=30" \
-sbatch experiments/slurm_optuna.sh
+sbatch experiments/slurm_hpo.sh
 ```
 
 Notes:
@@ -286,9 +286,9 @@ Set `BEST_OVERRIDES` to the tuned hyperparameters you want to run. The script pa
 ### Single entrypoints and legacy scripts
 - Preferred entrypoints:
   - Training: `experiments/run_trial.py` (module form: `python -m experiments.run_trial ...`)
-  - HPO: `experiments/run_optuna.py`
+  - HPO: `experiments/run_hpo.py`
 - Legacy compatibility: `experiments/run.py` still works for single runs but `run_trial.py` is the canonical entrypoint going forward.
-- The older sweeper-based SLURM script is deprecated. Use `experiments/slurm_optuna.sh` instead. A shim `slurm_sweep.sh` may exist but simply forwards to the new script.
+- The older sweeper-based SLURM script is deprecated. Use `experiments/slurm_hpo.sh` instead. A shim `slurm_sweep.sh` may exist but simply forwards to the new script.
 
 ## Packaging & Imports (Why `import src` Works Here)
 This repository intentionally exposes a top-level package named `src` (because `src/__init__.py` exists). Normally, "src layout" projects nest the real package (e.g., `src/har/`) and you would import `har`. We kept `src` directly for lightweight research iteration.
