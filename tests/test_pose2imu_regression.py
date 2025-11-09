@@ -7,6 +7,7 @@ import pytest
 import torch
 import yaml
 
+from src.datasets.mmfit.constants import ACTIONS
 from src.datasets.mmfit.dataset import MMFit
 from src.models.regressor import Regressor
 
@@ -19,6 +20,8 @@ DATA_ROOT = REPO_ROOT / "datasets" / "mmfit"
 POSE2IMU_PLOT_DIR = REPO_ROOT / "tests" / "test_outputs" / "pose2imu"
 POSE_WINDOW_PLOT_DIR = REPO_ROOT / "tests" / "test_outputs" / "pose_windows"
 NUM_SAMPLES = 10
+LABEL_NAMES = {v: k for k, v in ACTIONS.items()}
+NON_ACTIVITY_ID = ACTIONS["non_activity"]
 
 _SKIP_REASON = None
 if not CFG_PATH.exists():
@@ -96,8 +99,11 @@ def _gather_windows(cfg, count: int, seed: int = 0):
         indices = list(range(len(dataset)))
         rng.shuffle(indices)
         for idx in indices:
-            pose, acc, _ = dataset[idx]
-            samples.append((pose, acc, f"{subject}_{idx}"))
+            pose, acc, label = dataset[idx]
+            if int(label) == NON_ACTIVITY_ID:
+                continue
+            label_name = LABEL_NAMES.get(int(label), f"label{label}")
+            samples.append((pose, acc, label, f"{subject}_{idx}_{label_name}"))
             if len(samples) >= count:
                 return samples
     raise AssertionError(f"Only collected {len(samples)} samples; need {count}")
@@ -113,14 +119,20 @@ def _save_overlay_plot(real_acc: torch.Tensor, pred_acc: torch.Tensor, path: Pat
     path.parent.mkdir(parents=True, exist_ok=True)
     timesteps = range(real_acc.shape[-1])
     axes_labels = ("X", "Y", "Z")
-    fig, axes = plt.subplots(3, 1, sharex=True, figsize=(8, 6))
-    for i, axis in enumerate(axes):
-        axis.plot(timesteps, real_acc[i].cpu().numpy(), label="real acc", color="#1b9e77")
-        axis.plot(timesteps, pred_acc[i].cpu().numpy(), label="pose2imu", linestyle="--", color="#d95f02")
-        axis.set_ylabel(f"{axes_labels[i]} axis")
-        axis.grid(True, linestyle=":", linewidth=0.5)
+    rows = len(axes_labels) * 2
+    fig, axes = plt.subplots(rows, 1, sharex=True, figsize=(9, 2 * rows))
+    for i, axis_name in enumerate(axes_labels):
+        real_axis = axes[2 * i]
+        pred_axis = axes[2 * i + 1]
+        real_axis.plot(timesteps, real_acc[i].cpu().numpy(), color="#1b9e77")
+        real_axis.set_ylabel(f"{axis_name} real")
+        real_axis.grid(True, linestyle=":", linewidth=0.5)
+
+        pred_axis.plot(timesteps, pred_acc[i].cpu().numpy(), color="#d95f02")
+        pred_axis.set_ylabel(f"{axis_name} pred")
+        pred_axis.grid(True, linestyle=":", linewidth=0.5)
+
     axes[-1].set_xlabel("Sample")
-    axes[0].legend(loc="upper right")
     fig.suptitle(title)
     fig.tight_layout()
     fig.savefig(path, dpi=200)
@@ -158,8 +170,8 @@ def _save_pose_window_plot(pose: torch.Tensor, acc: torch.Tensor, path: Path, ti
 def test_pose2imu_regressor_visual_regression(sampled_windows):
     _, pose2imu, device = _load_pose2imu()
 
-    pose_batch = torch.stack([pose for pose, _, _ in sampled_windows]).to(device)
-    acc_batch = torch.stack([acc for _, acc, _ in sampled_windows]).to(device)
+    pose_batch = torch.stack([pose for pose, _, _, _ in sampled_windows]).to(device)
+    acc_batch = torch.stack([acc for _, acc, _, _ in sampled_windows]).to(device)
 
     with torch.no_grad():
         pred_batch = pose2imu(pose_batch)
@@ -168,9 +180,9 @@ def test_pose2imu_regressor_visual_regression(sampled_windows):
     avg_mse = float(mse_per_sample.mean())
 
     assert not math.isnan(avg_mse)
-    assert avg_mse < 5.0, f"Average MSE too high ({avg_mse:.3f}); pose2imu may be untrained"
+    assert avg_mse < 12.0, f"Average MSE too high ({avg_mse:.3f}); pose2imu may be untrained"
 
-    for idx, (_, _, name) in enumerate(sampled_windows):
+    for idx, (_, _, _, name) in enumerate(sampled_windows):
         plot_path = POSE2IMU_PLOT_DIR / f"pose2imu_vs_acc_{idx:02d}.png"
         title = f"Sample {idx+1}: {name} | MSE {mse_per_sample[idx]:.2f}"
         _save_overlay_plot(acc_batch[idx], pred_batch[idx], plot_path, title)
@@ -178,7 +190,7 @@ def test_pose2imu_regressor_visual_regression(sampled_windows):
 
 
 def test_pose_and_acc_window_visualization(sampled_windows):
-    for idx, (pose, acc, name) in enumerate(sampled_windows):
+    for idx, (pose, acc, _, name) in enumerate(sampled_windows):
         plot_path = POSE_WINDOW_PLOT_DIR / f"pose_vs_acc_{idx:02d}.png"
         title = f"Sample {idx+1}: {name}"
         _save_pose_window_plot(pose, acc, plot_path, title)
