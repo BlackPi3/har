@@ -31,6 +31,9 @@ experiments/best_run/
 *.log
 multirun
 
+# Test outputs
+tests/test_outputs/
+
 # Model checkpoints and temporary files
 *.pth
 *.pkl
