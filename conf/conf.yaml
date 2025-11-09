@@ -11,12 +11,3 @@ defaults:
 
 # Global training hyperparameters
 seed: 0
-
-## Cluster-specific overrides will move to a dedicated env/ config group later.
-
-hydra:
-  run:
-    dir: experiments/outputs/${now:%Y%m%d-%H%M%S} # TODO needs to be infered based on the env
-  output_subdir: .hydra
-  job:
-    chdir: true

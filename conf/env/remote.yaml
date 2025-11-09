@@ -1,3 +1,4 @@
-data_dir: /netscratch/zolfaghari/datasets
+data_dir: /netscratch/zolfaghari/datasets/
+experiments_dir: /netscratch/zolfaghari/experiments/
 num_workers: 4 # should match the number of CPUs
 device: cuda

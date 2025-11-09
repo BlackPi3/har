@@ -15,6 +15,7 @@ import os
 import json
 import math
 from pathlib import Path
+from datetime import datetime
 from types import SimpleNamespace
 from typing import Any, Dict, List
 
@@ -214,6 +215,17 @@ def _build_cfg(overrides: List[str]) -> SimpleNamespace:
     # Apply overrides last
     cfg_dict = _apply_overrides(cfg_dict, overrides)
 
+    # Stamp the selected config surface explicitly for reproducibility
+    if not isinstance(cfg_dict.get("env"), dict):
+        cfg_dict["env"] = env_sel
+    if not isinstance(cfg_dict.get("data"), dict):
+        cfg_dict["data"] = data_sel
+    cfg_dict["scenario"] = scenario_sel
+
+    # Drop Hydra-specific metadata so resolved configs only contain final values
+    cfg_dict.pop("defaults", None)
+    cfg_dict.pop("hydra", None)
+
     # Device/cluster auto-detect if not explicitly set
     is_cluster = bool(os.environ.get("SLURM_JOB_ID") or os.environ.get("SLURM_CPUS_ON_NODE"))
     cfg_dict["cluster"] = is_cluster
@@ -231,14 +243,52 @@ def _build_cfg(overrides: List[str]) -> SimpleNamespace:
     return _dict_to_ns(cfg_dict)
 
 
-def _ensure_run_dir(overrides: List[str]) -> Path:
-    # Honor hydra.run.dir override for compatibility with the orchestrator
-    run_dir = None
-    for o in overrides:
-        if o.startswith("hydra.run.dir="):
-            run_dir = o.split("=", 1)[1]
-            break
-    p = Path(run_dir) if run_dir else Path.cwd()
+def _ensure_run_dir(cfg: SimpleNamespace, overrides: List[str]) -> Path:
+    """Determine and materialize the run directory."""
+    run_dir: str | Path | None = None
+
+    run_cfg = getattr(cfg, "run", None)
+    if isinstance(run_cfg, SimpleNamespace):
+        for attr in ("dir", "path", "output_dir"):
+            candidate = getattr(run_cfg, attr, None)
+            if candidate:
+                run_dir = candidate
+                break
+    if run_dir is None:
+        run_dir = getattr(cfg, "run_dir", None) or getattr(cfg, "output_dir", None)
+    if run_dir is None:
+        run_dir = os.environ.get("RUN_TRIAL_DIR") or os.environ.get("RUN_DIR")
+
+    if run_dir is None:
+        experiments_root = getattr(cfg, "experiments_dir", None)
+        experiments_root = Path(experiments_root) if experiments_root else (Path.cwd() / "experiments")
+
+        group = None
+        if isinstance(run_cfg, SimpleNamespace):
+            group = getattr(run_cfg, "group", None)
+        if not group:
+            group = os.environ.get("RUN_TRIAL_GROUP") or "best_run"
+
+        scenario = getattr(cfg, "scenario", getattr(cfg, "experiment_name", "scenario"))
+        data_name = getattr(cfg, "data", getattr(cfg, "dataset_name", "dataset"))
+
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        label = None
+        if isinstance(run_cfg, SimpleNamespace):
+            label = getattr(run_cfg, "label", None) or getattr(run_cfg, "name", None)
+        if not label:
+            label = os.environ.get("RUN_TRIAL_LABEL")
+        suffix = f"{timestamp}-{label}" if label else timestamp
+
+        if group == "hpo":
+            study = getattr(run_cfg, "study", None) if isinstance(run_cfg, SimpleNamespace) else None
+            if not study:
+                study = getattr(cfg, "study_name", getattr(cfg, "experiment_name", scenario))
+            run_dir = experiments_root / "hpo" / str(study) / suffix
+        else:
+            run_dir = experiments_root / str(group) / str(scenario) / str(data_name) / suffix
+
+    p = Path(run_dir)
     p.mkdir(parents=True, exist_ok=True)
     try:
         os.chdir(p)
@@ -512,7 +562,7 @@ def main():
             cfg.patience = getattr(cfg.trainer, "patience", 10)
     except Exception:
         pass
-    run_dir = _ensure_run_dir(overrides)
+    run_dir = _ensure_run_dir(cfg, overrides)
 
     trainer = None
     history: Dict[str, List[Any]] = {}

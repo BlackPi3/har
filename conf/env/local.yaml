@@ -1,3 +1,4 @@
-data_dir: /Users/parham/Desktop/The Semester/code/datasets
+data_dir: /Users/parham/Desktop/The Semester/code/datasets/
+experiments_dir: /Users/parham/Desktop/The Semester/code/experiments/
 device: mps
 num_workers: 2

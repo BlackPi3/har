@@ -20,16 +20,14 @@ EPOCHS=${EPOCHS:-200}
 SEED=${SEED:-0}
 BEST_OVERRIDES=${BEST_OVERRIDES:-}
 RUN_LABEL=${RUN_LABEL:-}
-
-# Output layout: experiments/best_run/<scenario>/<data>/<timestamp>/
-OUTPUT_ROOT=${OUTPUT_ROOT:-/netscratch/zolfaghari/experiments/best_run/$SCENARIO_NAME/$DATA_NAME}
-RUN_STAMP=$(date +%Y%m%d-%H%M)
-RUN_DIR=${RUN_DIR:-$OUTPUT_ROOT/$RUN_STAMP}
+RUN_DIR=${RUN_DIR:-}
 
 # Logs
 set -euo pipefail
 set -x
-mkdir -p "$OUTPUT_ROOT" "$RUN_DIR"
+if [[ -n "$RUN_DIR" ]]; then
+  mkdir -p "$RUN_DIR"
+fi
 LOGDIR=/netscratch/$USER/experiments/log
 mkdir -p "$LOGDIR"
 
@@ -57,15 +55,20 @@ log_runtime() {
 }
 trap 'log_runtime $?' EXIT
 
-# Assemble Hydra overrides
+# Assemble overrides
 BASE_OVERRIDES=(
   "env=$ENV_NAME"
   "data=$DATA_NAME"
   "scenario=$SCENARIO_NAME"
   "trainer.epochs=$EPOCHS"
   "seed=$SEED"
-  "hydra.run.dir=$RUN_DIR"
 )
+if [[ -n "$RUN_DIR" ]]; then
+  BASE_OVERRIDES+=("run.dir=$RUN_DIR")
+fi
+if [[ -n "$RUN_LABEL" ]]; then
+  BASE_OVERRIDES+=("run.label=$RUN_LABEL")
+fi
 
 if [[ -n "$BEST_OVERRIDES" ]]; then
   read -r -a EXTRA_OVERRIDES <<< "$BEST_OVERRIDES"

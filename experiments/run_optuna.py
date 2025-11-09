@@ -184,10 +184,14 @@ def build_space_from_yaml(trial: optuna.trial.Trial, yaml_path: Path) -> Dict[st
     return suggested
 
 
-def run_trial(cmd_base: list[str], run_dir: Path, skip_artifacts: bool = False) -> Dict[str, Any]:
+def run_trial(cmd_base: list[str], run_dir: Path, skip_artifacts: bool = False, study_name: str | None = None) -> Dict[str, Any]:
     run_dir.mkdir(parents=True, exist_ok=True)
-    # Force Hydra run dir and ensure chdir behavior
-    overrides = [f"hydra.run.dir={str(run_dir)}"]
+    overrides = [
+        f"run.dir={str(run_dir)}",
+        "run.group=hpo",
+    ]
+    if study_name:
+        overrides.append(f"run.study={study_name}")
     full_cmd = cmd_base + overrides
     print("Launching:", " ".join(shlex.quote(p) for p in full_cmd))
     env = os.environ.copy()
@@ -305,14 +309,14 @@ def main():
                                 storage=storage_url, load_if_exists=True, sampler=sampler, pruner=pruner)
 
     base_cmd = [args.python, "-m", args.module]
-    # Build explicit Hydra overrides from flags
-    hydra_overrides = [
+    # Build explicit CLI overrides from flags
+    base_overrides = [
         f"env={args.env}",
         f"data={args.data}",
         f"seed={args.seed}",
     ]
     if args.epochs is not None:
-        hydra_overrides.append(f"trainer.epochs={args.epochs}")
+        base_overrides.append(f"trainer.epochs={args.epochs}")
 
     # YAML path already resolved above; fail-fast happened earlier
 
@@ -321,14 +325,14 @@ def main():
         trial_dir = out_root / "trials" / f"trial_{trial.number:04d}"
 
         # Convert params dict to hydra-style overrides
-        trial_overrides = hydra_overrides + [f"{k}={v}" for k, v in params.items()]
+        trial_overrides = base_overrides + [f"{k}={v}" for k, v in params.items()]
         cmd = base_cmd + trial_overrides
 
         if args.dry:
             print("DRY RUN:", " ".join(shlex.quote(x) for x in cmd))
             return 0.0
 
-        results = run_trial(cmd, trial_dir, skip_artifacts=True)
+        results = run_trial(cmd, trial_dir, skip_artifacts=True, study_name=study_name)
         if not results:
             # Failed run; assign a bad score so it's pruned from consideration
             return -1e9 if direction == "maximize" else 1e9
