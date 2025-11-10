@@ -7,7 +7,7 @@ applies simple key=value overrides (dot-paths supported), runs training, and
 writes results.json into the requested run directory.
 
 Usage:
-  python -m experiments.run_trial scenario=scenario2 env=remote data=mmfit_debug trainer.epochs=1 optim.lr=1e-3
+  python -m experiments.run_trial trial=scenario2_mmfit env=remote data=mmfit_debug trainer.epochs=1 optim.lr=1e-3
 """
 from __future__ import annotations
 import sys
@@ -75,6 +75,14 @@ def _ns_to_dict(ns: Any) -> Any:
 
 
 def _apply_overrides(cfg: Dict[str, Any], overrides: List[str]) -> Dict[str, Any]:
+    alias_map = {
+        "scenario.alpha": "alpha",
+        "scenario.beta": "beta",
+        "scenario.gamma": "gamma",
+        "trial.alpha": "alpha",
+        "trial.beta": "beta",
+        "trial.gamma": "gamma",
+    }
     for o in overrides or []:
         if not isinstance(o, str) or "=" not in o:
             continue
@@ -84,13 +92,10 @@ def _apply_overrides(cfg: Dict[str, Any], overrides: List[str]) -> Dict[str, Any
             val = json.loads(v)
         except Exception:
             val = v
-        # Map legacy scenario.* keys to top-level for Trainer compatibility
-        if k == "scenario.alpha":
-            cfg["alpha"] = val
-        if k == "scenario.beta":
-            cfg["beta"] = val
-        if k == "scenario.gamma":
-            cfg["gamma"] = val
+        # Map scenario./trial. knobs to top-level for Trainer compatibility
+        target = alias_map.get(k)
+        if target:
+            cfg[target] = val
         parts = k.split(".")
         d = cfg
         for p in parts[:-1]:
@@ -132,7 +137,7 @@ def _load_composite_yaml(root: Path, name: str, visited: set[str] | None = None)
                 continue
             merged = merge_dicts(merged, _load_composite_yaml(root, item, visited))
         elif isinstance(item, dict) and item:
-            # Handle dict syntax like {"scenario": "base"} by consuming the value
+            # Handle dict syntax like {"trial": "base"} (or legacy {"scenario": "base"}) by consuming the value
             ref = next(iter(item.values()))
             if isinstance(ref, str):
                 merged = merge_dicts(merged, _load_composite_yaml(root, ref, visited))
@@ -147,20 +152,25 @@ def _build_cfg(overrides: List[str]) -> SimpleNamespace:
     # Determine env/data selections from overrides (defaults to conf/conf.yaml values via Hydra; here we default explicitly)
     env_sel = None
     data_sel = None
-    scenario_sel = None
+    trial_sel = None
+    legacy_scenario_sel = None
     for o in overrides:
         if o.startswith("env="):
             env_sel = o.split("=", 1)[1]
         elif o.startswith("data="):
             data_sel = o.split("=", 1)[1]
+        elif o.startswith("trial="):
+            trial_sel = o.split("=", 1)[1]
         elif o.startswith("scenario="):
-            scenario_sel = o.split("=", 1)[1]
+            legacy_scenario_sel = o.split("=", 1)[1]
     if env_sel is None:
         env_sel = "local"
     if data_sel is None:
         data_sel = "mmfit"
-    if scenario_sel is None:
-        scenario_sel = "scenario2"
+    if trial_sel is None:
+        trial_sel = legacy_scenario_sel
+    if trial_sel is None:
+        trial_sel = "scenario2_mmfit"
 
     # Load selected groups akin to Hydra defaults
     env_cfg = _load_yaml(REPO_ROOT / f"conf/env/{env_sel}.yaml")
@@ -180,7 +190,7 @@ def _build_cfg(overrides: List[str]) -> SimpleNamespace:
         # Overlay the rest of current file on top of merged base
         data_cfg = {k: v for k, v in (data_cfg or {}).items() if k != "defaults"}
         data_cfg = merge_dicts(base_data, data_cfg)
-    scenario_cfg = _load_composite_yaml(REPO_ROOT / "conf/scenario", scenario_sel)
+    trial_cfg = _load_composite_yaml(REPO_ROOT / "conf/trial", trial_sel)
 
     reg_cfg = _load_yaml(REPO_ROOT / "conf/model/regressor/regressor.yaml")
     fe_cfg = _load_yaml(REPO_ROOT / "conf/model/feature_extractor/feature_extractor.yaml")
@@ -201,8 +211,28 @@ def _build_cfg(overrides: List[str]) -> SimpleNamespace:
     cfg_dict["optim"] = optim_cfg or {}
     cfg_dict["trainer"] = merge_dicts(trainer_cfg or {}, cfg_dict.get("trainer", {}))
 
-    # Merge scenario-level overrides last so they remain the single source of truth per flow
-    cfg_dict = merge_dicts(cfg_dict, scenario_cfg)
+    # Merge trial-level overrides last so they remain the single source of truth per flow
+    cfg_dict = merge_dicts(cfg_dict, trial_cfg)
+
+    # Allow trial configs to declare data selection + overrides while still mutating the flat namespace.
+    data_meta = cfg_dict.get("data")
+    data_overrides: Dict[str, Any] = {}
+    if isinstance(data_meta, dict):
+        meta_selection = data_meta.get("name") or data_meta.get("selection") or data_meta.get("dataset_name") or data_meta.get("dataset")
+        if meta_selection:
+            data_sel = meta_selection
+        overrides_node = data_meta.get("overrides")
+        if isinstance(overrides_node, dict):
+            data_overrides = merge_dicts(data_overrides, overrides_node)
+        inline_overrides = {
+            k: v
+            for k, v in data_meta.items()
+            if k not in ("name", "selection", "dataset", "dataset_name", "overrides")
+        }
+        if inline_overrides:
+            data_overrides = merge_dicts(data_overrides, inline_overrides)
+    if data_overrides:
+        cfg_dict = merge_dicts(cfg_dict, data_overrides)
 
     # If dataset has a named subfolder under data_dir (e.g., mmfit), append it if not already included
     ds_name = cfg_dict.get("dataset_name")
@@ -218,9 +248,13 @@ def _build_cfg(overrides: List[str]) -> SimpleNamespace:
     # Stamp the selected config surface explicitly for reproducibility
     if not isinstance(cfg_dict.get("env"), dict):
         cfg_dict["env"] = env_sel
-    if not isinstance(cfg_dict.get("data"), dict):
+    if isinstance(cfg_dict.get("data"), dict):
+        cfg_dict["data"].setdefault("name", data_sel)
+    else:
         cfg_dict["data"] = data_sel
-    cfg_dict["scenario"] = scenario_sel
+    cfg_dict["trial"] = trial_sel
+    # Keep legacy key for downstream consumers that still expect `scenario`
+    cfg_dict["scenario"] = trial_sel
 
     # Drop Hydra-specific metadata so resolved configs only contain final values
     cfg_dict.pop("defaults", None)
@@ -269,7 +303,7 @@ def _ensure_run_dir(cfg: SimpleNamespace, overrides: List[str]) -> Path:
         if not group:
             group = os.environ.get("RUN_TRIAL_GROUP") or "best_run"
 
-        scenario = getattr(cfg, "scenario", getattr(cfg, "experiment_name", "scenario"))
+        scenario = getattr(cfg, "trial", None) or getattr(cfg, "scenario", getattr(cfg, "experiment_name", "scenario"))
         data_name = getattr(cfg, "data", getattr(cfg, "dataset_name", "dataset"))
 
         timestamp = datetime.now().strftime("%y%m%d-%H%M%S")

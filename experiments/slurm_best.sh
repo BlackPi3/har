@@ -15,61 +15,27 @@ CONTAINER_IMAGE=${CONTAINER_IMAGE:-/netscratch/zolfaghari/images/har.sqsh}
 ########################################
 ENV_NAME=${ENV_NAME:-remote}
 DATA_NAME=${DATA_NAME:-mmfit}
-SCENARIO_NAME=${SCENARIO_NAME:-scenario2}
+TRIAL_NAME=${TRIAL_NAME:-scenario2_mmfit}
 EPOCHS=${EPOCHS:-200}
 SEED=${SEED:-0}
 BEST_OVERRIDES=${BEST_OVERRIDES:-}
-RUN_LABEL=${RUN_LABEL:-}
-RUN_DIR=${RUN_DIR:-}
+RUN_DIR=${RUN_DIR:-$PROJECT_ROOT/experiments/best_run/$TRIAL_NAME}
 
 # Logs
 set -euo pipefail
-set -x
-if [[ -n "$RUN_DIR" ]]; then
-  mkdir -p "$RUN_DIR"
-fi
-LOGDIR=/netscratch/$USER/experiments/log
-mkdir -p "$LOGDIR"
+mkdir -p "$RUN_DIR"
 
 export HYDRA_FULL_ERROR=1
-
-DATESTAMP=$(date +%y%m%d-%H%M)
-LOG_BASENAME="trial-${DATESTAMP}"
-if [[ -n "$RUN_LABEL" ]]; then
-  LOG_BASENAME+="_${RUN_LABEL}"
-fi
-exec > >(tee -a "$LOGDIR/${LOG_BASENAME}.out")
-exec 2> >(tee -a "$LOGDIR/${LOG_BASENAME}.err" >&2)
-
-START_TIME=$(date +%s)
-log_runtime() {
-  local exit_code="$1"
-  local end_time elapsed h m s
-  end_time=$(date +%s)
-  elapsed=$((end_time - START_TIME))
-  h=$((elapsed / 3600))
-  m=$(((elapsed % 3600) / 60))
-  s=$((elapsed % 60))
-  printf 'Job finished (status: %s) in %02dh:%02dm:%02ds (%d seconds)\n' \
-    "$exit_code" "$h" "$m" "$s" "$elapsed"
-}
-trap 'log_runtime $?' EXIT
 
 # Assemble overrides
 BASE_OVERRIDES=(
   "env=$ENV_NAME"
   "data=$DATA_NAME"
-  "scenario=$SCENARIO_NAME"
+  "trial=$TRIAL_NAME"
   "trainer.epochs=$EPOCHS"
   "seed=$SEED"
+  "run.dir=$RUN_DIR"
 )
-if [[ -n "$RUN_DIR" ]]; then
-  BASE_OVERRIDES+=("run.dir=$RUN_DIR")
-fi
-if [[ -n "$RUN_LABEL" ]]; then
-  BASE_OVERRIDES+=("run.label=$RUN_LABEL")
-fi
-
 if [[ -n "$BEST_OVERRIDES" ]]; then
   read -r -a EXTRA_OVERRIDES <<< "$BEST_OVERRIDES"
   BASE_OVERRIDES+=("${EXTRA_OVERRIDES[@]}")

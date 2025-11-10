@@ -13,7 +13,14 @@ from src.models.regressor import Regressor
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-RUN_DIR = REPO_ROOT / "experiments/best_run/scenario2/mmfit/20251109-0055"
+_TRIAL_NAME = "scenario2_mmfit"
+_LEGACY_SCENARIO_NAME = "scenario2"
+_BEST_RUN_STEM = "20251109-0055"
+_RUN_DIR_CANDIDATES = [
+    REPO_ROOT / "experiments" / "best_run" / _TRIAL_NAME / "mmfit" / _BEST_RUN_STEM,
+    REPO_ROOT / "experiments" / "best_run" / _LEGACY_SCENARIO_NAME / "mmfit" / _BEST_RUN_STEM,
+]
+RUN_DIR = next((p for p in _RUN_DIR_CANDIDATES if p.exists()), _RUN_DIR_CANDIDATES[0])
 CFG_PATH = RUN_DIR / "resolved_config.yaml"
 POSE2IMU_CKPT = RUN_DIR / "checkpoints" / "pose2imu_best.pth"
 DATA_ROOT = REPO_ROOT / "datasets" / "mmfit"

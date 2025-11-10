@@ -24,9 +24,9 @@ hydra:
       optim.warmup_start_factor: choice(0.1, 0.15, 0.2, 0.25, 0.3)
 
       # Scenario2-specific loss coefficients
-      scenario.alpha: choice(0, 0.01, 0.1, 1, 10, 100)
-      scenario.beta: choice(0, 0.01, 0.1, 1, 10, 100)
-      scenario.gamma: choice(0, 0.01, 0.1, 1, 10, 100)
+      trial.alpha: choice(0, 0.01, 0.1, 1, 10, 100)
+      trial.beta: choice(0, 0.01, 0.1, 1, 10, 100)
+      trial.gamma: choice(0, 0.01, 0.1, 1, 10, 100)
 
       # Data/model coupling (MM-Fit typical ranges)
       data.sensor_window_length: choice(400, 450, 500, 550)

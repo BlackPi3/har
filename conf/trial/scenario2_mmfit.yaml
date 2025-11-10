@@ -1,8 +1,15 @@
 defaults:
   - _self_
 
-## Scenario 2 experiment configuration
-experiment_name: scenario2
+## Scenario 2 trial configuration
+trial_name: scenario2_mmfit
+
+# Data overrides (merged on top of conf/data/mmfit.yaml)
+data:
+  name: mmfit
+  overrides:
+    sensor_window_length: 400
+    stride_seconds: 0.1
 
 # Loss weighting coefficients consumed by the manual Trainer
 alpha: 100   # weight for activity classification component

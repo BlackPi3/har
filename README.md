@@ -4,7 +4,7 @@ Unified, Hydra-configured training pipeline for pose-to-IMU regression + activit
 
 ## Current Layout (trimmed)
 ```
-conf/                # Hydra config root (data/, model/, experiment/, optim/, trainer/)
+conf/                # Hydra config root (data/, model/, trial/, optim/, trainer/)
 experiments/
   run_trial.py       # Canonical single-trial entrypoint (Hydra)
   run_hpo.py         # Native Optuna orchestrator (per-trial subprocess)
@@ -49,13 +49,13 @@ If your subjects are directly under `<data_dir>/w01`, adjust or set `data.data_d
 
 ## Run (Basic)
 ```bash
-python experiments/run_trial.py scenario=scenario2
+python experiments/run_trial.py trial=scenario2_mmfit
 ```
-Scenario defaults to `scenario2`; pass `scenario=<name>` to swap flows or overrides bundled hyperparameters.
+Trial defaults to `scenario2_mmfit`; pass `trial=<name>` to swap flows or overrides bundled hyperparameters (`scenario=<name>` remains a supported alias).
 Common overrides:
 ```bash
 python experiments/run_trial.py trainer.epochs=50 optim.lr=5e-4 \
-  model.regressor.sequence_length=256 scenario.alpha=1.5
+  model.regressor.sequence_length=256 trial.alpha=1.5
 ```
 
 Short smoke test (2 epochs):
@@ -66,7 +66,7 @@ python experiments/run_trial.py trainer.epochs=2
 ## Fast Debug Run
 Use the tiny debug split to validate end-to-end behavior quickly:
 ```bash
-python experiments/run_trial.py data=mmfit_debug scenario=debug trainer.epochs=2
+python experiments/run_trial.py data=mmfit_debug trial=debug trainer.epochs=2
 ```
 What this does:
 * Restricts subjects to 1 per split
@@ -75,7 +75,7 @@ What this does:
 
 Ultra-fast plumbing smoke (no checkpoints / early stopping):
 ```bash
-python experiments/run_trial.py data=mmfit_debug scenario=debug trainer.epochs=1 trainer.enable_checkpointing=false trainer.early_stopping.enabled=false
+python experiments/run_trial.py data=mmfit_debug trial=debug trainer.epochs=1 trainer.enable_checkpointing=false trainer.early_stopping.enabled=false
 ```
 
 Faster epochs without changing the dataset size (use a fraction of batches):
@@ -90,14 +90,14 @@ python experiments/run_trial.py seed=42
 ```
 
 ## Config Anatomy
-Root defaults file (`conf/conf.yaml`) defines a `defaults:` list specifying which groups load (data, model components, optim, trainer, etc.). Individual scenarios (e.g. `conf/scenario/scenario2.yaml`) now act as composite overlays: they gather the loss weights, optimiser settings, regressor/feature-extractor knobs, and a few data conveniences in one editable spot. When you launch with `scenario=scenario2`, those overrides are merged on top of the shared defaults.
+Root defaults file (`conf/conf.yaml`) defines a `defaults:` list specifying which groups load (data, model components, optim, trainer, etc.). Individual trial overlays (e.g. `conf/trial/scenario2_mmfit.yaml`) gather the loss weights, optimiser settings, regressor/feature-extractor knobs, and a few data conveniences in one editable spot. When you launch with `trial=scenario2_mmfit`, those overrides are merged on top of the shared defaults (legacy `scenario=<name>` flags still resolve to the same files).
 
 Accepted dataset name keys inside `conf/data/*.yaml`: `name`, `dataset_name`, or `dataset_name` (current MM-Fit file uses `dataset_name`).
 
 Example overrides:
 * Switch dataset split: `data=mmfit`
-* Swap scenario (and all bundled knobs): `scenario=debug`
-* Quick tweak on top of the scenario: `optim.lr=3e-4` or `model.regressor.fc_hidden=128`
+* Swap trial (and all bundled knobs): `trial=debug` (or legacy `scenario=debug`)
+* Quick tweak on top of the trial: `optim.lr=3e-4` or `model.regressor.fc_hidden=128`
 * Reduce epochs: `trainer.epochs=10`
 
 Hydra stores the fully resolved config in each run dir; we also write `results.json` containing final metrics.
@@ -130,7 +130,7 @@ python experiments/run_trial.py trainer.logger=wandb trainer.wandb.enabled=true 
 
 # Add grouping / tags
 python experiments/run_trial.py trainer.logger=wandb trainer.wandb.enabled=true \
-  trainer.wandb.group=scenario2 trainer.wandb.tags='["mmfit","alpha1.0"]'
+  trainer.wandb.group=scenario2_mmfit trainer.wandb.tags='["mmfit","alpha1.0"]'
 ```
 If `wandb` is not installed the run will continue without a logger and print a warning.
 Environment variable alternative:
@@ -177,7 +177,7 @@ Quick facts:
 
 - Search space: `conf/hpo/scenario2_mmfit.yaml`
   - Canonical window length: `data.sensor_window_length` (models inherit via interpolation)
-  - Core knobs: `optim.lr` (log), `optim.weight_decay` (log), `scenario.alpha`, `scenario.beta`
+  - Core knobs: `optim.lr` (log), `optim.weight_decay` (log), `trial.alpha`, `trial.beta`
   - Model FE capacity: `model.feature_extractor.n_filters`, `model.feature_extractor.filter_size`
   - Throughput: `data.batch_size` (coarse steps)
 
@@ -246,11 +246,11 @@ Quick facts:
   ```bash
   # Example using printed best params (replace with your values)
   python experiments/run_trial.py \
-    scenario=scenario2 data=mmfit \
+    trial=scenario2_mmfit data=mmfit \
     optim.lr=3e-4 optim.weight_decay=1e-4 \
     data.sensor_window_length=256 \
     model.feature_extractor.n_filters=16 model.feature_extractor.filter_size=5 \
-    scenario.alpha=1.2 scenario.beta=0.3 \
+    trial.alpha=1.2 trial.beta=0.3 \
     trainer.epochs=50 seed=0
   # Repeat with seed=1..4 and report mean ± std
   ```
@@ -275,13 +275,13 @@ Notes:
 To run a single long-form training job with the tuned hyperparameters, use the companion script (defaults shown):
 
 ```bash
-BEST_OVERRIDES="optim.lr=0.0026421464 optim.weight_decay=0.00018897 scenario.alpha=10 scenario.beta=10 data.sensor_window_length=400 data.stride_seconds=0.1 model.feature_extractor.n_filters=24 model.feature_extractor.filter_size=7" \
+BEST_OVERRIDES="optim.lr=0.0026421464 optim.weight_decay=0.00018897 trial.alpha=10 trial.beta=10 data.sensor_window_length=400 data.stride_seconds=0.1 model.feature_extractor.n_filters=24 model.feature_extractor.filter_size=7" \
 RUN_LABEL=apex \
 EPOCHS=200 SEED=0 \
 sbatch experiments/slurm_best.sh
 ```
 
-Set `BEST_OVERRIDES` to the tuned hyperparameters you want to run. The script passes those overrides to `experiments.run_trial` and stores artifacts under `experiments/best_run/<scenario>/<dataset>/<timestamp>/` (plots, metrics CSV/JSON, resolved config, checkpoints). Override `ENV_NAME`, `DATA_NAME`, `SCENARIO_NAME`, `EPOCHS`, `SEED`, or `RUN_DIR` as needed; `RUN_LABEL` just tags the log filenames.
+Set `BEST_OVERRIDES` to the tuned hyperparameters you want to run. The script passes those overrides to `experiments.run_trial` and stores artifacts under `experiments/best_run/<trial>/<dataset>/<timestamp>/` (plots, metrics CSV/JSON, resolved config, checkpoints). Override `ENV_NAME`, `DATA_NAME`, `TRIAL_NAME` (or legacy `SCENARIO_NAME`), `EPOCHS`, `SEED`, or `RUN_DIR` as needed; `RUN_LABEL` just tags the log filenames.
 
 ### Single entrypoints and legacy scripts
 - Preferred entrypoints:
@@ -361,7 +361,7 @@ Two equivalent ways:
 python -m experiments.run_trial data=mmfit_debug trainer.epochs=2
 
 # Script form (requires pip install -e . so `src/` is importable)
-python experiments/run_trial.py scenario=scenario2 trainer.epochs=5 optim.lr=5e-4
+python experiments/run_trial.py trial=scenario2_mmfit trainer.epochs=5 optim.lr=5e-4
 ```
 
 Common overrides:
@@ -371,7 +371,7 @@ Common overrides:
 - Data: `data.dataset_name=mmfit` and optionally `env.data_dir=/absolute/path`.
 - Training: `trainer.epochs=100 trainer.patience=10`
 - Optimizer: `optim.lr=1e-3 optim.weight_decay=1e-4`
-- Scenario knobs: `scenario.alpha=... scenario.beta=...`
+- Trial knobs: `trial.alpha=... trial.beta=...`
 - Window length used by data factory: `data.sensor_window_length=256`
 
 Hydra run directory: each run executes in its own working directory (printed at start) and writes outputs there.
