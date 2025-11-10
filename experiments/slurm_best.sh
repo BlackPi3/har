@@ -17,7 +17,7 @@ ENV_NAME=${ENV_NAME:-remote}
 TRIAL_NAME=${TRIAL_NAME:-scenario2_mmfit}
 EPOCHS=${EPOCHS:-200}
 SEED=${SEED:-0}
-LOG_ROOT=${LOG_ROOT:-/netscratch/zolfaghari/log}
+LOG_ROOT=${LOG_ROOT:-/netscratch/zolfaghari/experiments/log}
 # Optional extra Hydra overrides appended verbatim to the run command.
 # Example:
 #   export BEST_OVERRIDES="optim.lr=1e-4 trainer.objective.metric=val_mse"
@@ -31,9 +31,12 @@ if [[ -n "$RUN_DIR" ]]; then
   mkdir -p "$RUN_DIR"
 fi
 mkdir -p "$LOG_ROOT"
-timestamp=$(date +%y%m%d-%H%M%S)
-LOG_PATH="$LOG_ROOT/har-best_${TRIAL_NAME}_${timestamp}.log"
-echo "Logs: $LOG_PATH"
+timestamp=$(date +%y%m%d_%H%M)
+LOG_STEM="$LOG_ROOT/trial_${timestamp}"
+LOG_OUT="${LOG_STEM}.out"
+LOG_ERR="${LOG_STEM}.err"
+echo "Stdout: $LOG_OUT"
+echo "Stderr: $LOG_ERR"
 
 export HYDRA_FULL_ERROR=1
 
@@ -65,4 +68,4 @@ srun \
     set -euo pipefail
     echo Running: $RUN_COMMAND
     eval \"$RUN_COMMAND\"
-  " 2>&1 | tee "$LOG_PATH"
+  " >"$LOG_OUT" 2>"$LOG_ERR"
