@@ -62,6 +62,40 @@ def default_output_root(study: str) -> Path:
     return Path("experiments") / "hpo" / study
 
 
+def _format_override_value(value: Any) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if value is None:
+        return "null"
+    if isinstance(value, (list, tuple, dict)):
+        try:
+            return json.dumps(value)
+        except Exception:
+            return str(value)
+    return str(value)
+
+
+def _flatten_overrides(prefix: str, value: Any) -> list[str]:
+    if isinstance(value, dict):
+        items: list[str] = []
+        for key, val in value.items():
+            key_path = f"{prefix}.{key}" if prefix else key
+            items.extend(_flatten_overrides(key_path, val))
+        return items
+    return [f"{prefix}={_format_override_value(value)}"]
+
+
+def _mode_to_direction(mode: str | None) -> str | None:
+    if not mode:
+        return None
+    m = mode.lower()
+    if m in ("max", "maximize"):
+        return "maximize"
+    if m in ("min", "minimize"):
+        return "minimize"
+    return None
+
+
 def build_space(trial: optuna.trial.Trial) -> Dict[str, Any]:
     # Deprecated: search space must come from conf/hpo YAML.
     raise RuntimeError("Search space must be provided via --space-config (conf/hpo/*.yaml) or HPO env var.")
@@ -208,10 +242,8 @@ def run_trial(cmd_base: list[str], run_dir: Path, skip_artifacts: bool = False, 
 
 
 def _extract_yaml_meta(yaml_path: Path) -> Dict[str, Any]:
-    """Extract optional metadata from conf/hpo YAML.
-    Returns keys: study_name (str|None), metric (str|None), mode (str|None)
-    """
-    meta: Dict[str, Any] = {"study_name": None, "metric": None, "mode": None}
+    """Extract optional metadata from conf/hpo YAML."""
+    meta: Dict[str, Any] = {"study_name": None, "metric": None, "mode": None, "trainer_overrides": []}
     if yaml is None:
         return meta
     try:
@@ -222,13 +254,18 @@ def _extract_yaml_meta(yaml_path: Path) -> Dict[str, Any]:
         if isinstance(sweeper, dict):
             if isinstance(sweeper.get("study_name"), str):
                 meta["study_name"] = sweeper.get("study_name")
-        # hpo.metric/mode
-        hpo_node = data.get("hpo", {}) or {}
-        if isinstance(hpo_node, dict):
-            if isinstance(hpo_node.get("metric"), str):
-                meta["metric"] = hpo_node.get("metric")
-            if isinstance(hpo_node.get("mode"), str):
-                meta["mode"] = hpo_node.get("mode")
+        trainer_node = data.get("trainer")
+        if trainer_node is not None:
+            if isinstance(trainer_node, str):
+                trainer_node = {"name": trainer_node}
+            if isinstance(trainer_node, dict):
+                meta["trainer_overrides"] = _flatten_overrides("trainer", trainer_node)
+                objective = trainer_node.get("objective", {}) or {}
+                if isinstance(objective, dict):
+                    if isinstance(objective.get("metric"), str):
+                        meta["metric"] = objective.get("metric")
+                    if isinstance(objective.get("mode"), str):
+                        meta["mode"] = objective.get("mode")
     except Exception:
         pass
     return meta
@@ -283,13 +320,17 @@ def main():
     space_yaml_path = _resolve_space_yaml(args)
     meta = _extract_yaml_meta(space_yaml_path)
 
+    trainer_overrides = meta.get("trainer_overrides") or []
+
     # Adopt study name from YAML if provided
     study_name = meta.get("study_name") or args.study_name
 
-    # Determine metric and direction; prefer YAML if present
+    # Determine metric and direction; prefer trainer objective if present
     metric = meta.get("metric") or args.metric
     if args.direction is None:
-        direction = (meta.get("mode") or ("maximize" if metric == "val_f1" else "minimize"))
+        direction = _mode_to_direction(meta.get("mode"))
+        if direction is None:
+            direction = "maximize" if metric == "val_f1" else "minimize"
     else:
         direction = args.direction
 
@@ -315,6 +356,8 @@ def main():
         f"data={args.data}",
         f"seed={args.seed}",
     ]
+    if trainer_overrides:
+        base_overrides.extend(trainer_overrides)
     if args.epochs is not None:
         base_overrides.append(f"trainer.epochs={args.epochs}")
 
@@ -337,6 +380,14 @@ def main():
             # Failed run; assign a bad score so it's pruned from consideration
             return -1e9 if direction == "maximize" else 1e9
 
+        objective_info = (results or {}).get("objective", {}) or {}
+        score = objective_info.get("best_score")
+        if score is not None:
+            try:
+                return float(score)
+            except Exception:
+                pass
+
         fm = (results or {}).get("final_metrics", {})
         if metric == "val_f1":
             val = fm.get("val_f1_last") or fm.get("best_val_f1")
@@ -346,8 +397,7 @@ def main():
         else:
             val = fm.get("val_loss_last") or fm.get("best_val_loss")
             if val is None:
-                return 1e9
-            # Optuna expects minimize for val_loss; if user selected maximize, invert
+                return 1e9 if direction == "minimize" else -1e9
             return float(val)
 
     study.optimize(objective, n_trials=args.n_trials, gc_after_trial=True)

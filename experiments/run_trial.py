@@ -462,7 +462,13 @@ def _clean_history(history: Dict[str, List[Any]]) -> Dict[str, List[float]]:
     return clean
 
 
-def _write_results(run_dir: Path, history: Dict[str, List[Any]], best_epoch: int | None, include_history: bool) -> None:
+def _write_results(
+    run_dir: Path,
+    history: Dict[str, List[Any]],
+    best_epoch: int | None,
+    include_history: bool,
+    objective_meta: Dict[str, Any] | None = None,
+) -> None:
     history = history or {}
     val_f1_hist = history.get("val_f1", []) or []
     val_loss_hist = history.get("val_loss", []) or []
@@ -480,6 +486,15 @@ def _write_results(run_dir: Path, history: Dict[str, List[Any]], best_epoch: int
     }
     if include_history:
         out["history"] = _clean_history(history)
+    if objective_meta:
+        meta = dict(objective_meta)
+        for key in ("best_score", "last_score"):
+            if key in meta and meta[key] is not None:
+                try:
+                    meta[key] = float(meta[key])
+                except Exception:
+                    pass
+        out["objective"] = meta
     (run_dir / "results.json").write_text(json.dumps(out, indent=2))
 
 
@@ -664,7 +679,22 @@ def main():
     best_epoch = getattr(trainer, "best_epoch", None) if trainer else None
 
     include_history = not _SKIP_ARTIFACTS
-    _write_results(run_dir, history, best_epoch, include_history=include_history)
+    objective_meta = None
+    if trainer and getattr(trainer, "objective_metric", None):
+        metric_name = getattr(trainer, "objective_metric", None)
+        objective_meta = {
+            "metric": metric_name,
+            "mode": getattr(trainer, "objective_mode", None),
+            "best_score": getattr(trainer, "best_score", None),
+            "last_score": None,
+        }
+        metric_hist = history.get(metric_name) if isinstance(history, dict) else None
+        if metric_hist:
+            try:
+                objective_meta["last_score"] = float(metric_hist[-1])
+            except Exception:
+                pass
+    _write_results(run_dir, history, best_epoch, include_history=include_history, objective_meta=objective_meta)
     if _SKIP_ARTIFACTS:
         print("[run_trial] Artifact saving disabled for this run.")
     else:

@@ -3,19 +3,16 @@
 
 # This file declares the search space (params) and the objective.
 
-# Also define the objective to optimize for this space.
-hpo:
-  metric: val_f1
-  mode: maximize
+study_name: scenario2_mmfit
 
 hydra:
   sweeper:
     # Keep sweep-level defaults close to the space so CLI can stay minimal
-    direction: ${hpo.mode}
+    direction: maximize
     # Study name with a robust fallback: prefer env STUDY_NAME, else this file's canonical name
-    study_name: scenario2_mmfit
+    study_name: ${study_name}
     # Store Optuna DB alongside trials inside the repo
-    storage: "sqlite:///experiments/hpo/${hpo.study_name}/${hpo.study_name}.db"
+    storage: "sqlite:///experiments/hpo/${study_name}/${study_name}.db"
     params:
       # Optimizer
       optim.lr: tag(log, interval(1e-5, 1e-2))
@@ -47,9 +44,12 @@ hydra:
 
   sweep:
     # Place all trials under a unified per-study directory
-    dir: "experiments/hpo/${hpo.study_name}/trials"
+    dir: "experiments/hpo/${study_name}/trials"
     subdir: trial_${hydra.job.num}
 
 # Trainer selection for this HPO space
 trainer:
   name: scenario2
+  objective:
+    metric: val_f1
+    mode: max

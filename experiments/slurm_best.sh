@@ -18,6 +18,10 @@ DATA_NAME=${DATA_NAME:-mmfit}
 TRIAL_NAME=${TRIAL_NAME:-scenario2_mmfit}
 EPOCHS=${EPOCHS:-200}
 SEED=${SEED:-0}
+# Optional extra Hydra overrides appended verbatim to the run command.
+# Example:
+#   export BEST_OVERRIDES="optim.lr=1e-4 trainer.objective.metric=val_mse"
+#   sbatch experiments/slurm_best.sh
 BEST_OVERRIDES=${BEST_OVERRIDES:-}
 RUN_DIR=${RUN_DIR:-$PROJECT_ROOT/experiments/best_run/$TRIAL_NAME}
 
