@@ -1,4 +1,5 @@
 import copy
+import math
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -42,6 +43,45 @@ class Trainer:
         self.lr_warmup_start_factor = float(min(max(start_factor, 0.0), 1.0))
         self.base_lrs = [group["lr"] for group in self.optimizer.param_groups]
         self._lr_warmup_finished = self.lr_warmup_epochs <= 0
+        self.ce = torch.nn.CrossEntropyLoss()
+
+        # Trainer-specific controls (objective + loss toggles)
+        self.trainer_cfg = getattr(cfg, "trainer", None)
+        objective_cfg = getattr(self.trainer_cfg, "objective", None) if self.trainer_cfg else None
+        metric_name = getattr(objective_cfg, "metric", None) if objective_cfg else None
+        self.objective_metric = metric_name or "val_f1"
+        mode = getattr(objective_cfg, "mode", "max") if objective_cfg else "max"
+        if isinstance(mode, str):
+            mode = mode.lower()
+        self.objective_mode = "min" if mode == "min" else "max"
+
+        losses_cfg = getattr(self.trainer_cfg, "losses", None) if self.trainer_cfg else None
+
+        def _loss_flag(name: str, default: bool) -> bool:
+            if not losses_cfg:
+                return default
+            value = getattr(losses_cfg, name, None)
+            if value is None:
+                return default
+            return bool(value)
+
+        activity_global = getattr(losses_cfg, "activity", None) if losses_cfg else None
+        self.use_mse_loss = _loss_flag("mse", True)
+        # Support either feature_similarity or shorthand sim
+        feature_flag = getattr(losses_cfg, "feature_similarity", None) if losses_cfg else None
+        if feature_flag is None and losses_cfg:
+            feature_flag = getattr(losses_cfg, "sim", None)
+        if feature_flag is None:
+            self.use_feature_similarity_loss = _loss_flag("feature_similarity", True)
+        else:
+            self.use_feature_similarity_loss = bool(feature_flag)
+        self.use_activity_loss_real = _loss_flag("activity_real", True)
+        self.use_activity_loss_sim = _loss_flag("activity_sim", True)
+        if activity_global is not None:
+            flag = bool(activity_global)
+            self.use_activity_loss_real = self.use_activity_loss_real and flag
+            self.use_activity_loss_sim = self.use_activity_loss_sim and flag
+        self.use_activity_loss = self.use_activity_loss_real or self.use_activity_loss_sim
 
     def _cosine(self, a, b):
         return (1 - F.cosine_similarity(a, b, dim=1)).mean()
@@ -53,13 +93,38 @@ class Trainer:
         mse = torch.nn.functional.mse_loss(sim_acc, acc)
         real_feat = self.models["fe"](acc)
         sim_feat = self.models["fe"](sim_acc)
-        sim_loss = self._cosine(sim_feat, real_feat) if self.beta > 0 else 0.0
         logits_real = self.models["ac"](real_feat)
         logits_sim = self.models["ac"](sim_feat)
-        ce = torch.nn.CrossEntropyLoss()
-        act_loss = ce(logits_real, labels) + ce(logits_sim, labels)
-        total = self.gamma * mse + self.alpha * act_loss + self.beta * sim_loss
-        return total, mse.item(), sim_loss if isinstance(sim_loss, float) else sim_loss.item(), act_loss.item(), logits_real, labels
+        zero = torch.zeros((), device=self.device, dtype=pose.dtype)
+
+        if self.beta > 0 and self.use_feature_similarity_loss:
+            sim_loss = self._cosine(sim_feat, real_feat)
+        else:
+            sim_loss = zero
+
+        act_loss = zero
+        if self.use_activity_loss and self.alpha > 0:
+            if self.use_activity_loss_real:
+                act_loss = act_loss + self.ce(logits_real, labels)
+            if self.use_activity_loss_sim:
+                act_loss = act_loss + self.ce(logits_sim, labels)
+
+        total = torch.zeros((), device=self.device, dtype=pose.dtype)
+        if self.use_mse_loss:
+            total = total + self.gamma * mse
+        if self.beta > 0 and self.use_feature_similarity_loss:
+            total = total + self.beta * sim_loss
+        if self.alpha > 0 and self.use_activity_loss:
+            total = total + self.alpha * act_loss
+
+        return (
+            total,
+            float(mse.detach().cpu()),
+            float(sim_loss.detach().cpu()),
+            float(act_loss.detach().cpu()),
+            logits_real,
+            labels,
+        )
 
     def _apply_lr_warmup(self, epoch: int) -> None:
         if self._lr_warmup_finished:
@@ -73,6 +138,18 @@ class Trainer:
         factor = self.lr_warmup_start_factor + (1.0 - self.lr_warmup_start_factor) * progress
         for base_lr, group in zip(self.base_lrs, self.optimizer.param_groups):
             group["lr"] = base_lr * factor
+
+    def _is_improvement(self, current: float, best_value: float) -> bool:
+        if current is None:
+            return False
+        current_val = float(current)
+        if not math.isfinite(current_val):
+            return False
+        if not math.isfinite(best_value):
+            return True
+        if self.objective_mode == "min":
+            return current_val < best_value
+        return current_val > best_value
 
     def _run_epoch(self, split="train"):
         is_train = split == "train"
@@ -114,7 +191,28 @@ class Trainer:
         return avg_loss, f1, mse_avg, sim_avg, act_avg, acc
 
     def fit(self, epochs):
-        best = {"f1": -np.inf, "state": None, "epoch": None}
+        if self.objective_metric not in (
+            "train_loss",
+            "val_loss",
+            "train_f1",
+            "val_f1",
+            "train_acc",
+            "val_acc",
+            "train_mse",
+            "val_mse",
+            "train_sim_loss",
+            "val_sim_loss",
+            "train_act_loss",
+            "val_act_loss",
+        ):
+            raise KeyError(
+                f"Objective metric '{self.objective_metric}' is not tracked by the Trainer. "
+                "Choose one of: train_loss, val_loss, train_f1, val_f1, train_acc, val_acc, "
+                "train_mse, val_mse, train_sim_loss, val_sim_loss, train_act_loss, val_act_loss."
+            )
+
+        best_default = np.inf if self.objective_mode == "min" else -np.inf
+        best = {"value": best_default, "state": None, "epoch": None}
         history = {
             "train_loss": [],
             "val_loss": [],
@@ -132,7 +230,7 @@ class Trainer:
         
         print(f"Starting training for {epochs} epochs...")
         print("-" * 70)
-        
+
         for epoch in range(epochs):
             self._apply_lr_warmup(epoch)
             tr_loss, tr_f1, tr_mse, tr_sim, tr_act, tr_acc = self._run_epoch("train")
@@ -157,32 +255,41 @@ class Trainer:
                   f"Train Loss: {tr_loss:.4f} | Val Loss: {val_loss:.4f} | "
                   f"Train F1: {tr_f1:.4f} | Val F1: {val_f1:.4f} | "
                   f"LR: {current_lr:.3e}")
-            
+
             if self.scheduler is not None and self._lr_warmup_finished:
                 try:
                     self.scheduler.step(val_loss)
                 except TypeError:
                     self.scheduler.step()
-            
-            if val_f1 > best["f1"]:
-                best["f1"] = val_f1
+
+            metric_history = history.get(self.objective_metric)
+            if metric_history is None or not metric_history:
+                raise KeyError(
+                    f"Objective metric '{self.objective_metric}' not populated in history; available keys: {list(history.keys())}"
+                )
+            current_metric = metric_history[-1]
+            if self._is_improvement(current_metric, best["value"]):
+                best["value"] = current_metric
                 best["state"] = {k: copy.deepcopy(m.state_dict()) for k, m in self.models.items()}
                 best["epoch"] = epoch
-                print(f"    → New best Val F1: {val_f1:.4f}")
-            
-            if (epoch - np.argmax(history["val_f1"])) >= self.cfg.patience:
-                print(f"Early stopping triggered after {epoch+1} epochs (patience: {self.cfg.patience})")
+                print(f"    → New best {self.objective_metric}: {current_metric:.4f}")
+
+            if best["epoch"] is not None and (epoch - best["epoch"]) >= self.patience:
+                print(f"Early stopping triggered after {epoch+1} epochs (patience: {self.patience})")
                 break
-        
+
         print("-" * 70)
-        print(f"Training completed. Best Val F1: {best['f1']:.4f}")
-        
+        if math.isfinite(best["value"]):
+            print(f"Training completed. Best {self.objective_metric}: {best['value']:.4f}")
+        else:
+            print(f"Training completed. Best {self.objective_metric}: N/A")
+
         # restore best
         if best["state"]:
             for k, m in self.models.items():
                 m.load_state_dict(best["state"][k])
         self.best_state = best["state"]
         self.best_epoch = best["epoch"]
-        self.best_score = best["f1"]
+        self.best_score = best["value"]
         return history
 # ...existing code...

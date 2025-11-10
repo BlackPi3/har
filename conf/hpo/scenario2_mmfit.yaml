@@ -49,3 +49,7 @@ hydra:
     # Place all trials under a unified per-study directory
     dir: "experiments/hpo/${hpo.study_name}/trials"
     subdir: trial_${hydra.job.num}
+
+# Trainer selection for this HPO space
+trainer:
+  name: scenario2

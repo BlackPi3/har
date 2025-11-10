@@ -1,0 +1,26 @@
+## Manual Trainer configuration for scenario2 (pose2imu + HAR multitask)
+defaults:
+  - _self_
+
+# Number of epochs/patience used by experiments.run_trial Trainer wrapper
+epochs: 100
+patience: 10
+
+objective:
+  metric: val_f1   # Any key from Trainer history (e.g., val_f1, val_mse, val_loss)
+  mode: max        # max to maximize, min to minimize (e.g., use min for val_mse)
+
+# Select which sub-modules receive optimizer updates.
+# Modules set to false are frozen (no optimizer params) but still run during forward passes.
+trainable_modules:
+  pose2imu: true
+  fe: true
+  ac: true
+
+# Fine-grained loss toggles. Each flag gates the corresponding component regardless of alpha/beta.
+losses:
+  mse: true
+  feature_similarity: true
+  activity: true       # Master switch for activity losses
+  activity_real: true  # Cross-entropy on real accelerometer branch
+  activity_sim: true   # Cross-entropy on simulated accelerometer branch

@@ -49,5 +49,6 @@ optim:
     patience: 10
 
 trainer:
+  name: scenario2
   epochs: 100
   patience: 10

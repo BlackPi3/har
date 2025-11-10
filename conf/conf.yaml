@@ -6,7 +6,6 @@ defaults:
   - model/feature_extractor: feature_extractor
   - model/classifier: classifier
   - optim: adam
-  - trainer: lightning
   - _self_
 
 # Global training hyperparameters

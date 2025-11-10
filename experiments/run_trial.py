@@ -196,8 +196,6 @@ def _build_cfg(overrides: List[str]) -> SimpleNamespace:
     fe_cfg = _load_yaml(REPO_ROOT / "conf/model/feature_extractor/feature_extractor.yaml")
     clf_cfg = _load_yaml(REPO_ROOT / "conf/model/classifier/classifier.yaml")
     optim_cfg = _load_yaml(REPO_ROOT / "conf/optim/adam.yaml")
-    trainer_cfg = _load_yaml(REPO_ROOT / "conf/trainer/lightning.yaml")
-
     # Compose a single dict
     cfg_dict: Dict[str, Any] = {}
     for part in (base, env_cfg, data_cfg):
@@ -209,7 +207,6 @@ def _build_cfg(overrides: List[str]) -> SimpleNamespace:
         "classifier": clf_cfg or {},
     }
     cfg_dict["optim"] = optim_cfg or {}
-    cfg_dict["trainer"] = merge_dicts(trainer_cfg or {}, cfg_dict.get("trainer", {}))
 
     # Merge trial-level overrides last so they remain the single source of truth per flow
     cfg_dict = merge_dicts(cfg_dict, trial_cfg)
@@ -244,6 +241,23 @@ def _build_cfg(overrides: List[str]) -> SimpleNamespace:
 
     # Apply overrides last
     cfg_dict = _apply_overrides(cfg_dict, overrides)
+
+    # Resolve trainer selection (required)
+    trainer_node = cfg_dict.get("trainer")
+    trainer_sel = None
+    trainer_overrides: Dict[str, Any] = {}
+    if isinstance(trainer_node, str):
+        trainer_sel = trainer_node
+    elif isinstance(trainer_node, dict):
+        trainer_sel = trainer_node.get("name") or trainer_node.get("selection")
+        trainer_overrides = {k: v for k, v in trainer_node.items() if k not in ("name", "selection")}
+    if not trainer_sel:
+        raise ValueError(
+            "Trainer selection is missing. Specify trainer.name (or trainer=...) in the trial/config overrides."
+        )
+    trainer_cfg = _load_yaml(REPO_ROOT / f"conf/trainer/{trainer_sel}.yaml")
+    cfg_dict["trainer"] = merge_dicts(trainer_cfg or {}, trainer_overrides or {})
+    cfg_dict["trainer"]["name"] = trainer_sel
 
     # Stamp the selected config surface explicitly for reproducibility
     if not isinstance(cfg_dict.get("env"), dict):
@@ -381,9 +395,43 @@ def _build_models(cfg) -> Dict[str, torch.nn.Module]:
 
 
 def _build_optim(cfg, models):
+    trainer_cfg = getattr(cfg, "trainer", None)
+    modules_cfg = getattr(trainer_cfg, "trainable_modules", None) if trainer_cfg else None
+
+    def _module_enabled(name: str) -> bool:
+        if modules_cfg is None:
+            return True
+        value = getattr(modules_cfg, name, None)
+        # Allow descriptive aliases without forcing config churn
+        if value is None:
+            alias_map = {
+                "fe": "feature_extractor",
+                "ac": "activity_classifier",
+                "pose2imu": "regressor",
+            }
+            alias = alias_map.get(name)
+            if alias:
+                value = getattr(modules_cfg, alias, None)
+        return True if value is None else bool(value)
+
     params = []
-    for m in models.values():
-        params.extend(list(m.parameters()))
+    frozen = []
+    trainable = []
+    for name, module in models.items():
+        enabled = _module_enabled(name)
+        module.requires_grad_(enabled)
+        if enabled:
+            params.extend(list(module.parameters()))
+            trainable.append(name)
+        else:
+            frozen.append(name)
+    if not params:
+        raise ValueError("No trainable parameters selected; check trainer.trainable_modules settings.")
+    if frozen:
+        print(f"[run_trial] Freezing modules (no optimizer params): {', '.join(sorted(frozen))}")
+    if trainable:
+        print(f"[run_trial] Optimizing modules: {', '.join(sorted(trainable))}")
+
     lr = float(getattr(cfg.optim, "lr", 1e-3))
     weight_decay = float(getattr(cfg.optim, "weight_decay", 0.0))
     optimizer = torch.optim.Adam(params, lr=lr, weight_decay=weight_decay)
