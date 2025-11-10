@@ -349,18 +349,6 @@ def _ensure_run_dir(cfg: SimpleNamespace, overrides: List[str]) -> Path:
             group = os.environ.get("RUN_TRIAL_GROUP") or "best_run"
 
         scenario = getattr(cfg, "trial", None) or getattr(cfg, "scenario", getattr(cfg, "experiment_name", "scenario"))
-        data_name = getattr(cfg, "dataset_name", None)
-        if not data_name:
-            data_field = getattr(cfg, "data", None)
-            if isinstance(data_field, str):
-                data_name = data_field
-            elif data_field is not None:
-                try:
-                    data_name = getattr(data_field, "name", None) or getattr(data_field, "selection", None)
-                except Exception:
-                    data_name = None
-        if not data_name:
-            data_name = "dataset"
 
         timestamp = datetime.now().strftime("%y%m%d-%H%M%S")
         label = None
@@ -376,7 +364,7 @@ def _ensure_run_dir(cfg: SimpleNamespace, overrides: List[str]) -> Path:
                 study = getattr(cfg, "study_name", getattr(cfg, "experiment_name", scenario))
             run_dir = experiments_root / "hpo" / str(study) / suffix
         else:
-            run_dir = experiments_root / str(group) / str(scenario) / str(data_name) / suffix
+            run_dir = experiments_root / str(group) / str(scenario) / suffix
 
     p = Path(run_dir)
     p.mkdir(parents=True, exist_ok=True)

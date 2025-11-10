@@ -17,16 +17,23 @@ ENV_NAME=${ENV_NAME:-remote}
 TRIAL_NAME=${TRIAL_NAME:-scenario2_mmfit}
 EPOCHS=${EPOCHS:-200}
 SEED=${SEED:-0}
+LOG_ROOT=${LOG_ROOT:-/netscratch/zolfaghari/log}
 # Optional extra Hydra overrides appended verbatim to the run command.
 # Example:
 #   export BEST_OVERRIDES="optim.lr=1e-4 trainer.objective.metric=val_mse"
 #   sbatch experiments/slurm_best.sh
 BEST_OVERRIDES=${BEST_OVERRIDES:-}
-RUN_DIR=${RUN_DIR:-$PROJECT_ROOT/experiments/best_run/$TRIAL_NAME}
+RUN_DIR=${RUN_DIR:-}
 
 # Logs
 set -euo pipefail
-mkdir -p "$RUN_DIR"
+if [[ -n "$RUN_DIR" ]]; then
+  mkdir -p "$RUN_DIR"
+fi
+mkdir -p "$LOG_ROOT"
+timestamp=$(date +%y%m%d-%H%M%S)
+LOG_PATH="$LOG_ROOT/har-best_${TRIAL_NAME}_${timestamp}.log"
+echo "Logs: $LOG_PATH"
 
 export HYDRA_FULL_ERROR=1
 
@@ -36,8 +43,10 @@ BASE_OVERRIDES=(
   "trial=$TRIAL_NAME"
   "trainer.epochs=$EPOCHS"
   "seed=$SEED"
-  "run.dir=$RUN_DIR"
 )
+if [[ -n "$RUN_DIR" ]]; then
+  BASE_OVERRIDES+=("run.dir=$RUN_DIR")
+fi
 if [[ -n "$BEST_OVERRIDES" ]]; then
   read -r -a EXTRA_OVERRIDES <<< "$BEST_OVERRIDES"
   BASE_OVERRIDES+=("${EXTRA_OVERRIDES[@]}")
@@ -56,4 +65,4 @@ srun \
     set -euo pipefail
     echo Running: $RUN_COMMAND
     eval \"$RUN_COMMAND\"
-  "
+  " 2>&1 | tee "$LOG_PATH"

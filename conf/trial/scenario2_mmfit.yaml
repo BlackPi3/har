@@ -8,12 +8,12 @@ trial_name: scenario2_mmfit
 data:
   name: mmfit
   overrides:
-    sensor_window_length: 400
-    stride_seconds: 0.1
+    sensor_window_length: 450
+    stride_seconds: 0.15
 
 # Loss weighting coefficients consumed by the manual Trainer
-alpha: 100   # weight for activity classification component
-beta: 1    # weight for feature similarity component
+alpha: 0.1   # weight for activity classification component
+beta: 0.1    # weight for feature similarity component
 gamma: 1    # weight for regression (MSE) component
 
 model:
@@ -52,3 +52,17 @@ trainer:
   name: scenario2
   epochs: 100
   patience: 10
+  objective:
+    metric: val_mse
+    mode: min
+  trainable_modules:
+    pose2imu: true
+    fe: true
+    ac: true
+  losses:
+    mse: true
+    feature_similarity: true
+    activity: true
+    activity_real: true
+    activity_sim: true
+

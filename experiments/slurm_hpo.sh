@@ -23,10 +23,15 @@ STORAGE=${STORAGE:-$OUTPUT_ROOT/$HPO.db}
 # Explicit run-time config (no aggregated overrides)
 ENV_NAME=${ENV_NAME:-remote}
 EPOCHS=${EPOCHS:-50}
+LOG_ROOT=${LOG_ROOT:-/netscratch/zolfaghari/log}
 
 # Logs
 set -euo pipefail
 mkdir -p "$OUTPUT_ROOT"
+mkdir -p "$LOG_ROOT"
+timestamp=$(date +%y%m%d-%H%M%S)
+LOG_PATH="$LOG_ROOT/har-hpo_${HPO}_${timestamp}.log"
+echo "Logs: $LOG_PATH"
 
 # Optuna + Hydra diagnostics
 export HYDRA_FULL_ERROR=1
@@ -44,4 +49,4 @@ srun \
       --space-config '$SPACE_CONFIG' \
       --env $ENV_NAME \
       --epochs $EPOCHS
-  "
+  " 2>&1 | tee "$LOG_PATH"
