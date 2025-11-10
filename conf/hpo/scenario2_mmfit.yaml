@@ -7,8 +7,6 @@ study_name: scenario2_mmfit
 
 hydra:
   sweeper:
-    # Keep sweep-level defaults close to the space so CLI can stay minimal
-    direction: maximize
     # Study name with a robust fallback: prefer env STUDY_NAME, else this file's canonical name
     study_name: ${study_name}
     # Store Optuna DB alongside trials inside the repo

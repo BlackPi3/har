@@ -4,12 +4,11 @@ defaults:
 ## Scenario 2 trial configuration
 trial_name: scenario2_mmfit
 
-# Data overrides (merged on top of conf/data/mmfit.yaml)
+# Data configuration (merged on top of conf/data/mmfit.yaml)
 data:
   name: mmfit
-  overrides:
-    sensor_window_length: 450
-    stride_seconds: 0.15
+  sensor_window_length: 450
+  stride_seconds: 0.15
 
 # Loss weighting coefficients consumed by the manual Trainer
 alpha: 0.1   # weight for activity classification component
@@ -65,4 +64,3 @@ trainer:
     activity: true
     activity_real: true
     activity_sim: true
-
