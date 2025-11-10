@@ -18,7 +18,7 @@ Usage examples:
         --space-config conf/hpo/scenario2_mmfit.yaml \
         --metric val_f1 --direction maximize \
         --output-root experiments/hpo/scenario2_mmfit \
-        --env remote --data mmfit --epochs 5
+        --env remote --epochs 5
 
 Notes:
     - Arguments after "--" are forwarded as Hydra overrides to experiments.run_trial.
@@ -243,7 +243,13 @@ def run_trial(cmd_base: list[str], run_dir: Path, skip_artifacts: bool = False, 
 
 def _extract_yaml_meta(yaml_path: Path) -> Dict[str, Any]:
     """Extract optional metadata from conf/hpo YAML."""
-    meta: Dict[str, Any] = {"study_name": None, "metric": None, "mode": None, "trainer_overrides": []}
+    meta: Dict[str, Any] = {
+        "study_name": None,
+        "metric": None,
+        "mode": None,
+        "trainer_overrides": [],
+        "data_overrides": [],
+    }
     if yaml is None:
         return meta
     try:
@@ -266,6 +272,13 @@ def _extract_yaml_meta(yaml_path: Path) -> Dict[str, Any]:
                         meta["metric"] = objective.get("metric")
                     if isinstance(objective.get("mode"), str):
                         meta["mode"] = objective.get("mode")
+
+        data_node = data.get("data")
+        if data_node is not None:
+            if isinstance(data_node, str):
+                data_node = {"name": data_node}
+            if isinstance(data_node, dict):
+                meta["data_overrides"] = _flatten_overrides("data", data_node)
     except Exception:
         pass
     return meta
@@ -311,7 +324,6 @@ def main():
     parser.add_argument("--dry", action="store_true", help="Print commands without running")
     # Explicit run-time configuration (avoid free-form overrides for simplicity)
     parser.add_argument("--env", type=str, default="remote", help="Hydra env choice (e.g., local, remote)")
-    parser.add_argument("--data", type=str, default="mmfit", help="Dataset config choice (e.g., mmfit, mmfit_debug)")
     parser.add_argument("--epochs", type=int, default=None, help="Trainer epochs override; if omitted, use config default")
 
     args = parser.parse_args()
@@ -321,6 +333,7 @@ def main():
     meta = _extract_yaml_meta(space_yaml_path)
 
     trainer_overrides = meta.get("trainer_overrides") or []
+    data_overrides = meta.get("data_overrides") or []
 
     # Adopt study name from YAML if provided
     study_name = meta.get("study_name") or args.study_name
@@ -353,11 +366,12 @@ def main():
     # Build explicit CLI overrides from flags
     base_overrides = [
         f"env={args.env}",
-        f"data={args.data}",
         f"seed={args.seed}",
     ]
     if trainer_overrides:
         base_overrides.extend(trainer_overrides)
+    if data_overrides:
+        base_overrides.extend(data_overrides)
     if args.epochs is not None:
         base_overrides.append(f"trainer.epochs={args.epochs}")
 

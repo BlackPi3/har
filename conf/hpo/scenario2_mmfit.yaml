@@ -53,3 +53,6 @@ trainer:
   objective:
     metric: val_f1
     mode: max
+
+data:
+  name: mmfit

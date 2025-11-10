@@ -14,7 +14,6 @@ CONTAINER_IMAGE=${CONTAINER_IMAGE:-/netscratch/zolfaghari/images/har.sqsh}
 # Best-run configuration (override via env)
 ########################################
 ENV_NAME=${ENV_NAME:-remote}
-DATA_NAME=${DATA_NAME:-mmfit}
 TRIAL_NAME=${TRIAL_NAME:-scenario2_mmfit}
 EPOCHS=${EPOCHS:-200}
 SEED=${SEED:-0}
@@ -34,7 +33,6 @@ export HYDRA_FULL_ERROR=1
 # Assemble overrides
 BASE_OVERRIDES=(
   "env=$ENV_NAME"
-  "data=$DATA_NAME"
   "trial=$TRIAL_NAME"
   "trainer.epochs=$EPOCHS"
   "seed=$SEED"

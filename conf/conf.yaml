@@ -1,7 +1,6 @@
 # defining all knobs
 defaults:
   - env: local
-  - data: mmfit
   - model/regressor: regressor
   - model/feature_extractor: feature_extractor
   - model/classifier: classifier

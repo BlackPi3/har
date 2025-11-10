@@ -22,7 +22,6 @@ STORAGE=${STORAGE:-$OUTPUT_ROOT/$HPO.db}
 
 # Explicit run-time config (no aggregated overrides)
 ENV_NAME=${ENV_NAME:-remote}
-DATA_NAME=${DATA_NAME:-mmfit}
 EPOCHS=${EPOCHS:-50}
 
 # Logs
@@ -44,6 +43,5 @@ srun \
       --output-root '$OUTPUT_ROOT' \
       --space-config '$SPACE_CONFIG' \
       --env $ENV_NAME \
-      --data $DATA_NAME \
       --epochs $EPOCHS
   "

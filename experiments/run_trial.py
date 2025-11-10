@@ -145,28 +145,52 @@ def _load_composite_yaml(root: Path, name: str, visited: set[str] | None = None)
     return merge_dicts(merged, data)
 
 
+def _load_data_config(name: str, visited: set[str] | None = None) -> Dict[str, Any]:
+    """Load data config with simple defaults support (mirrors Hydra behavior)."""
+    if not name:
+        return {}
+    visited = visited or set()
+    if name in visited:
+        return {}
+    visited.add(name)
+    path = REPO_ROOT / f"conf/data/{name}.yaml"
+    data = _load_yaml(path)
+    if not data:
+        raise FileNotFoundError(f"Data config not found: {path}")
+    defaults = data.get("defaults", []) or []
+    merged: Dict[str, Any] = {}
+    for item in defaults:
+        ref = None
+        if isinstance(item, str):
+            ref = item
+        elif isinstance(item, dict) and item:
+            ref = list(item.keys())[0]
+        if isinstance(ref, str):
+            merged = merge_dicts(merged, _load_data_config(ref, visited))
+    data = {k: v for k, v in data.items() if k != "defaults"}
+    return merge_dicts(merged, data)
+
+
 def _build_cfg(overrides: List[str]) -> SimpleNamespace:
     # Base config
     base = _load_yaml(REPO_ROOT / "conf/conf.yaml")
 
     # Determine env/data selections from overrides (defaults to conf/conf.yaml values via Hydra; here we default explicitly)
     env_sel = None
-    data_sel = None
+    data_sel_override = None
     trial_sel = None
     legacy_scenario_sel = None
     for o in overrides:
         if o.startswith("env="):
             env_sel = o.split("=", 1)[1]
         elif o.startswith("data="):
-            data_sel = o.split("=", 1)[1]
+            data_sel_override = o.split("=", 1)[1]
         elif o.startswith("trial="):
             trial_sel = o.split("=", 1)[1]
         elif o.startswith("scenario="):
             legacy_scenario_sel = o.split("=", 1)[1]
     if env_sel is None:
         env_sel = "local"
-    if data_sel is None:
-        data_sel = "mmfit"
     if trial_sel is None:
         trial_sel = legacy_scenario_sel
     if trial_sel is None:
@@ -174,22 +198,6 @@ def _build_cfg(overrides: List[str]) -> SimpleNamespace:
 
     # Load selected groups akin to Hydra defaults
     env_cfg = _load_yaml(REPO_ROOT / f"conf/env/{env_sel}.yaml")
-    data_cfg = _load_yaml(REPO_ROOT / f"conf/data/{data_sel}.yaml")
-    # Minimal resolver for Hydra-style defaults in data configs (e.g., mmfit_debug -> mmfit)
-    if isinstance(data_cfg, dict) and data_cfg.get("defaults"):
-        base_data = {}
-        for item in data_cfg.get("defaults", []) or []:
-            ref = None
-            if isinstance(item, str):
-                ref = item
-            elif isinstance(item, dict) and item:
-                ref = list(item.keys())[0]
-            if isinstance(ref, str):
-                ref_yaml = _load_yaml(REPO_ROOT / f"conf/data/{ref}.yaml")
-                base_data = merge_dicts(base_data, ref_yaml)
-        # Overlay the rest of current file on top of merged base
-        data_cfg = {k: v for k, v in (data_cfg or {}).items() if k != "defaults"}
-        data_cfg = merge_dicts(base_data, data_cfg)
     trial_cfg = _load_composite_yaml(REPO_ROOT / "conf/trial", trial_sel)
 
     reg_cfg = _load_yaml(REPO_ROOT / "conf/model/regressor/regressor.yaml")
@@ -198,7 +206,7 @@ def _build_cfg(overrides: List[str]) -> SimpleNamespace:
     optim_cfg = _load_yaml(REPO_ROOT / "conf/optim/adam.yaml")
     # Compose a single dict
     cfg_dict: Dict[str, Any] = {}
-    for part in (base, env_cfg, data_cfg):
+    for part in (base, env_cfg):
         cfg_dict = merge_dicts(cfg_dict, part)
     # Nest model/optim/trainer under dedicated keys to avoid collisions
     cfg_dict["model"] = {
@@ -214,9 +222,15 @@ def _build_cfg(overrides: List[str]) -> SimpleNamespace:
     # Allow trial configs to declare data selection + overrides while still mutating the flat namespace.
     data_meta = cfg_dict.get("data")
     data_overrides: Dict[str, Any] = {}
+    data_sel = data_sel_override
     if isinstance(data_meta, dict):
-        meta_selection = data_meta.get("name") or data_meta.get("selection") or data_meta.get("dataset_name") or data_meta.get("dataset")
-        if meta_selection:
+        meta_selection = (
+            data_meta.get("name")
+            or data_meta.get("selection")
+            or data_meta.get("dataset_name")
+            or data_meta.get("dataset")
+        )
+        if meta_selection and not data_sel_override:
             data_sel = meta_selection
         overrides_node = data_meta.get("overrides")
         if isinstance(overrides_node, dict):
@@ -228,8 +242,24 @@ def _build_cfg(overrides: List[str]) -> SimpleNamespace:
         }
         if inline_overrides:
             data_overrides = merge_dicts(data_overrides, inline_overrides)
+    elif isinstance(data_meta, str) and not data_sel_override:
+        data_sel = data_meta
+
+    if not data_sel:
+        raise ValueError(
+            "Dataset selection is missing. Provide data=<name> override or set data.name in the trial/HPO config."
+        )
+
+    data_cfg = _load_data_config(data_sel)
+    cfg_dict = merge_dicts(data_cfg, cfg_dict)
+
     if data_overrides:
         cfg_dict = merge_dicts(cfg_dict, data_overrides)
+
+    if isinstance(cfg_dict.get("data"), dict):
+        cfg_dict["data"]["name"] = data_sel
+    else:
+        cfg_dict["data"] = {"name": data_sel}
 
     # If dataset has a named subfolder under data_dir (e.g., mmfit), append it if not already included
     ds_name = cfg_dict.get("dataset_name")
@@ -262,10 +292,11 @@ def _build_cfg(overrides: List[str]) -> SimpleNamespace:
     # Stamp the selected config surface explicitly for reproducibility
     if not isinstance(cfg_dict.get("env"), dict):
         cfg_dict["env"] = env_sel
-    if isinstance(cfg_dict.get("data"), dict):
+    data_field = cfg_dict.get("data")
+    if isinstance(data_field, dict):
         cfg_dict["data"].setdefault("name", data_sel)
-    else:
-        cfg_dict["data"] = data_sel
+    elif data_sel:
+        cfg_dict["data"] = {"name": data_sel}
     cfg_dict["trial"] = trial_sel
     # Keep legacy key for downstream consumers that still expect `scenario`
     cfg_dict["scenario"] = trial_sel
@@ -318,7 +349,18 @@ def _ensure_run_dir(cfg: SimpleNamespace, overrides: List[str]) -> Path:
             group = os.environ.get("RUN_TRIAL_GROUP") or "best_run"
 
         scenario = getattr(cfg, "trial", None) or getattr(cfg, "scenario", getattr(cfg, "experiment_name", "scenario"))
-        data_name = getattr(cfg, "data", getattr(cfg, "dataset_name", "dataset"))
+        data_name = getattr(cfg, "dataset_name", None)
+        if not data_name:
+            data_field = getattr(cfg, "data", None)
+            if isinstance(data_field, str):
+                data_name = data_field
+            elif data_field is not None:
+                try:
+                    data_name = getattr(data_field, "name", None) or getattr(data_field, "selection", None)
+                except Exception:
+                    data_name = None
+        if not data_name:
+            data_name = "dataset"
 
         timestamp = datetime.now().strftime("%y%m%d-%H%M%S")
         label = None

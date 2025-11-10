@@ -164,7 +164,7 @@ Example submit:
 
 ```bash
 HPO=scenario2_mmfit N_TRIALS=50 \
-OVERRIDES="env=remote data=mmfit trainer.epochs=30" \
+OVERRIDES="env=remote trainer.epochs=30" \
 sbatch experiments/slurm_hpo.sh
 ```
 
@@ -281,7 +281,7 @@ EPOCHS=200 SEED=0 \
 sbatch experiments/slurm_best.sh
 ```
 
-Set `BEST_OVERRIDES` to the tuned hyperparameters you want to run. The script passes those overrides to `experiments.run_trial` and stores artifacts under `experiments/best_run/<trial>/<dataset>/<timestamp>/` (plots, metrics CSV/JSON, resolved config, checkpoints). Override `ENV_NAME`, `DATA_NAME`, `TRIAL_NAME` (or legacy `SCENARIO_NAME`), `EPOCHS`, `SEED`, or `RUN_DIR` as needed; `RUN_LABEL` just tags the log filenames.
+Set `BEST_OVERRIDES` to the tuned hyperparameters you want to run. The script passes those overrides to `experiments.run_trial` and stores artifacts under `experiments/best_run/<trial>/<dataset>/<timestamp>/` (plots, metrics CSV/JSON, resolved config, checkpoints). Override `ENV_NAME`, `TRIAL_NAME` (or legacy `SCENARIO_NAME`), `EPOCHS`, `SEED`, or `RUN_DIR` as needed; `RUN_LABEL` just tags the log filenames. To switch datasets, add an override such as `BEST_OVERRIDES="data.name=mmfit_debug ..."`.
 
 ### Single entrypoints and legacy scripts
 - Preferred entrypoints:
