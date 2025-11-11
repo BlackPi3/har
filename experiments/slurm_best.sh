@@ -4,7 +4,7 @@
 #SBATCH --gpus=1
 #SBATCH --cpus-per-gpu=8
 #SBATCH --mem=48G
-#SBATCH -t 06:00:00
+#SBATCH -t 02:00:00
 
 # Container + project paths
 PROJECT_ROOT=${PROJECT_ROOT:-/home/zolfaghari/har}
