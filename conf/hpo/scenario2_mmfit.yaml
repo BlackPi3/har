@@ -39,6 +39,7 @@ hydra:
       model.regressor.fc_hidden: choice(0, 64, 128)
       model.regressor.fc_dropout: choice(0.05, 0.1, 0.15, 0.2, 0.25)
       model.regressor.use_batch_norm: choice(true, false)
+      # TODO I don't see any hyperparams for classifier. shouldn't we search that space too?
 
   sweep:
     # Place all trials under a unified per-study directory

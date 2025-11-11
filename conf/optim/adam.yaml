@@ -8,4 +8,4 @@ scheduler:
   name: reduce_on_plateau
   mode: min
   factor: 0.1
-  patience: 10
+  patience: 10  # epochs to wait without val-loss improvement before lowering lr
