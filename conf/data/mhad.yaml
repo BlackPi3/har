@@ -1,1 +1,3 @@
 dataset_name: "UTD_MHAD"
+pose_file: skeleton.npy
+acc_file: inertial.npy
