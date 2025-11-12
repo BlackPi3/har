@@ -21,8 +21,8 @@ htmlcov/
 .vscode/
 
 # Data directories (large datasets)
-datasets/
-legacy/
+/datasets/
+/legacy/
 
 # Experiment outputs
 outputs/
