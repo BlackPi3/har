@@ -9,12 +9,20 @@ CLI so it can be invoked directly:
 from importlib import import_module
 from typing import Any
 
-__all__ = ["UTDMHADPreprocessConfig", "UTDMHADPreprocessor"]
+_EXPORTS = {
+    "UTDMHADPreprocessConfig": ".utd_mhad",
+    "UTDMHADPreprocessor": ".utd_mhad",
+    "MMFitPreprocessConfig": ".mmfit",
+    "MMFitPreprocessor": ".mmfit",
+}
+
+__all__ = sorted(_EXPORTS.keys())
 
 
 def __getattr__(name: str) -> Any:
-    if name in __all__:
-        module = import_module(".utd_mhad", __name__)
+    module_path = _EXPORTS.get(name)
+    if module_path:
+        module = import_module(module_path, __name__)
         return getattr(module, name)
     raise AttributeError(f"module {__name__} has no attribute {name}")
 
