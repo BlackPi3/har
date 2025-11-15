@@ -80,8 +80,8 @@ class UTDMHADPreprocessor:
 
         for clip in clips:
             acc = self._process_inertial(clip.inertial_path)
-            skel = self._process_skeleton(clip.skeleton_path)
-            self._persist_clip(clip, acc, skel)
+            skel_norm, skel_aligned = self._process_skeleton(clip.skeleton_path, acc.shape[1])
+            self._persist_clip(clip, acc, skel_norm, skel_aligned)
             self._record_stats(clip, acc_length=acc.shape[1])
 
         summary = self._finalize()
@@ -172,20 +172,18 @@ class UTDMHADPreprocessor:
         acc = (acc - mean[:, None]) / (std[:, None] + 1e-8)
         return acc
 
-    def _process_skeleton(self, path: Path) -> np.ndarray:
+    def _process_skeleton(self, path: Path, target_length: int) -> tuple[np.ndarray, np.ndarray]:
         skel = self._load_skeleton_raw(path)
-        skel = self._normalize_skeleton(skel)
-        # Alignment to IMU timeline will be reintroduced once we finalize the
-        # normalization scheme. For now, keep the native pose frame rate.
-        # skel = self._align_skeleton(skel, target_length)
-        return skel
+        skel_norm = self._normalize_skeleton(skel)
+        skel_aligned = self._align_skeleton(skel_norm, target_length)
+        return skel_norm, skel_aligned
 
     def _align_skeleton(self, skel: np.ndarray, target_length: int) -> np.ndarray:
         if skel.shape[2] == target_length:
             return skel
 
-        skel_ts = self._time_axis(skel.shape[2], self.config.skeleton_sampling_rate_hz)
-        imu_ts = self._time_axis(target_length, self.config.imu_sampling_rate_hz)
+        skel_ts = np.linspace(0.0, 1.0, num=skel.shape[2], dtype=np.float32)
+        imu_ts = np.linspace(0.0, 1.0, num=target_length, dtype=np.float32)
 
         aligned = np.empty((skel.shape[0], skel.shape[1], target_length), dtype=self.config.dtype)
         for axis in range(skel.shape[0]):
@@ -218,9 +216,10 @@ class UTDMHADPreprocessor:
         duration = (length - 1) / rate
         return np.linspace(0.0, duration, num=length, dtype=np.float32)
 
-    def _persist_clip(self, clip: _Clip, acc: np.ndarray, skel: np.ndarray) -> None:
+    def _persist_clip(self, clip: _Clip, acc: np.ndarray, skel_norm: np.ndarray, skel_aligned: np.ndarray) -> None:
         out_acc = clip.inertial_path.with_name(f"{clip.prefix}_{self.config.inertial_output_suffix}")
         out_skel_norm = clip.skeleton_path.with_name(f"{clip.prefix}_{self.config.skeleton_norm_suffix}")
+        out_skel_aligned = clip.skeleton_path.with_name(f"{clip.prefix}_{self.config.skeleton_output_suffix}")
 
         if out_acc.exists() and self.config.verbose and self.config.overwrite:
             print(f"[overwrite] {out_acc}")
@@ -228,11 +227,11 @@ class UTDMHADPreprocessor:
 
         if out_skel_norm.exists() and self.config.verbose and self.config.overwrite:
             print(f"[overwrite] {out_skel_norm}")
-        np.save(out_skel_norm, skel.astype(self.config.dtype))
+        np.save(out_skel_norm, skel_norm.astype(self.config.dtype))
 
-        # Alignment output will be added later when the interpolation step returns.
-        # out_skel_aligned = clip.skeleton_path.with_name(f"{clip.prefix}_{self.config.skeleton_output_suffix}")
-        # np.save(out_skel_aligned, aligned_skel.astype(self.config.dtype))
+        if out_skel_aligned.exists() and self.config.verbose and self.config.overwrite:
+            print(f"[overwrite] {out_skel_aligned}")
+        np.save(out_skel_aligned, skel_aligned.astype(self.config.dtype))
 
     def _record_stats(self, clip: _Clip, acc_length: int) -> None:
         self.stats.lengths.append(acc_length)
