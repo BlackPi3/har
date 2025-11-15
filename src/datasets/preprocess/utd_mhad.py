@@ -39,6 +39,7 @@ class UTDMHADPreprocessConfig:
     inertial_raw_suffix: str = "inertial.npy"
     skeleton_raw_suffix: str = "skeleton.npy"
     inertial_output_suffix: str = "inertial_std.npy"
+    skeleton_norm_suffix: str = "skeleton_norm.npy"
     skeleton_output_suffix: str = "skeleton_aligned.npy"
     dtype: np.dtype = np.float32
     overwrite: bool = True
@@ -79,7 +80,7 @@ class UTDMHADPreprocessor:
 
         for clip in clips:
             acc = self._process_inertial(clip.inertial_path)
-            skel = self._process_skeleton(clip.skeleton_path, acc.shape[1])
+            skel = self._process_skeleton(clip.skeleton_path)
             self._persist_clip(clip, acc, skel)
             self._record_stats(clip, acc_length=acc.shape[1])
 
@@ -171,10 +172,12 @@ class UTDMHADPreprocessor:
         acc = (acc - mean[:, None]) / (std[:, None] + 1e-8)
         return acc
 
-    def _process_skeleton(self, path: Path, target_length: int) -> np.ndarray:
+    def _process_skeleton(self, path: Path) -> np.ndarray:
         skel = self._load_skeleton_raw(path)
-        skel = self._align_skeleton(skel, target_length)
         skel = self._normalize_skeleton(skel)
+        # Alignment to IMU timeline will be reintroduced once we finalize the
+        # normalization scheme. For now, keep the native pose frame rate.
+        # skel = self._align_skeleton(skel, target_length)
         return skel
 
     def _align_skeleton(self, skel: np.ndarray, target_length: int) -> np.ndarray:
@@ -194,17 +197,17 @@ class UTDMHADPreprocessor:
         midhip = skel[:, MID_HIP_IDX, :]
         head = skel[:, HEAD_IDX, :]
 
-        centered = skel - midhip[:, None, :]
+        # Subtract a reference mid-hip position (first frame) to preserve curve shape.
+        reference_midhip = midhip[:, 0][:, None, None]
+        centered = skel - reference_midhip
+
+        # Global scale per clip (median neck-hip distance) avoids per-frame distortions.
         distances = np.linalg.norm(head - midhip, axis=0)
         distances = np.clip(distances, a_min=1e-4, a_max=None)
-
-        window = max(1, int(round(self.config.normalization_window_sec * self.config.imu_sampling_rate_hz)))
-        scale = np.array([np.median(distances[max(0, i - window // 2) : i + window // 2 + 1]) for i in range(len(distances))])
-        scale = np.clip(scale, a_min=1e-3, a_max=None)
+        scale = float(np.median(distances))
+        scale = max(scale, 1e-3)
 
         normalized = centered / scale
-        # Keep same axis order as previous experiments (x, z, y)
-        normalized = normalized[[0, 2, 1], :, :]
         return normalized
 
     # ----------------------------------------------------------------- Utility
@@ -217,15 +220,19 @@ class UTDMHADPreprocessor:
 
     def _persist_clip(self, clip: _Clip, acc: np.ndarray, skel: np.ndarray) -> None:
         out_acc = clip.inertial_path.with_name(f"{clip.prefix}_{self.config.inertial_output_suffix}")
-        out_skel = clip.skeleton_path.with_name(f"{clip.prefix}_{self.config.skeleton_output_suffix}")
+        out_skel_norm = clip.skeleton_path.with_name(f"{clip.prefix}_{self.config.skeleton_norm_suffix}")
 
         if out_acc.exists() and self.config.verbose and self.config.overwrite:
             print(f"[overwrite] {out_acc}")
         np.save(out_acc, acc.astype(self.config.dtype))
 
-        if out_skel.exists() and self.config.verbose and self.config.overwrite:
-            print(f"[overwrite] {out_skel}")
-        np.save(out_skel, skel.astype(self.config.dtype))
+        if out_skel_norm.exists() and self.config.verbose and self.config.overwrite:
+            print(f"[overwrite] {out_skel_norm}")
+        np.save(out_skel_norm, skel.astype(self.config.dtype))
+
+        # Alignment output will be added later when the interpolation step returns.
+        # out_skel_aligned = clip.skeleton_path.with_name(f"{clip.prefix}_{self.config.skeleton_output_suffix}")
+        # np.save(out_skel_aligned, aligned_skel.astype(self.config.dtype))
 
     def _record_stats(self, clip: _Clip, acc_length: int) -> None:
         self.stats.lengths.append(acc_length)
