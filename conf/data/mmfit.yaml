@@ -5,7 +5,8 @@
 dataset_name: mmfit
 
 # Filenames inside each subject directory
-pose_file: pose_3d_upsample_normal.npy
+pose_file: pose_3d_aligned.npy
+pose_norm_file: pose_3d_norm.npy
 acc_file: sw_l_acc_std.npy
 sim_acc_file: sw_l_sim_acc.npy
 labels_file: labels.csv
