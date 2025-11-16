@@ -1,5 +1,8 @@
 dataset_name: utd_mhad
 
+pose_file: skeleton_aligned.npy
+acc_file: inertial_std.npy
+
 # Subject splits (leave-one-subject-out style)
 train_subjects: ["s1", "s2", "s3", "s4"]
 val_subjects: ["s5", "s6"]
@@ -9,6 +12,4 @@ test_subjects: ["s7", "s8"]
 sampling_rate_hz: 50
 sensor_window_length: 100
 stride_seconds: 0.5
-batch_size: 512
-pose_file: skeleton.npy
-acc_file: inertial.npy
+batch_size: 1024
