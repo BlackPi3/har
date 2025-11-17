@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #SBATCH -J har-hpo
-#SBATCH -p A100-80Gb
+#SBATCH -p V100-32GB
 #SBATCH --gpus=1
 #SBATCH --cpus-per-gpu=8
 #SBATCH --mem=48G
@@ -14,8 +14,8 @@ CONTAINER_IMAGE=${CONTAINER_IMAGE:-/netscratch/zolfaghari/images/har.sqsh}
 # HPO configuration (study via conf/hpo)
 ########################################
 # Defaults (override via environment variables as needed)
-HPO=${HPO:-scenario2_mmfit}
-N_TRIALS=${N_TRIALS:-60}
+HPO=${HPO:-scenario2_mhad}
+N_TRIALS=${N_TRIALS:-50}
 SPACE_CONFIG=${SPACE_CONFIG:-conf/hpo/$HPO.yaml}
 OUTPUT_ROOT=${OUTPUT_ROOT:-/netscratch/zolfaghari/experiments/hpo/$HPO}
 STORAGE=${STORAGE:-$OUTPUT_ROOT/$HPO.db}

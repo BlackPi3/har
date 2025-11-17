@@ -245,6 +245,7 @@ def _extract_yaml_meta(yaml_path: Path) -> Dict[str, Any]:
     """Extract optional metadata from conf/hpo YAML."""
     meta: Dict[str, Any] = {
         "study_name": None,
+        "trial": None,
         "metric": None,
         "mode": None,
         "trainer_overrides": [],
@@ -260,6 +261,8 @@ def _extract_yaml_meta(yaml_path: Path) -> Dict[str, Any]:
         if isinstance(sweeper, dict):
             if isinstance(sweeper.get("study_name"), str):
                 meta["study_name"] = sweeper.get("study_name")
+        if isinstance(data.get("trial"), str):
+            meta["trial"] = data.get("trial")
         trainer_node = data.get("trainer")
         if trainer_node is not None:
             if isinstance(trainer_node, str):
@@ -372,6 +375,9 @@ def main():
         base_overrides.extend(trainer_overrides)
     if data_overrides:
         base_overrides.extend(data_overrides)
+    trial_override = meta.get("trial")
+    if trial_override:
+        base_overrides.append(f"trial={trial_override}")
     if args.epochs is not None:
         base_overrides.append(f"trainer.epochs={args.epochs}")
 

@@ -2,6 +2,7 @@
 # Activate with: -m hydra/sweeper=optuna hpo=scenario2_mhad
 
 study_name: scenario2_mhad
+trial: ${study_name}
 
 hydra:
   sweeper:
