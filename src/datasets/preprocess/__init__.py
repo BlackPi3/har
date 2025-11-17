@@ -4,14 +4,14 @@ Dataset preprocessing utilities.
 Each dataset-specific preprocessor lives in this package and exposes a small
 CLI so it can be invoked directly:
 
-    python -m src.datasets.preprocess.utd_mhad --data-dir datasets/UTD_MHAD
+    python -m src.datasets.preprocess.utd --data-dir datasets/utd
 """
 from importlib import import_module
 from typing import Any
 
 _EXPORTS = {
-    "UTDMHADPreprocessConfig": ".utd_mhad",
-    "UTDMHADPreprocessor": ".utd_mhad",
+    "UTDPreprocessConfig": ".utd",
+    "UTDPreprocessor": ".utd",
     "MMFitPreprocessConfig": ".mmfit",
     "MMFitPreprocessor": ".mmfit",
 }

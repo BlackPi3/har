@@ -14,7 +14,7 @@ CONTAINER_IMAGE=${CONTAINER_IMAGE:-/netscratch/zolfaghari/images/har.sqsh}
 # HPO configuration (study via conf/hpo)
 ########################################
 # Defaults (override via environment variables as needed)
-HPO=${HPO:-scenario2_mhad}
+HPO=${HPO:-scenario2_utd}
 N_TRIALS=${N_TRIALS:-50}
 SPACE_CONFIG=${SPACE_CONFIG:-conf/hpo/$HPO.yaml}
 OUTPUT_ROOT=${OUTPUT_ROOT:-/netscratch/zolfaghari/experiments/hpo/$HPO}

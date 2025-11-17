@@ -1,8 +1,8 @@
 defaults:
   - _self_
 
-## Scenario 2 trial configuration for UTD-MHAD
-trial_name: scenario2_mhad
+## Scenario 2 trial configuration for UTD dataset
+trial_name: scenario2_utd
 
 optim:
   name: adam
@@ -16,7 +16,7 @@ beta: 10
 gamma: 1
 
 data:
-  name: utd_mhad
+  name: utd
   sensor_window_length: 100
   stride_seconds: 0.25
 

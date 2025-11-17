@@ -1,8 +1,8 @@
 # Per-scenario, per-dataset search space for Hydra Optuna Sweeper
-# Activate with: -m hydra/sweeper=optuna hpo=scenario2_mhad
+# Activate with: -m hydra/sweeper=optuna hpo=scenario2_utd
 
-study_name: scenario2_mhad
-trial: ${study_name}
+study_name: scenario2_utd
+trial: scenario2_utd
 
 hydra:
   sweeper:
@@ -43,4 +43,4 @@ trainer:
     mode: max
 
 data:
-  name: utd_mhad
+  name: utd

@@ -2,10 +2,10 @@ from pathlib import Path
 import torch
 from torch.utils.data import Dataset
 
-from .dataset import UTDMHADDataset
+from .dataset import UTDDataset
 
 
-def build_utd_mhad_datasets(cfg) -> tuple[Dataset, Dataset, Dataset]:
+def build_utd_datasets(cfg) -> tuple[Dataset, Dataset, Dataset]:
     data_dir = Path(getattr(cfg, "data_dir"))
     pose_file = getattr(cfg, "pose_file", "skeleton_aligned.npy")
     acc_file = getattr(cfg, "acc_file", "inertial_std.npy")
@@ -21,7 +21,7 @@ def build_utd_mhad_datasets(cfg) -> tuple[Dataset, Dataset, Dataset]:
     default_dtype = dtype if dtype is not None else torch.float32
 
     def _build(subjects):
-        return UTDMHADDataset(
+        return UTDDataset(
             data_dir=data_dir,
             subjects=subjects,
             pose_suffix=pose_file,

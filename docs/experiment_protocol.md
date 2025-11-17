@@ -1,18 +1,18 @@
-# Research Protocol for Cross-Dataset HAR (MMFiT ↔ UTD-MHAD)
+# Research Protocol for Cross-Dataset HAR (MMFiT ↔ UTD)
 
-This document specifies the experimental design, data alignment policy, evaluation protocol, and reproducibility checklist for studying transfer between MMFiT (continuous streams) and UTD-MHAD (isolated clips).
+This document specifies the experimental design, data alignment policy, evaluation protocol, and reproducibility checklist for studying transfer between MMFiT (continuous streams) and UTD (isolated clips).
 
 ## 1) Problem framing
 
-- Objective: Learn activity representations using pose→IMU regression + activity classification, and study transfer from MMFiT to UTD-MHAD and vice versa.
-- Mismatch: MMFiT is continuous (includes idle); UTD-MHAD is segmented action-only clips with variable durations.
+- Objective: Learn activity representations using pose→IMU regression + activity classification, and study transfer from MMFiT to UTD and vice versa.
+- Mismatch: MMFiT is continuous (includes idle); UTD is segmented action-only clips with variable durations.
 
 ## 2) Data alignment policy
 
 - Fixed window length W and stride S for both datasets to standardize model input.
 - Window generation:
   - MMFiT: sliding windows over the continuous stream; label by center-frame (or majority) with tolerance.
-  - UTD-MHAD: slide within each clip; for short clips (T < W), emit one padded window and a boolean mask; for long clips, use same stride S.
+  - UTD: slide within each clip; for short clips (T < W), emit one padded window and a boolean mask; for long clips, use same stride S.
 - Padding and masks:
   - Use mask-aware batching (`src/datasets/common/collate.py::mask_collate`). Batches return `(pose, acc, label, mask)`; models may optionally use the mask for temporal pooling.
 - Normalization:
@@ -22,8 +22,8 @@ This document specifies the experimental design, data alignment policy, evaluati
 
 - Pretrain→Finetune:
   1) Pretrain on MMFiT (idle included or filtered per ablation) with fixed W,S.
-  2) Finetune on UTD-MHAD; drop/ignore idle class.
-  3) Evaluate on UTD-MHAD held-out subjects.
+  2) Finetune on UTD; drop/ignore idle class.
+  3) Evaluate on UTD held-out subjects.
 - Joint training (optional):
   - Mix datasets with a dataset-aware sampler to balance minibatches and prevent MMFiT dominance.
 - Domain regularization (optional):
@@ -34,7 +34,7 @@ This document specifies the experimental design, data alignment policy, evaluati
 
 - Splits:
   - MMFiT: use existing subject splits in `conf/data/mmfit.yaml`.
-  - UTD-MHAD: use Leave-One-Subject-Out (LOSO) or pre-defined splits; report macro-F1 and per-class F1.
+- UTD: use Leave-One-Subject-Out (LOSO) or pre-defined splits; report macro-F1 and per-class F1.
 - Metrics:
   - Macro-F1 (primary), Accuracy, Confusion Matrix; (optional) Calibration (ECE) and AUROC per class.
 - Statistical testing:
@@ -42,7 +42,7 @@ This document specifies the experimental design, data alignment policy, evaluati
 
 ## 5) Ablations (minimum set)
 
-1) Window length W ∈ {64, 128, 256, 300}; stride S ∈ {W/4, W/2}.
+- Window length W ∈ {64, 128, 256, 300}; stride S ∈ {W/4, W/2}.
 2) UTD short-clip handling: pad+mask vs. center-crop vs. simple upsample.
 3) Idle handling: include vs. exclude during MMFiT pretraining.
 4) Normalization: per-dataset vs. global.

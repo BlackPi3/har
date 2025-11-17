@@ -4,7 +4,7 @@
 # This file declares the search space (params) and the objective.
 
 study_name: scenario2_mmfit
-trial: ${study_name}
+trial: scenario2_mmfit
 
 hydra:
   sweeper:

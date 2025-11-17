@@ -1,5 +1,5 @@
 """
-Utility dataset + dataloader helpers for the UTD-MHAD inertial clips.
+Utility dataset + dataloader helpers for the UTD inertial clips.
 
 This module is intentionally lightweight so that we can explore dataset
 statistics from tests without wiring the full training pipeline yet.
@@ -23,9 +23,9 @@ class _ClipInfo:
     trial: str
 
 
-class UTDMHADInertialDataset(Dataset):
+class UTDInertialDataset(Dataset):
     """
-    Torch dataset over the raw (non-upsampled) inertial clips from UTD-MHAD.
+    Torch dataset over the raw (non-upsampled) inertial clips from UTD.
 
     Parameters
     ----------
@@ -54,7 +54,7 @@ class UTDMHADInertialDataset(Dataset):
     ) -> None:
         self.root = Path(root)
         if not self.root.exists():
-            raise FileNotFoundError(f"UTD-MHAD root not found: {self.root}")
+            raise FileNotFoundError(f"UTD root not found: {self.root}")
 
         if subjects is None:
             subjects = sorted(
@@ -141,9 +141,9 @@ def make_utd_inertial_dataloader(
     select_axes: Optional[Sequence[int]] = None,
 ) -> DataLoader:
     """
-    Convenience wrapper that instantiates UTDMHADInertialDataset and a torch DataLoader.
+    Convenience wrapper that instantiates UTDInertialDataset and a torch DataLoader.
     """
-    dataset = UTDMHADInertialDataset(
+    dataset = UTDInertialDataset(
         root=root,
         subjects=subjects,
         acc_file_suffix=acc_file_suffix,

@@ -11,9 +11,9 @@ def get_dataloaders(name: str, cfg) -> Dict[str, DataLoader]:
     if name == "mmfit":
         from src.datasets.mmfit.factory import build_mmfit_datasets
         factory_fn = build_mmfit_datasets
-    elif name == "utd_mhad":
-        from src.datasets.utd_mhad.factory import build_utd_mhad_datasets
-        factory_fn = build_utd_mhad_datasets
+    elif name == "utd":
+        from src.datasets.utd.factory import build_utd_datasets
+        factory_fn = build_utd_datasets
     else:
         raise ValueError(f"Unknown dataset: {name}")
     

@@ -18,8 +18,8 @@ class _Clip:
     length: int
 
 
-class UTDMHADDataset(BaseHARDataset):
-    """Dataset that returns sliding windows from aligned UTD-MHAD clips."""
+class UTDDataset(BaseHARDataset):
+    """Dataset that returns sliding windows from aligned UTD clips."""
 
     def __init__(
         self,

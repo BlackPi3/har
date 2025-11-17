@@ -3,10 +3,10 @@
 
 Usage:
   python tests/test_conf.py                     # default config
-  python tests/test_conf.py env=remote data=mhad
+  python tests/test_conf.py env=remote data=utd
 
 Also works via module:
-  python -m tests.test_conf env=remote data=mhad
+  python -m tests.test_conf env=remote data=utd
 
 Outputs:
   Prints concise summary to stdout.

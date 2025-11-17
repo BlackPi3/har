@@ -25,7 +25,7 @@ Outputs:
     - mask: Tensor[B, T_max] (bool)
 
 This collate is a drop-in replacement for torch.utils.data.DataLoader(collate_fn=...).
-Use it when batching variable-length sequences (e.g., UTD-MHAD clips) or when you
+Use it when batching variable-length sequences (e.g., UTD clips) or when you
 want explicit masks for attention/temporal pooling.
 """
 from __future__ import annotations

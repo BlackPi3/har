@@ -3,12 +3,12 @@ from types import SimpleNamespace
 
 import torch
 
-from src.datasets.utd_mhad.factory import build_utd_mhad_datasets
+from src.datasets.utd.factory import build_utd_datasets
 
 
-def test_utd_mhad_dataloader_shapes():
+def test_utd_dataloader_shapes():
     cfg = SimpleNamespace(
-        data_dir=Path("datasets/UTD_MHAD"),
+        data_dir=Path("datasets/utd"),
         pose_file="skeleton_aligned.npy",
         acc_file="inertial_std.npy",
         train_subjects=["s1", "s2"],
@@ -20,7 +20,7 @@ def test_utd_mhad_dataloader_shapes():
         dtype=torch.float32,
     )
 
-    train_ds, val_ds, test_ds = build_utd_mhad_datasets(cfg)
+    train_ds, val_ds, test_ds = build_utd_datasets(cfg)
 
     assert len(train_ds) > 0
     pose, acc, label = train_ds[0]

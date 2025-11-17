@@ -1,4 +1,4 @@
-dataset_name: utd_mhad
+dataset_name: utd
 
 pose_file: skeleton_aligned.npy
 acc_file: inertial_std.npy

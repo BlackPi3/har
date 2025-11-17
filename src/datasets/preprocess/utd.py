@@ -1,5 +1,5 @@
 """
-UTD-MHAD dataset preprocessor.
+UTD dataset preprocessor.
 
 This script converts the raw subject folders into standardized pose/IMU
 artifacts that align skeleton clips with the corresponding inertial windows,
@@ -9,7 +9,7 @@ windows; instead, each clip keeps its native duration (roughly 107–326 frames)
 
 Usage (from repo root):
 
-    python -m src.datasets.preprocess.utd_mhad --data-dir datasets/UTD_MHAD
+    python -m src.datasets.preprocess.utd --data-dir datasets/utd
 """
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ MID_HIP_IDX = 3
 
 
 @dataclass
-class UTDMHADPreprocessConfig:
+class UTDPreprocessConfig:
     data_dir: Path
     subjects: Optional[Sequence[str]] = None
     train_subjects: Optional[Sequence[str]] = None
@@ -65,8 +65,8 @@ class _DatasetStats:
     acc_std: Optional[np.ndarray] = None
 
 
-class UTDMHADPreprocessor:
-    def __init__(self, config: UTDMHADPreprocessConfig):
+class UTDPreprocessor:
+    def __init__(self, config: UTDPreprocessConfig):
         self.config = config
         self.stats = _DatasetStats()
 
@@ -94,7 +94,7 @@ class UTDMHADPreprocessor:
         cfg = self.config
         data_dir = cfg.data_dir
         if not data_dir.exists():
-            raise FileNotFoundError(f"UTD-MHAD directory not found: {data_dir}")
+            raise FileNotFoundError(f"UTD directory not found: {data_dir}")
 
         subjects = cfg.subjects
         if subjects is None:
@@ -128,7 +128,7 @@ class UTDMHADPreprocessor:
                     )
                 )
         if self.config.verbose:
-            print(f"[utd_mhad] Collected {len(clips)} clips across {len(subjects)} subjects")
+            print(f"[utd] Collected {len(clips)} clips across {len(subjects)} subjects")
         return clips
 
     def _fit_acc_stats(self, clips: Sequence[_Clip]) -> None:
@@ -251,7 +251,7 @@ class UTDMHADPreprocessor:
             "acc_mean": self.stats.acc_mean.tolist() if self.stats.acc_mean is not None else None,
             "acc_std": self.stats.acc_std.tolist() if self.stats.acc_std is not None else None,
         }
-        stats_path = self.config.data_dir / "utd_mhad_preprocess_stats.json"
+        stats_path = self.config.data_dir / "utd_preprocess_stats.json"
         with stats_path.open("w") as f:
             json.dump(summary, f, indent=2)
         return summary
@@ -259,10 +259,10 @@ class UTDMHADPreprocessor:
 
 def _load_train_subjects_from_conf() -> Optional[Sequence[str]]:
     """
-    Read train_subjects from conf/data/mhad.yaml to keep preprocessing aligned
+    Read train_subjects from conf/data/utd.yaml to keep preprocessing aligned
     with the dataset config used by the training pipeline.
     """
-    cfg_path = Path(__file__).resolve().parents[3] / "conf" / "data" / "mhad.yaml"
+    cfg_path = Path(__file__).resolve().parents[3] / "conf" / "data" / "utd.yaml"
     if not cfg_path.exists():
         return None
     try:
@@ -276,8 +276,8 @@ def _load_train_subjects_from_conf() -> Optional[Sequence[str]]:
     return None
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="UTD-MHAD preprocessing pipeline.")
-    parser.add_argument("--data-dir", type=Path, default=Path(Path(__file__).resolve().parents[3] / "datasets"/"UTD_MHAD"))
+    parser = argparse.ArgumentParser(description="UTD preprocessing pipeline.")
+    parser.add_argument("--data-dir", type=Path, default=Path("datasets/utd"))
     parser.add_argument("--subjects", nargs="*", default=None, help="Optional subset of subjects (e.g., s1 s2).")
     parser.add_argument("--train-subjects", nargs="*", default=None, help="Subjects used to compute accelerometer stats.")
     parser.add_argument("--imu-sampling-rate", type=float, default=50.0)
@@ -291,7 +291,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     train_subjects = args.train_subjects or _load_train_subjects_from_conf()
-    config = UTDMHADPreprocessConfig(
+    config = UTDPreprocessConfig(
         data_dir=args.data_dir,
         subjects=args.subjects,
         train_subjects=train_subjects,
@@ -301,7 +301,7 @@ def main() -> None:
         overwrite=args.overwrite,
         verbose=not args.quiet,
     )
-    preprocessor = UTDMHADPreprocessor(config)
+    preprocessor = UTDPreprocessor(config)
     preprocessor.run()
 
 

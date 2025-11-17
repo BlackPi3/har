@@ -5,6 +5,7 @@ Contains dataset classes, loaders, and data utilities.
 
 # Import from new modular structure
 from .mmfit import MMFit, build_mmfit_datasets
+from .utd import UTDDataset, build_utd_datasets
 from .common import RandomStridedSampler, SequentialStridedSampler, BaseHARDataset
 
 # Other dataset classes (to be imported when needed)
@@ -16,6 +17,8 @@ __all__ = [
     # MMFit dataset
     'MMFit',
     'build_mmfit_datasets',
+    'UTDDataset',
+    'build_utd_datasets',
     
     # Common utilities
     'RandomStridedSampler',
@@ -31,7 +34,7 @@ __all__ = [
 # Dataset factory mapping for experiments
 DATASET_FACTORIES = {
     'mmfit': build_mmfit_datasets,
-    # 'mhad': build_mhad_datasets,  # TODO: Create factory function
+    'utd': build_utd_datasets,
     # 'ntu': build_ntu_datasets,    # TODO: Create factory function
 }
 
@@ -40,7 +43,7 @@ def get_dataset_factory(dataset_name: str):
     Get the factory function for a dataset.
     
     Args:
-        dataset_name: Name of the dataset ('mmfit', 'mhad', 'ntu', etc.)
+        dataset_name: Name of the dataset ('mmfit', 'utd', 'ntu', etc.)
         
     Returns:
         Factory function that takes config and returns (train, val, test) datasets
