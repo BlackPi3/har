@@ -4,13 +4,6 @@ defaults:
 ## Scenario 2 trial configuration for UTD dataset
 trial_name: scenario2_utd
 
-optim:
-  name: adam
-  lr: 0.0005
-  weight_decay: 0.0001
-  warmup_epochs: 5
-  warmup_start_factor: 0.1
-
 alpha: 1
 beta: 10
 gamma: 1
@@ -19,41 +12,51 @@ data:
   name: utd
   sensor_window_length: 100
   stride_seconds: 0.25
+  batch_size: 4096
 
-model:
-  feature_extractor:
-    n_filters: 16
-    filter_size: 7
-  regressor:
-    joint_hidden_channels: [64, 64, 32, 32]
-    joint_kernel_sizes: [3, 3, 3, 1]
-    joint_dilations: [1, 2, 4, 1]
-    joint_dropouts: [0.0, 0.1, 0.1, 0.1]
-    temporal_hidden_channels: 16
-    temporal_kernel_size: 5
-    temporal_dilation: 1
-    temporal_dropout: 0.4
-    fc_hidden: 0
-    fc_dropout: 0.25
-    use_batch_norm: false
-  classifier:
-    f_in: 100
-    n_classes: 21
+optim:
+  name: adam
+  # lr: 0.0005
+  # weight_decay: 0.0001
+  # warmup_epochs: 5
+  # warmup_start_factor: 0.1
 
 trainer:
   name: scenario2
-  epochs: 100
-  patience: 10
-  objective:
-    metric: val_f1
-    mode: max
-  trainable_modules:
-    pose2imu: true
-    fe: true
-    ac: true
-  losses:
-    mse: true
-    feature_similarity: true
-    activity: true
-    activity_real: true
-    activity_sim: true
+  # epochs: 100
+  # patience: 10
+  # objective:
+  #   metric: val_f1
+  #   mode: max
+  # trainable_modules:
+  #   pose2imu: true
+  #   fe: true
+  #   ac: true
+  # losses:
+  #   mse: true
+  #   feature_similarity: true
+  #   activity: true
+  #   activity_real: true
+  #   activity_sim: true
+
+model:
+  feature_extractor:
+    name: feature_extractor
+    # n_filters: 16
+    # filter_size: 7
+  regressor:
+    name: regressor
+    # joint_hidden_channels: [64, 64, 32, 32]
+    # joint_kernel_sizes: [3, 3, 3, 1]
+    # joint_dilations: [1, 2, 4, 1]
+    # joint_dropouts: [0.0, 0.1, 0.1, 0.1]
+    # temporal_hidden_channels: 16
+    # temporal_kernel_size: 5
+    # temporal_dilation: 1
+    # temporal_dropout: 0.4
+    # fc_hidden: 0
+    # fc_dropout: 0.25
+    # use_batch_norm: false
+  classifier:
+    f_in: 100
+    n_classes: 21

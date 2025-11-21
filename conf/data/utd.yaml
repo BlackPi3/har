@@ -11,5 +11,5 @@ test_subjects: ["s7", "s8"]
 # Sampling + window policy (50 Hz, 2-second window)
 sampling_rate_hz: 50
 sensor_window_length: 100
-stride_seconds: 0.5
-batch_size: 1024
+stride_seconds: 0.25
+batch_size: 4096

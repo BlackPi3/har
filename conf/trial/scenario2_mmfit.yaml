@@ -4,30 +4,50 @@ defaults:
 ## Scenario 2 trial configuration
 trial_name: scenario2_mmfit
 
-## Params
-optim:
-  name: adam
-  lr: 0.0005
-  weight_decay: 0.0001
-  warmup_epochs: 5
-  warmup_start_factor: 0.1
-
 # Loss weighting coefficients consumed by the manual Trainer
-alpha: 1   # weight for activity classification component
-beta: 10    # weight for feature similarity component
-gamma: 1    # weight for regression (MSE) component
+alpha: 1 # weight for activity classification component
+beta: 10 # weight for feature similarity component
+gamma: 1 # weight for regression (MSE) component
 
 # Data configuration (merged on top of conf/data/mmfit.yaml)
 data:
   name: mmfit
-  sensor_window_length: 400
+  sensor_window_length: 450
   stride_seconds: 0.15
+
+## Params
+optim:
+  name: adam
+  # lr: 0.0005
+  # weight_decay: 0.0001
+  # warmup_epochs: 5
+  # warmup_start_factor: 0.1
+
+trainer:
+  name: scenario2
+  # epochs: 100
+  # patience: 10
+  # objective:
+  #   metric: val_f1
+  #   mode: max
+  # trainable_modules:
+  #   pose2imu: true
+  #   fe: true
+  #   ac: true
+  # losses:
+  #   mse: true
+  #   feature_similarity: true
+  #   activity: true
+  #   activity_real: true
+  #   activity_sim: true
 
 model:
   feature_extractor:
-    n_filters: 16
-    filter_size: 7
-  # regressor:
+    name: feature_extractor
+  #   n_filters: 16
+  #   filter_size: 7
+  regressor:
+    name: regressor
   #   joint_hidden_channels: [64, 64, 32, 32]
   #   joint_kernel_sizes: [3, 3, 3, 1]
   #   joint_dilations: [1, 2, 4, 1]
@@ -42,21 +62,3 @@ model:
   classifier:
     f_in: 100
     n_classes: 11
-
-trainer:
-  name: scenario2
-  epochs: 100
-  patience: 10
-  objective:
-    metric: val_f1
-    mode: max
-  trainable_modules:
-    pose2imu: true
-    fe: true
-    ac: true
-  losses:
-    mse: true
-    feature_similarity: true
-    activity: true
-    activity_real: true
-    activity_sim: true

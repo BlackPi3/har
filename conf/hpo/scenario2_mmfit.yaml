@@ -10,15 +10,6 @@ trial: scenario2_mmfit
 trainer:
   name: scenario2
   epochs: 50
-  objective:
-    metric: val_f1
-    mode: max
-
-data:
-  name: mmfit
-
-model:
-  classifier.n_classes: 11
 
 hydra:
   sweeper:
