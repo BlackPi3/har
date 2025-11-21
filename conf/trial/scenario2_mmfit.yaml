@@ -27,18 +27,18 @@ model:
   feature_extractor:
     n_filters: 16
     filter_size: 7
-  regressor:
-    joint_hidden_channels: [64, 64, 32, 32]
-    joint_kernel_sizes: [3, 3, 3, 1]
-    joint_dilations: [1, 2, 4, 1]
-    joint_dropouts: [0.0, 0.1, 0.1, 0.1]
-    temporal_hidden_channels: 16
-    temporal_kernel_size: 7
-    temporal_dilation: 2
-    temporal_dropout: 0.4
-    fc_hidden: 0
-    fc_dropout: 0.25
-    use_batch_norm: false
+  # regressor:
+  #   joint_hidden_channels: [64, 64, 32, 32]
+  #   joint_kernel_sizes: [3, 3, 3, 1]
+  #   joint_dilations: [1, 2, 4, 1]
+  #   joint_dropouts: [0.0, 0.1, 0.1, 0.1]
+  #   temporal_hidden_channels: 16
+  #   temporal_kernel_size: 7
+  #   temporal_dilation: 2
+  #   temporal_dropout: 0.4
+  #   fc_hidden: 0
+  #   fc_dropout: 0.25
+  #   use_batch_norm: false
   classifier:
     f_in: 100
     n_classes: 11

@@ -1,4 +1,4 @@
-## Regressor model configuration
+## Regressor model legacy LEGACY configuration
 type: tcn_regressor
 input_channels: 3
 num_joints: 3
@@ -7,10 +7,10 @@ joint_hidden_channels: [32, 32, 32, 16]
 joint_kernel_sizes: [5, 5, 5, 1]
 joint_dilations: [1, 2, 4, 1]
 joint_dropouts: [0.0, 0.2, 0.2, 0.2]
-temporal_hidden_channels: 32
+temporal_hidden_channels: 16
 temporal_kernel_size: 5
 temporal_dilation: 1
 temporal_dropout: 0.1
-fc_hidden: 64
-fc_dropout: 0.1
-use_batch_norm: true
+fc_hidden: 0
+fc_dropout: 0
+use_batch_norm: false

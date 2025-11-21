@@ -4,7 +4,7 @@ defaults:
 
 # Number of epochs/patience used by experiments.run_trial Trainer wrapper
 epochs: 100
-patience: 10  # early-stopping tolerance (epochs without val improvement)
+patience: 25  # early-stopping tolerance (epochs without val improvement)
 
 objective:
   metric: val_f1   # Any key from Trainer history (e.g., val_f1, val_mse, val_loss)

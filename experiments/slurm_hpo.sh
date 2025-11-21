@@ -22,7 +22,7 @@ STORAGE=${STORAGE:-$OUTPUT_ROOT/$HPO.db}
 
 # Explicit run-time config (no aggregated overrides)
 ENV_NAME=${ENV_NAME:-remote}
-EPOCHS=${EPOCHS:-50}
+# EPOCHS=${EPOCHS:-50} # --epochs $EPOCHS
 LOG_ROOT=${LOG_ROOT:-/netscratch/zolfaghari/experiments/log}
 
 # Logs
@@ -51,5 +51,4 @@ srun \
       --output-root '$OUTPUT_ROOT' \
       --space-config '$SPACE_CONFIG' \
       --env $ENV_NAME \
-      --epochs $EPOCHS
   " >"$LOG_OUT" 2>"$LOG_ERR"

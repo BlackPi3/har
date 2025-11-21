@@ -165,7 +165,7 @@ class Trainer:
                     self.optimizer.zero_grad()
                     total_loss.backward()
                     self.optimizer.step()
-                total += total_loss.item()
+                total += total_loss.detach().item()
                 mse_acc += mse_l
                 sim_acc += sim_l
                 act_acc += act_l
