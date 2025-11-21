@@ -17,6 +17,9 @@ trainer:
 data:
   name: mmfit
 
+model:
+  classifier.n_classes: 11
+
 hydra:
   sweeper:
     # Study name with a robust fallback: prefer env STUDY_NAME, else this file's canonical name
