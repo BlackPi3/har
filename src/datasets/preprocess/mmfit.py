@@ -1,6 +1,15 @@
 """
 MM-Fit accelerometer preprocessing.
 
+Raw pose dumps stored under `datasets/mmfit/wxx/wxx_pose_3d.npy` follow the legacy
+format: shape `(3, N, 18)` where the first axis is (x, y, z), the second axis is
+time, and the channel axis packs `[frame, joint_0, joint_1, ..., joint_16]`.
+Legacy preprocessing injects a timestamp column alongside the frame column,
+yielding `(3, M, 19)` via `[frame, timestamp, joints...]`. The code below
+replicates that behavior for consistency with older training pipelines: we only
+strip the frame column before interpolation so no joint is lost, then reinsert
+frame+timestamp metadata ahead of the 17 joints.
+
 Standardizes raw `sw_*_acc.npy` files (per subject) without altering length or
 metadata columns. Mean/std are computed over the configured training subjects
 so validation/test splits use the same normalization constants.
@@ -145,7 +154,7 @@ class MMFitPreprocessor:
     def _align_pose_to_acc(self, pose: np.ndarray, acc: np.ndarray) -> np.ndarray:
         # pose shape: (3, frames_pose, channels)
         pose_frames = pose[0, :, 0]
-        pose_coords = pose[:, :, 2:]
+        pose_coords = pose[:, :, 1:]
         acc_frames = acc[:, 0]
 
         # Build time axes using frame indices (100 Hz assumed)
