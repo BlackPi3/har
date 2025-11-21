@@ -83,6 +83,14 @@ class Trainer:
             self.use_activity_loss_sim = self.use_activity_loss_sim and flag
         self.use_activity_loss = self.use_activity_loss_real or self.use_activity_loss_sim
 
+        self.dual_classifiers = bool(getattr(self.trainer_cfg, "dual_classifiers", False))
+        self.real_classifier_key = "ac"
+        self.sim_classifier_key = "ac_sim" if self.dual_classifiers else "ac"
+        if self.dual_classifiers and self.sim_classifier_key not in self.models:
+            raise ValueError(
+                "dual_classifiers enabled but 'ac_sim' model is missing. Ensure experiments.run_trial builds it."
+            )
+
     def _cosine(self, a, b):
         return (1 - F.cosine_similarity(a, b, dim=1)).mean()
 
@@ -93,8 +101,8 @@ class Trainer:
         mse = torch.nn.functional.mse_loss(sim_acc, acc)
         real_feat = self.models["fe"](acc)
         sim_feat = self.models["fe"](sim_acc)
-        logits_real = self.models["ac"](real_feat)
-        logits_sim = self.models["ac"](sim_feat)
+        logits_real = self.models[self.real_classifier_key](real_feat)
+        logits_sim = self.models[self.sim_classifier_key](sim_feat)
         zero = torch.zeros((), device=self.device, dtype=pose.dtype)
 
         if self.beta > 0 and self.use_feature_similarity_loss:

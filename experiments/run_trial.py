@@ -416,11 +416,16 @@ def _build_models(cfg) -> Dict[str, torch.nn.Module]:
     )
     reg_kwargs = {k: v for k, v in reg_kwargs.items() if v is not None}
 
+    trainer_cfg = getattr(cfg, "trainer", None)
+    dual_cls = bool(getattr(trainer_cfg, "dual_classifiers", False)) if trainer_cfg else False
+
     models = {
         "pose2imu": Regressor(in_ch=in_ch, num_joints=num_joints, window_length=window_len, **reg_kwargs).to(cfg.device),
         "fe": FeatureExtractor(**fe_args).to(cfg.device),
         "ac": ActivityClassifier(f_in=f_in, n_classes=n_classes).to(cfg.device),
     }
+    if dual_cls:
+        models["ac_sim"] = ActivityClassifier(f_in=f_in, n_classes=n_classes).to(cfg.device)
     return models
 
 
@@ -437,6 +442,7 @@ def _build_optim(cfg, models):
             alias_map = {
                 "fe": "feature_extractor",
                 "ac": "activity_classifier",
+                "ac_sim": "activity_classifier",
                 "pose2imu": "regressor",
             }
             alias = alias_map.get(name)
