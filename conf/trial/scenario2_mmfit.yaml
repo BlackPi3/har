@@ -6,19 +6,20 @@ trial_name: scenario2_mmfit
 
 # Loss weighting coefficients consumed by the manual Trainer
 alpha: 1 # weight for activity classification component
-beta: 10 # weight for feature similarity component
+beta: 0.1 # weight for feature similarity component
 gamma: 1 # weight for regression (MSE) component
 
 # Data configuration (merged on top of conf/data/mmfit.yaml)
 data:
   name: mmfit
-  sensor_window_length: 450
-  stride_seconds: 0.15
+  sensor_window_length: 500
+  stride_seconds: 0.2
+  batch_size: 128
 
 ## Params
 optim:
   name: adam
-  # lr: 0.0005
+  lr: 0.001
   # weight_decay: 0.0001
   # warmup_epochs: 5
   # warmup_start_factor: 0.1

@@ -84,6 +84,12 @@ class Trainer:
         self.use_activity_loss = self.use_activity_loss_real or self.use_activity_loss_sim
 
         self.dual_classifiers = bool(getattr(self.trainer_cfg, "dual_classifiers", False))
+        clip_val = getattr(self.trainer_cfg, "gradient_clip", None)
+        try:
+            clip_val = float(clip_val) if clip_val is not None else None
+        except Exception:
+            clip_val = None
+        self.gradient_clip = clip_val if clip_val and clip_val > 0 else None
         self.real_classifier_key = "ac"
         self.sim_classifier_key = "ac_sim" if self.dual_classifiers else "ac"
         if self.dual_classifiers and self.sim_classifier_key not in self.models:
@@ -172,6 +178,12 @@ class Trainer:
                 if is_train:
                     self.optimizer.zero_grad()
                     total_loss.backward()
+                    if self.gradient_clip:
+                        clip_params = []
+                        for group in self.optimizer.param_groups:
+                            clip_params.extend(group.get("params", []))
+                        if clip_params:
+                            torch.nn.utils.clip_grad_norm_(clip_params, self.gradient_clip)
                     self.optimizer.step()
                 total += total_loss.detach().item()
                 mse_acc += mse_l

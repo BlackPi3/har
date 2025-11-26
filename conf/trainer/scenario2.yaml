@@ -6,6 +6,7 @@ defaults:
 epochs: 100
 patience: 25  # early-stopping tolerance (epochs without val improvement)
 dual_classifiers: false  # when true, use separate classifiers for real/sim streams
+gradient_clip: null  # set to a positive value (e.g., 1.0) to enable grad clipping
 
 objective:
   metric: val_f1   # Any key from Trainer history (e.g., val_f1, val_mse, val_loss)
