@@ -38,9 +38,7 @@ hydra:
       # Data
       data.batch_size: choice(64, 128)
 
-      # Data/model coupling (MM-Fit typical ranges)
-      # data.sensor_window_length: choice(400, 450, 500, 550)
-      # data.stride_seconds: choice(0.1, 0.15, 0.2)
+      # Model 
       # model.feature_extractor.n_filters: range(8, 32, 4)
       # model.feature_extractor.filter_size: range(3, 9, 2)
       # model.regressor.joint_hidden_channels: choice([32, 32, 32, 16], [48, 48, 32, 16], [64, 64, 32, 32])

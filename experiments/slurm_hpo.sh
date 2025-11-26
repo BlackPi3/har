@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #SBATCH -J har-hpo
-#SBATCH -p V100-32GB
+#SBATCH -p RTX3090
 #SBATCH --gpus=1
 #SBATCH --cpus-per-gpu=8
 #SBATCH --mem=48G

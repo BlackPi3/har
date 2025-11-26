@@ -5,26 +5,28 @@ defaults:
 trial_name: scenario2_utd
 
 alpha: 1
-beta: 10
+beta: 1
 gamma: 1
 
 data:
   name: utd
   sensor_window_length: 100
-  stride_seconds: 0.25
-  batch_size: 4096
+  stride_seconds: 0.1
+  batch_size: 128
 
 optim:
   name: adam
-  # lr: 0.0005
+  lr: 0.001
   # weight_decay: 0.0001
-  # warmup_epochs: 5
-  # warmup_start_factor: 0.1
+  warmup_epochs: 15
+  warmup_start_factor: 0.05
+  scheduler:
+    patience: 12
 
 trainer:
   name: scenario2
-  # epochs: 100
-  # patience: 10
+  epochs: 200
+  patience: 25
   # objective:
   #   metric: val_f1
   #   mode: max

@@ -6,7 +6,7 @@ trial_name: scenario2_mmfit
 
 # Loss weighting coefficients consumed by the manual Trainer
 alpha: 1 # weight for activity classification component
-beta: 0.1 # weight for feature similarity component
+beta: 1 # weight for feature similarity component
 gamma: 1 # weight for regression (MSE) component
 
 # Data configuration (merged on top of conf/data/mmfit.yaml)
