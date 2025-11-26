@@ -472,18 +472,23 @@ def _build_optim(cfg, models):
     weight_decay = float(getattr(cfg.optim, "weight_decay", 0.0))
     optimizer = torch.optim.Adam(params, lr=lr, weight_decay=weight_decay)
 
+    warmup_epochs = int(getattr(cfg.optim, "warmup_epochs", 0) or 0)
     sched_cfg = getattr(cfg.optim, "scheduler", {}) or {}
     name = (getattr(sched_cfg, "name", "") if not isinstance(sched_cfg, dict) else sched_cfg.get("name", ""))
     mode = (getattr(sched_cfg, "mode", "min") if not isinstance(sched_cfg, dict) else sched_cfg.get("mode", "min"))
     factor = (getattr(sched_cfg, "factor", 0.1) if not isinstance(sched_cfg, dict) else sched_cfg.get("factor", 0.1))
     patience = (getattr(sched_cfg, "patience", 10) if not isinstance(sched_cfg, dict) else sched_cfg.get("patience", 10))
     if (name or "").lower().startswith("reduce"):
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer,
-            mode=mode,
-            factor=float(factor),
-            patience=int(patience),
-        )
+        if warmup_epochs > 0:
+            print("[run_trial] Skipping ReduceLROnPlateau because warmup_epochs > 0")
+            scheduler = None
+        else:
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer,
+                mode=mode,
+                factor=float(factor),
+                patience=int(patience),
+            )
     else:
         scheduler = None
     return optimizer, scheduler
