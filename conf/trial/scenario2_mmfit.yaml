@@ -21,16 +21,16 @@ optim:
   name: adam
   lr: 0.001
   # weight_decay: 0.0001
-  # warmup_epochs: 5
-  # warmup_start_factor: 0.1
+  warmup_epochs: 15
+  warmup_start_factor: 0.05
+  scheduler:
+    patience: 12
 
 trainer:
   name: scenario2
-  # epochs: 100
-  # patience: 10
-  # objective:
-  #   metric: val_f1
-  #   mode: max
+  epochs: 200
+  patience: 25
+  # gradient_clip: null
   # trainable_modules:
   #   pose2imu: true
   #   fe: true

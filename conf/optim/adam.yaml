@@ -1,11 +1,11 @@
 # Optimizer config group
 name: adam
-lr: 0.0026421463889976056
-weight_decay: 0.00018897439101113147
-warmup_epochs: 5
-warmup_start_factor: 0.1
+lr: 0.001
+weight_decay: 0.0001
+warmup_epochs: 12
+warmup_start_factor: 0.05
 scheduler:
   name: reduce_on_plateau
   mode: min
   factor: 0.1
-  patience: 10  # epochs to wait without val-loss improvement before lowering lr
+  patience: 12  # epochs to wait without val-loss improvement before lowering lr

@@ -15,7 +15,6 @@ CONTAINER_IMAGE=${CONTAINER_IMAGE:-/netscratch/zolfaghari/images/har.sqsh}
 ########################################
 ENV_NAME=${ENV_NAME:-remote}
 TRIAL_NAME=${TRIAL_NAME:-scenario2_mmfit}
-EPOCHS=${EPOCHS:-200}
 SEED=${SEED:-0}
 LOG_ROOT=${LOG_ROOT:-/netscratch/zolfaghari/experiments/log}
 # Optional extra Hydra overrides appended verbatim to the run command.
@@ -44,7 +43,6 @@ export HYDRA_FULL_ERROR=1
 BASE_OVERRIDES=(
   "env=$ENV_NAME"
   "trial=$TRIAL_NAME"
-  "trainer.epochs=$EPOCHS"
   "seed=$SEED"
 )
 if [[ -n "$RUN_DIR" ]]; then

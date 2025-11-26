@@ -16,8 +16,8 @@ train_subjects: ["w01","w02","w03","w04","w06","w07","w08","w16","w17","w18","w0
 val_subjects:   ["w14","w15","w19","w20"]
 test_subjects:  ["w09","w10","w11","w13"]
 
-batch_size: 2048
+batch_size: 128
 
-sensor_window_length: 450
+sensor_window_length: 500
 sampling_rate_hz: 100        # Hz; assumed standard across datasets for now
-stride_seconds: 0.15          # hop size between windows (seconds); 0.2s => 20-sample stride at 100 Hz
+stride_seconds: 0.2          # hop size between windows (seconds); 0.2s => 20-sample stride at 100 Hz
