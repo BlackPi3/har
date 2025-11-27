@@ -1,23 +1,23 @@
 defaults:
   - _self_
 
-## Scenario 2 trial configuration for UTD dataset
 trial_name: scenario2_utd
 
-alpha: 1
-beta: 1
-gamma: 1
+alpha: 10 # Best
+beta: 1 # Best
+gamma: 1 # Best
 
 data:
   name: utd
-  sensor_window_length: 100
-  stride_seconds: 0.1
-  batch_size: 128
+  sensor_window_length: 100 # Best
+  stride_seconds: 0.1 # Best
+  batch_size: 64 # Best
 
 optim:
   name: adam
-  lr: 0.001
-  # weight_decay: 0.0001
+  lr: 0.001 # Best
+  weight_decay: 0.0005 # Best
+  gradient_clip: 1.0 # Best
   warmup_epochs: 15
   warmup_start_factor: 0.05
   scheduler:

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #SBATCH -J har-best
-#SBATCH -p RTX3090
+#SBATCH -p RTXA6000
 #SBATCH --gpus=1
 #SBATCH --cpus-per-gpu=8
-#SBATCH --mem=48G
-#SBATCH -t 02:00:00
+#SBATCH --mem=40G
+#SBATCH -t 06:00:00
 
 # Container + project paths
 PROJECT_ROOT=${PROJECT_ROOT:-/home/zolfaghari/har}
@@ -14,7 +14,7 @@ CONTAINER_IMAGE=${CONTAINER_IMAGE:-/netscratch/zolfaghari/images/har.sqsh}
 # Best-run configuration (override via env)
 ########################################
 ENV_NAME=${ENV_NAME:-remote}
-TRIAL_NAME=${TRIAL_NAME:-scenario2_mmfit}
+TRIAL_NAME=${TRIAL_NAME:-scenario2_utd}
 SEED=${SEED:-0}
 LOG_ROOT=${LOG_ROOT:-/netscratch/zolfaghari/experiments/log}
 # Optional extra Hydra overrides appended verbatim to the run command.
