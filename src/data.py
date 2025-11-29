@@ -2,6 +2,8 @@ from typing import Dict
 import torch
 from torch.utils.data import DataLoader
 
+from src.config import get_data_cfg_value
+
 def get_dataloaders(name: str, cfg) -> Dict[str, DataLoader]:
     """
     Return dict with 'train','val','test' DataLoaders for dataset `name`.
@@ -26,7 +28,10 @@ def get_dataloaders(name: str, cfg) -> Dict[str, DataLoader]:
     # Adjust num_workers for local vs cluster
     num_workers = cfg.num_workers if getattr(cfg, 'cluster', False) else min(cfg.num_workers, 2)
     
-    loader_args = dict(batch_size=cfg.batch_size, num_workers=num_workers, pin_memory=use_pin_memory)
+    batch_size = get_data_cfg_value(cfg, "batch_size")
+    if batch_size is None:
+        raise ValueError("batch_size is not defined in the config (expected either top-level or under data.*)")
+    loader_args = dict(batch_size=int(batch_size), num_workers=num_workers, pin_memory=use_pin_memory)
     return {
         "train": DataLoader(train_ds, shuffle=True, **loader_args),
         "val": DataLoader(val_ds, shuffle=False, **loader_args),

@@ -22,7 +22,7 @@ from typing import Any, Dict, List
 import yaml
 import torch
 
-from src.config import merge_dicts
+from src.config import merge_dicts, get_data_cfg_value
 from src.data import get_dataloaders
 from src.models import Regressor, FeatureExtractor, ActivityClassifier
 from src.train_scenario2 import Trainer
@@ -220,7 +220,7 @@ def _build_cfg(overrides: List[str]) -> SimpleNamespace:
     cfg_dict = merge_dicts(cfg_dict, trial_cfg)
 
     # Allow trial configs to declare data selection + overrides while still mutating the flat namespace.
-    data_meta = cfg_dict.get("data")
+    data_meta = cfg_dict.pop("data", None)
     data_overrides: Dict[str, Any] = {}
     data_sel = data_sel_override
     if isinstance(data_meta, dict):
@@ -251,18 +251,13 @@ def _build_cfg(overrides: List[str]) -> SimpleNamespace:
         )
 
     data_cfg = _load_data_config(data_sel)
-    cfg_dict = merge_dicts(data_cfg, cfg_dict)
-
-    if data_overrides:
-        cfg_dict = merge_dicts(cfg_dict, data_overrides)
-
-    if isinstance(cfg_dict.get("data"), dict):
-        cfg_dict["data"]["name"] = data_sel
-    else:
-        cfg_dict["data"] = {"name": data_sel}
+    final_data = merge_dicts(data_cfg, data_overrides or {})
+    final_data["name"] = data_sel
+    final_data.setdefault("dataset_name", data_sel)
+    cfg_dict["data"] = final_data
 
     # If dataset has a named subfolder under data_dir (e.g., mmfit), append it if not already included
-    ds_name = cfg_dict.get("dataset_name")
+    ds_name = final_data.get("dataset_name")
     dd = cfg_dict.get("data_dir")
     if isinstance(ds_name, str) and isinstance(dd, str) and dd:
         # Only append if path does not already end with dataset name
@@ -379,9 +374,9 @@ def _build_models(cfg) -> Dict[str, torch.nn.Module]:
     # Map config to model ctor args
     in_ch = getattr(cfg.model.regressor, "input_channels", 3)
     num_joints = getattr(cfg.model.regressor, "num_joints", 3)
-    window_len = getattr(cfg, "sensor_window_length", None)
-    if window_len is None and hasattr(cfg, "data"):
-        window_len = getattr(cfg.data, "sensor_window_length", 300)
+    window_len = get_data_cfg_value(cfg, "sensor_window_length", None)
+    if window_len is None:
+        window_len = getattr(cfg, "sensor_window_length", None)
     if isinstance(window_len, dict):  # defensive: if not fully merged
         window_len = window_len.get("sensor_window_length", 300)
 
@@ -705,7 +700,10 @@ def main():
     trainer = None
     history: Dict[str, List[Any]] = {}
     try:
-        dls = get_dataloaders(getattr(cfg, "dataset_name", "mmfit"), cfg)
+        dataset_name = get_data_cfg_value(cfg, "dataset_name", None) or get_data_cfg_value(cfg, "name", None)
+        if not dataset_name:
+            dataset_name = getattr(cfg, "dataset_name", "mmfit")
+        dls = get_dataloaders(dataset_name, cfg)
         models = _build_models(cfg)
         optimizer, scheduler = _build_optim(cfg, models)
         epochs = getattr(cfg.trainer, "epochs", 1)

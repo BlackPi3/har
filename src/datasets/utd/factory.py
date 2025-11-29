@@ -2,21 +2,22 @@ from pathlib import Path
 import torch
 from torch.utils.data import Dataset
 
+from src.config import get_data_cfg_value
 from .dataset import UTDDataset
 
 
 def build_utd_datasets(cfg) -> tuple[Dataset, Dataset, Dataset]:
-    data_dir = Path(getattr(cfg, "data_dir"))
-    pose_file = getattr(cfg, "pose_file", "skeleton_aligned.npy")
-    acc_file = getattr(cfg, "acc_file", "inertial_std.npy")
-    sampling_rate = int(getattr(cfg, "sampling_rate_hz", 50))
-    window = int(getattr(cfg, "sensor_window_length", 100))
-    stride = float(getattr(cfg, "stride_seconds", 0.5))
+    data_dir = Path(get_data_cfg_value(cfg, "data_dir"))
+    pose_file = get_data_cfg_value(cfg, "pose_file", "skeleton_aligned.npy")
+    acc_file = get_data_cfg_value(cfg, "acc_file", "inertial_std.npy")
+    sampling_rate = int(get_data_cfg_value(cfg, "sampling_rate_hz", 50))
+    window = int(get_data_cfg_value(cfg, "sensor_window_length", 100))
+    stride = float(get_data_cfg_value(cfg, "stride_seconds", 0.5))
     dtype = getattr(cfg, "dtype", None)
 
-    train_subjects = getattr(cfg, "train_subjects", [])
-    val_subjects = getattr(cfg, "val_subjects", [])
-    test_subjects = getattr(cfg, "test_subjects", [])
+    train_subjects = get_data_cfg_value(cfg, "train_subjects", [])
+    val_subjects = get_data_cfg_value(cfg, "val_subjects", [])
+    test_subjects = get_data_cfg_value(cfg, "test_subjects", [])
 
     default_dtype = dtype if dtype is not None else torch.float32
 

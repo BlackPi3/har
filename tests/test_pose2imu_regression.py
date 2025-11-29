@@ -51,10 +51,15 @@ def _read_cfg():
     return yaml.safe_load(CFG_PATH.read_text())
 
 
+def _data_value(cfg: dict, key: str, default=None):
+    data_section = cfg.get("data") or {}
+    return data_section.get(key, cfg.get(key, default))
+
+
 def _load_pose2imu():
     cfg = _read_cfg()
     reg_cfg = cfg["model"]["regressor"]
-    window = int(cfg["sensor_window_length"])
+    window = int(_data_value(cfg, "sensor_window_length", 300))
     model = Regressor(
         in_ch=reg_cfg.get("input_channels", 3),
         num_joints=reg_cfg.get("num_joints", 3),
@@ -81,22 +86,22 @@ def _load_pose2imu():
 
 def _build_dataset(cfg, subject_id: str) -> MMFit:
     subject_dir = DATA_ROOT / subject_id
-    pose_path = subject_dir / f"{subject_id}_{cfg['pose_file']}"
-    acc_path = subject_dir / f"{subject_id}_{cfg['acc_file']}"
-    labels_path = subject_dir / f"{subject_id}_{cfg['labels_file']}"
+    pose_path = subject_dir / f"{subject_id}_{_data_value(cfg, 'pose_file')}"
+    acc_path = subject_dir / f"{subject_id}_{_data_value(cfg, 'acc_file')}"
+    labels_path = subject_dir / f"{subject_id}_{_data_value(cfg, 'labels_file')}"
     return MMFit(
         pose_file=str(pose_path),
         acc_file=str(acc_path),
         labels_file=str(labels_path),
-        sensor_window_length=int(cfg["sensor_window_length"]),
-        stride_seconds=cfg.get("stride_seconds"),
-        sampling_rate_hz=int(cfg.get("sampling_rate_hz", 100)),
+        sensor_window_length=int(_data_value(cfg, "sensor_window_length", 300)),
+        stride_seconds=_data_value(cfg, "stride_seconds"),
+        sampling_rate_hz=int(_data_value(cfg, "sampling_rate_hz", 100)),
         cluster=bool(cfg.get("cluster", False)),
     )
 
 
 def _gather_windows(cfg, count: int, seed: int = 0):
-    subjects = cfg.get("train_subjects") or []
+    subjects = _data_value(cfg, "train_subjects", []) or []
     if not subjects:
         raise AssertionError("cfg.train_subjects is empty; cannot draw samples")
     rng = random.Random(seed)

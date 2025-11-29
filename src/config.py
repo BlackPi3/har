@@ -7,11 +7,39 @@ import random
 import torch
 import numpy as np
 
+_SENTINEL = object()
+
 
 def _dict_to_ns(d):
     if isinstance(d, dict):
         return SimpleNamespace(**{k: _dict_to_ns(v) for k, v in d.items()})
     return d
+
+
+def _get_from_source(source, key):
+    if source is None:
+        return _SENTINEL
+    if isinstance(source, dict):
+        return source.get(key, _SENTINEL)
+    return getattr(source, key, _SENTINEL)
+
+
+def get_data_cfg_value(cfg, key: str, default=None):
+    """Return dataset-level config value preferring cfg.data overrides."""
+    data_node = None
+    if isinstance(cfg, dict):
+        data_node = cfg.get("data")
+    else:
+        data_node = getattr(cfg, "data", None)
+
+    value = _get_from_source(data_node, key)
+    if value is not _SENTINEL:
+        return value
+
+    value = _get_from_source(cfg, key)
+    if value is not _SENTINEL:
+        return value
+    return default
 
 
 def merge_dicts(a: dict, b: dict) -> dict:

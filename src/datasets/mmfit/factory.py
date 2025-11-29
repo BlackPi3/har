@@ -4,6 +4,7 @@ Factory function for creating MMFit datasets.
 import os
 import torch
 from torch.utils.data import ConcatDataset
+from src.config import get_data_cfg_value
 from .dataset import MMFit
 from .constants import (
     DEFAULT_TRAIN_SUBJECTS, DEFAULT_VAL_SUBJECTS, DEFAULT_TEST_SUBJECTS,
@@ -24,22 +25,21 @@ def build_mmfit_datasets(cfg):
         tuple: (train_dataset, val_dataset, test_dataset) as ConcatDataset objects
     """
     # Extract configuration values with fallbacks
-    data_dir = getattr(cfg, 'data_dir', '../datasets/mm-fit/')
-    train_ids = getattr(cfg, 'train_subjects', DEFAULT_TRAIN_SUBJECTS)
-    val_ids = getattr(cfg, 'val_subjects', DEFAULT_VAL_SUBJECTS) 
-    test_ids = getattr(cfg, 'test_subjects', DEFAULT_TEST_SUBJECTS)
+    data_dir = get_data_cfg_value(cfg, 'data_dir', '../datasets/mm-fit/')
+    train_ids = get_data_cfg_value(cfg, 'train_subjects', DEFAULT_TRAIN_SUBJECTS)
+    val_ids = get_data_cfg_value(cfg, 'val_subjects', DEFAULT_VAL_SUBJECTS)
+    test_ids = get_data_cfg_value(cfg, 'test_subjects', DEFAULT_TEST_SUBJECTS)
     
-    pose_file = getattr(cfg, 'pose_file', DEFAULT_POSE_FILE)
-    acc_file = getattr(cfg, 'acc_file', DEFAULT_ACC_FILE)
-    labels_file = getattr(cfg, 'labels_file', DEFAULT_LABELS_FILE)
-    sim_acc_file = getattr(cfg, 'sim_acc_file', DEFAULT_SIM_ACC_FILE)
+    pose_file = get_data_cfg_value(cfg, 'pose_file', DEFAULT_POSE_FILE)
+    acc_file = get_data_cfg_value(cfg, 'acc_file', DEFAULT_ACC_FILE)
+    labels_file = get_data_cfg_value(cfg, 'labels_file', DEFAULT_LABELS_FILE)
+    sim_acc_file = get_data_cfg_value(cfg, 'sim_acc_file', DEFAULT_SIM_ACC_FILE)
     
-    sensor_window_length = getattr(cfg, 'sensor_window_length', DEFAULT_SENSOR_WINDOW_LENGTH)
-    stride_seconds = getattr(cfg, 'stride_seconds', None)
-    sampling_rate_hz = int(getattr(cfg, 'sampling_rate_hz', 100))
+    sensor_window_length = int(get_data_cfg_value(cfg, 'sensor_window_length', DEFAULT_SENSOR_WINDOW_LENGTH))
+    stride_seconds = get_data_cfg_value(cfg, 'stride_seconds', None)
+    sampling_rate_hz = int(get_data_cfg_value(cfg, 'sampling_rate_hz', 100))
     
-    # Check for mode configuration - determine if we should use simulated data
-    use_simulated_data = getattr(cfg, 'use_simulated_data', False)
+    use_simulated_data = bool(get_data_cfg_value(cfg, 'use_simulated_data', False))
     
     train, val, test = [], [], []
     
