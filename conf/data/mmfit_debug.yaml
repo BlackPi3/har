@@ -1,9 +1,0 @@
-defaults:
-  - mmfit
-
-# Minimal smoke split: 1 subject per split
-train_subjects: ["w01"]
-val_subjects: ["w14"]
-test_subjects: ["w09"]
-
-# Note: use with `data=mmfit_debug` (all non-data settings remain identical to mmfit)

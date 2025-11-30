@@ -14,6 +14,8 @@ _EXPORTS = {
     "UTDPreprocessor": ".utd",
     "MMFitPreprocessConfig": ".mmfit",
     "MMFitPreprocessor": ".mmfit",
+    "NTUPreprocessConfig": ".ntu",
+    "NTUPreprocessor": ".ntu",
 }
 
 __all__ = sorted(_EXPORTS.keys())
