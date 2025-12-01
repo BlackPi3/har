@@ -6,6 +6,7 @@ defaults:
   - model/classifier: classifier
   - optim: adam
   - _self_
-
+ 
 # Global training hyperparameters
 seed: 0
+deterministic: true

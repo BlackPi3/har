@@ -8,6 +8,7 @@
   - Config knobs get passed to `run_trial` and `run_hpo` scripts to control behavior (dataset selection, model/trainer settings, etc.).
 - `src/` contains the backbone Python code: PyTorch datasets/dataloaders, preprocessing pipelines, and training logic (`train_scenario2.py`).
 - Cluster launchers (`experiments/slurm_trial.sh`, `experiments/slurm_hpo.sh`) wrap the same entrypoints for SLURM environments.
+- For local runs/tests, activate the `har` conda env first (`conda activate har`).
 
 ## TODO
 

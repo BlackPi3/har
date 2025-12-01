@@ -58,3 +58,8 @@ hydra:
     # Place all trials under a unified per-study directory
     dir: "experiments/hpo/${study_name}/trials"
     subdir: trial_${hydra.job.num}
+
+# Optional repeats for top-config evaluation
+repeat:
+  enabled: false
+  k: 1

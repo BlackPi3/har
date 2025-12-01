@@ -22,7 +22,7 @@ from typing import Any, Dict, List
 import yaml
 import torch
 
-from src.config import merge_dicts, get_data_cfg_value
+from src.config import merge_dicts, get_data_cfg_value, set_seed
 from src.data import get_dataloaders
 from src.models import Regressor, FeatureExtractor, ActivityClassifier
 from src.train_scenario2 import Trainer
@@ -689,6 +689,20 @@ def _write_config(run_dir: Path, cfg: SimpleNamespace) -> None:
 def main():
     overrides = sys.argv[1:]
     cfg = _build_cfg(overrides)
+    try:
+        set_seed(getattr(cfg, "seed", None))
+    except Exception:
+        pass
+    if getattr(cfg, "deterministic", False):
+        try:
+            torch.use_deterministic_algorithms(True)
+        except Exception:
+            pass
+        try:
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+        except Exception:
+            pass
     # Hoist commonly used fields expected at top-level by Trainer
     try:
         if hasattr(cfg, "trainer") and hasattr(cfg.trainer, "patience"):
