@@ -30,6 +30,7 @@ import argparse
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -218,11 +219,12 @@ def build_space_from_yaml(trial: optuna.trial.Trial, yaml_path: Path) -> Dict[st
     return suggested
 
 
-def run_trial(cmd_base: list[str], run_dir: Path, skip_artifacts: bool = False, study_name: str | None = None) -> Dict[str, Any]:
+def run_trial(cmd_base: list[str], run_dir: Path, skip_artifacts: bool = False,
+              study_name: str | None = None, group: str = "hpo") -> Dict[str, Any]:
     run_dir.mkdir(parents=True, exist_ok=True)
     overrides = [
         f"run.dir={str(run_dir)}",
-        "run.group=hpo",
+        f"run.group={group}",
     ]
     if study_name:
         overrides.append(f"run.study={study_name}")
@@ -241,26 +243,113 @@ def run_trial(cmd_base: list[str], run_dir: Path, skip_artifacts: bool = False, 
         return json.load(f)
 
 
-def _write_best_summary(study, best_path: Path, direction: str, metric: str, storage_url: str, study_name: str):
+def _sorted_completed_trials(study, direction: str):
     try:
-        best = study.best_trial
+        completed = [
+            t for t in study.get_trials(deepcopy=False)
+            if t.state == optuna.trial.TrialState.COMPLETE and t.value is not None
+        ]
     except Exception:
+        return []
+    reverse = direction == "maximize"
+    return sorted(completed, key=lambda t: t.value, reverse=reverse)
+
+
+def _parse_trial_number(path: Path) -> int | None:
+    name = path.name
+    if not name.startswith("trial_"):
+        return None
+    try:
+        return int(name.split("_", 1)[1])
+    except Exception:
+        return None
+
+
+def _prune_trial_dirs(trials_root: Path, keep_numbers: set[int], dry_run: bool = False):
+    if not trials_root.exists():
         return
-    summary = {
-        "best_value": best.value,
-        "best_params": best.params,
-        "best_trial_number": best.number,
-        "direction": direction,
+    for child in trials_root.iterdir():
+        if not child.is_dir():
+            continue
+        num = _parse_trial_number(child)
+        if num is None or num in keep_numbers:
+            continue
+        if dry_run:
+            print(f"[hpo] DRY-RUN would delete trial dir: {child}")
+            continue
+        try:
+            shutil.rmtree(child, ignore_errors=True)
+        except Exception as e:
+            print(f"[hpo] Failed to delete {child}: {e}")
+
+
+def _params_to_overrides(params: Dict[str, Any]) -> list[str]:
+    return [f"{k}={_format_override_value(v)}" for k, v in params.items()]
+
+
+def _score_from_results(results: Dict[str, Any], metric: str):
+    objective_info = (results or {}).get("objective", {}) or {}
+    score = objective_info.get("best_score")
+    if score is not None:
+        try:
+            return float(score)
+        except Exception:
+            pass
+    fm = (results or {}).get("final_metrics", {}) or {}
+    if metric == "val_f1":
+        val = fm.get("val_f1_last") or fm.get("best_val_f1")
+        if val is None:
+            return None
+        return float(val)
+    else:
+        val = fm.get("val_loss_last") or fm.get("best_val_loss")
+        if val is None:
+            return None
+        return float(val)
+
+
+def _write_topk_summary(trials: list, path: Path, metric: str, direction: str):
+    entries = []
+    for rank, t in enumerate(trials, start=1):
+        entries.append(
+            {
+                "rank": rank,
+                "trial_number": t.number,
+                "value": t.value,
+                "params": t.params,
+            }
+        )
+    payload = {
         "metric": metric,
-        "storage": storage_url,
-        "study_name": study_name,
+        "direction": direction,
+        "trials": entries,
     }
     try:
-        best_path.parent.mkdir(parents=True, exist_ok=True)
-        with best_path.open("w") as f:
-            json.dump(summary, f, indent=2)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w") as f:
+            json.dump(payload, f, indent=2)
     except Exception as e:
-        print(f"[hpo] Failed to write best.json: {e}")
+        print(f"[hpo] Failed to write top_k summary: {e}")
+
+
+def _maintain_topk(
+    study,
+    out_root: Path,
+    top_k: int,
+    metric: str,
+    direction: str,
+    dry_run: bool,
+):
+    if top_k <= 0:
+        return
+    trials_root = out_root / "trials"
+    completed_sorted = _sorted_completed_trials(study, direction)
+    top_trials = completed_sorted[:top_k] if completed_sorted else []
+    if not top_trials:
+        return
+    keep_numbers = {t.number for t in top_trials}
+    _prune_trial_dirs(trials_root, keep_numbers, dry_run=dry_run)
+    _write_topk_summary(top_trials, out_root / "top_k.json", metric, direction)
 
 
 def _extract_yaml_meta(yaml_path: Path) -> Dict[str, Any]:
@@ -272,6 +361,9 @@ def _extract_yaml_meta(yaml_path: Path) -> Dict[str, Any]:
         "mode": None,
         "trainer_overrides": [],
         "data_overrides": [],
+        "top_k": 1,
+        "repeat_enabled": False,
+        "repeat_k": 1,
     }
     if yaml is None:
         return meta
@@ -304,6 +396,24 @@ def _extract_yaml_meta(yaml_path: Path) -> Dict[str, Any]:
                 data_node = {"name": data_node}
             if isinstance(data_node, dict):
                 meta["data_overrides"] = _flatten_overrides("data", data_node)
+        try:
+            top_k = data.get("top_k", None)
+            if isinstance(top_k, int) and top_k > 0:
+                meta["top_k"] = top_k
+        except Exception:
+            pass
+        repeat_node = data.get("repeat", {}) or {}
+        if isinstance(repeat_node, dict):
+            try:
+                meta["repeat_enabled"] = bool(repeat_node.get("enabled", False))
+            except Exception:
+                pass
+            try:
+                k_val = repeat_node.get("k", None)
+                if isinstance(k_val, int) and k_val > 0:
+                    meta["repeat_k"] = k_val
+            except Exception:
+                pass
     except Exception:
         pass
     return meta
@@ -359,6 +469,9 @@ def main():
 
     trainer_overrides = meta.get("trainer_overrides") or []
     data_overrides = meta.get("data_overrides") or []
+    top_k = max(1, int(meta.get("top_k") or 1))
+    repeat_enabled = bool(meta.get("repeat_enabled"))
+    repeat_k = max(1, int(meta.get("repeat_k") or 1))
 
     # Adopt study name from YAML if provided
     study_name = meta.get("study_name") or args.study_name
@@ -381,7 +494,6 @@ def main():
 
     out_root = Path(args.output_root) if args.output_root else default_output_root(study_name)
     out_root.mkdir(parents=True, exist_ok=True)
-    best_json_path = out_root / "best.json"
 
     sampler = optuna.samplers.TPESampler(seed=args.seed)
     pruner = MedianPruner() if args.prune else None
@@ -423,35 +535,63 @@ def main():
             # Failed run; assign a bad score so it's pruned from consideration
             return -1e9 if direction == "maximize" else 1e9
 
-        objective_info = (results or {}).get("objective", {}) or {}
-        score = objective_info.get("best_score")
-        if score is not None:
-            try:
-                return float(score)
-            except Exception:
-                pass
-
-        fm = (results or {}).get("final_metrics", {})
-        if metric == "val_f1":
-            val = fm.get("val_f1_last") or fm.get("best_val_f1")
-            if val is None:
-                return -1e9
-            return float(val)
-        else:
-            val = fm.get("val_loss_last") or fm.get("best_val_loss")
-            if val is None:
-                return 1e9 if direction == "minimize" else -1e9
-            return float(val)
+        score = _score_from_results(results, metric)
+        if score is None:
+            return -1e9 if direction == "maximize" else 1e9
+        return score
 
     def _trial_callback(study, trial):
-        try:
-            if study.best_trial.number != trial.number:
-                return
-        except Exception:
-            return
-        _write_best_summary(study, best_json_path, direction, metric, storage_url, study_name)
+        _maintain_topk(study, out_root, top_k, metric, direction, args.dry)
 
     study.optimize(objective, n_trials=args.n_trials, gc_after_trial=True, callbacks=[_trial_callback])
+
+    completed_sorted = _sorted_completed_trials(study, direction)
+    top_trials = completed_sorted[:top_k] if top_k > 0 else []
+    if top_trials:
+        keep_numbers = {t.number for t in top_trials}
+        _prune_trial_dirs(out_root / "trials", keep_numbers, dry_run=args.dry)
+        _write_topk_summary(top_trials, out_root / "top_k.json", metric, direction)
+
+    repeat_summary = []
+    if repeat_enabled and top_trials:
+        repeats_root = out_root / "repeats"
+        for rank, t in enumerate(top_trials, start=1):
+            params_overrides = _params_to_overrides(t.params)
+            for rep_idx in range(repeat_k):
+                rep_dir = repeats_root / f"trial_{t.number:04d}_rep_{rep_idx}"
+                rep_cmd = base_cmd + base_overrides + params_overrides
+                if args.dry:
+                    print(
+                        f"DRY RUN repeat (rank {rank}, trial {t.number}, rep {rep_idx}):",
+                        " ".join(shlex.quote(x) for x in rep_cmd),
+                    )
+                    continue
+                rep_results = run_trial(rep_cmd, rep_dir, skip_artifacts=False, study_name=study_name, group="repeat")
+                rep_score = _score_from_results(rep_results, metric) if rep_results else None
+                repeat_summary.append(
+                    {
+                        "rank": rank,
+                        "trial_number": t.number,
+                        "repeat_index": rep_idx,
+                        "value": rep_score,
+                        "run_dir": str(rep_dir),
+                    }
+                )
+        if repeat_summary and not args.dry:
+            try:
+                repeats_root.mkdir(parents=True, exist_ok=True)
+                with (repeats_root / "repeats.json").open("w") as f:
+                    json.dump(
+                        {
+                            "metric": metric,
+                            "direction": direction,
+                            "repeats": repeat_summary,
+                        },
+                        f,
+                        indent=2,
+                    )
+            except Exception as e:
+                print(f"[hpo] Failed to write repeats summary: {e}")
 
     if study.best_trial:
         summary = {
