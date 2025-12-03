@@ -1,13 +1,15 @@
 defaults:
   - _self_
 
+seed: 0
+
 ## Scenario 2 trial configuration
 trial_name: scenario2_mmfit
 
-# Loss weighting coefficients consumed by the manual Trainer
-alpha: 1 # weight for activity classification component
-beta: 1 # weight for feature similarity component
-gamma: 1 # weight for regression (MSE) component
+# Loss weighting coefficients
+alpha: 1 # weight for activity classification
+beta: 1 # weight for feature similarity
+gamma: 1 # weight for regression (MSE)
 
 # Data configuration (merged on top of conf/data/mmfit.yaml)
 data:

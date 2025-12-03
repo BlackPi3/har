@@ -175,7 +175,7 @@ def _build_cfg(overrides: List[str]) -> SimpleNamespace:
     # Base config
     base = _load_yaml(REPO_ROOT / "conf/conf.yaml")
 
-    # Determine env/data selections from overrides (defaults to conf/conf.yaml values via Hydra; here we default explicitly)
+    # Determine env/data selections from overrides (must be provided)
     env_sel = None
     data_sel_override = None
     trial_sel = None
@@ -190,11 +190,11 @@ def _build_cfg(overrides: List[str]) -> SimpleNamespace:
         elif o.startswith("scenario="):
             legacy_scenario_sel = o.split("=", 1)[1]
     if env_sel is None:
-        env_sel = "local"
+        raise ValueError("env selection is required (env=<name>)")
     if trial_sel is None:
         trial_sel = legacy_scenario_sel
     if trial_sel is None:
-        trial_sel = "scenario2_mmfit"
+        raise ValueError("trial selection is required (trial=<name>)")
 
     # Load selected groups akin to Hydra defaults
     env_cfg = _load_yaml(REPO_ROOT / f"conf/env/{env_sel}.yaml")

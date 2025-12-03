@@ -1,6 +1,8 @@
 defaults:
   - _self_
 
+seed: 0
+
 trial_name: scenario2_utd
 
 alpha: 10 # Best

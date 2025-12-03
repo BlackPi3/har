@@ -277,10 +277,16 @@ class Trainer:
                   f"LR: {current_lr:.3e}")
 
             if self.scheduler is not None and self._lr_warmup_finished:
-                try:
-                    self.scheduler.step(val_loss)
-                except TypeError:
-                    self.scheduler.step()
+                sched_cfg = getattr(self.cfg, "optim", None)
+                sched_cfg = getattr(sched_cfg, "scheduler", None) if sched_cfg else None
+                metric_name = getattr(sched_cfg, "metric", None) if sched_cfg else None
+                if not metric_name:
+                    raise ValueError("Scheduler metric is not set; provide optim.scheduler.metric in the config.")
+                metric_history = history.get(metric_name)
+                if not (isinstance(metric_history, list) and metric_history):
+                    raise KeyError(f"Scheduler metric '{metric_name}' missing from history.")
+                target_metric = metric_history[-1]
+                self.scheduler.step(target_metric)
 
             metric_history = history.get(self.objective_metric)
             if metric_history is None or not metric_history:
