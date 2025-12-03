@@ -241,6 +241,28 @@ def run_trial(cmd_base: list[str], run_dir: Path, skip_artifacts: bool = False, 
         return json.load(f)
 
 
+def _write_best_summary(study, best_path: Path, direction: str, metric: str, storage_url: str, study_name: str):
+    try:
+        best = study.best_trial
+    except Exception:
+        return
+    summary = {
+        "best_value": best.value,
+        "best_params": best.params,
+        "best_trial_number": best.number,
+        "direction": direction,
+        "metric": metric,
+        "storage": storage_url,
+        "study_name": study_name,
+    }
+    try:
+        best_path.parent.mkdir(parents=True, exist_ok=True)
+        with best_path.open("w") as f:
+            json.dump(summary, f, indent=2)
+    except Exception as e:
+        print(f"[hpo] Failed to write best.json: {e}")
+
+
 def _extract_yaml_meta(yaml_path: Path) -> Dict[str, Any]:
     """Extract optional metadata from conf/hpo YAML."""
     meta: Dict[str, Any] = {
@@ -359,6 +381,7 @@ def main():
 
     out_root = Path(args.output_root) if args.output_root else default_output_root(study_name)
     out_root.mkdir(parents=True, exist_ok=True)
+    best_json_path = out_root / "best.json"
 
     sampler = optuna.samplers.TPESampler(seed=args.seed)
     pruner = MedianPruner() if args.prune else None
@@ -420,23 +443,29 @@ def main():
                 return 1e9 if direction == "minimize" else -1e9
             return float(val)
 
-    study.optimize(objective, n_trials=args.n_trials, gc_after_trial=True)
+    def _trial_callback(study, trial):
+        try:
+            if study.best_trial.number != trial.number:
+                return
+        except Exception:
+            return
+        _write_best_summary(study, best_json_path, direction, metric, storage_url, study_name)
 
-    # Save quick summary
-    best = study.best_trial
-    summary = {
-        "best_value": best.value,
-        "best_params": best.params,
-        "best_trial_number": best.number,
-        "direction": direction,
-        "metric": metric,
-        "storage": storage_url,
-        "study_name": study_name,
-    }
-    with (out_root / "best.json").open("w") as f:
-        json.dump(summary, f, indent=2)
+    study.optimize(objective, n_trials=args.n_trials, gc_after_trial=True, callbacks=[_trial_callback])
 
-    print("HPO complete. Best:", json.dumps(summary, indent=2))
+    if study.best_trial:
+        summary = {
+            "best_value": study.best_trial.value,
+            "best_params": study.best_trial.params,
+            "best_trial_number": study.best_trial.number,
+            "direction": direction,
+            "metric": metric,
+            "storage": storage_url,
+            "study_name": study_name,
+        }
+        print("HPO complete. Best:", json.dumps(summary, indent=2))
+    else:
+        print("HPO complete. No successful trials.")
 
 
 if __name__ == "__main__":
