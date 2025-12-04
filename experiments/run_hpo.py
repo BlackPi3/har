@@ -352,6 +352,40 @@ def _maintain_topk(
     _write_topk_summary(top_trials, out_root / "top_k.json", metric, direction)
 
 
+def _export_topk(
+    top_trials: list,
+    out_root: Path,
+    study_name: str,
+    dry_run: bool,
+):
+    if not top_trials:
+        return
+    dest_root = Path("experiments") / "top_k" / study_name
+    if dry_run:
+        print(f"[hpo] DRY-RUN would create top-k bundle at {dest_root}")
+        return
+    dest_root.mkdir(parents=True, exist_ok=True)
+    src_topk_json = out_root / "top_k.json"
+    if src_topk_json.exists():
+        try:
+            shutil.copy(src_topk_json, dest_root / "top_k.json")
+        except Exception as e:
+            print(f"[hpo] Failed to copy top_k.json to {dest_root}: {e}")
+    # Copy top-k trial dirs so resolved_config/results are preserved
+    src_trials_root = out_root / "trials"
+    dest_trials_root = dest_root / "trials"
+    for t in top_trials:
+        src_dir = src_trials_root / f"trial_{t.number:04d}"
+        dest_dir = dest_trials_root / f"trial_{t.number:04d}"
+        if not src_dir.exists():
+            continue
+        try:
+            dest_dir.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(src_dir, dest_dir, dirs_exist_ok=True)
+        except Exception as e:
+            print(f"[hpo] Failed to copy {src_dir} to {dest_dir}: {e}")
+
+
 def _extract_yaml_meta(yaml_path: Path) -> Dict[str, Any]:
     """Extract optional metadata from conf/hpo YAML."""
     meta: Dict[str, Any] = {
@@ -409,7 +443,7 @@ def _extract_yaml_meta(yaml_path: Path) -> Dict[str, Any]:
             except Exception:
                 pass
             try:
-                k_val = repeat_node.get("k", None)
+                k_val = repeat_node.get("count", repeat_node.get("k", None))
                 if isinstance(k_val, int) and k_val > 0:
                     meta["repeat_k"] = k_val
             except Exception:
@@ -592,6 +626,9 @@ def main():
                     )
             except Exception as e:
                 print(f"[hpo] Failed to write repeats summary: {e}")
+
+    # Export top-k artifacts to experiments/top_k/<study_name>
+    _export_topk(top_trials, out_root, study_name, args.dry)
 
     if study.best_trial:
         summary = {

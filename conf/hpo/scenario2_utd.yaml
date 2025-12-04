@@ -63,7 +63,7 @@ hydra:
 # Optional repeats for top-config evaluation
 repeat:
   enabled: false
-  k: 1
+  count: 1
 
 # Number of top configs to keep for re-evaluation/reporting
 top_k: 1
