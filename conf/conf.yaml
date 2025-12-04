@@ -9,4 +9,4 @@ defaults:
  
 # Global training hyperparameters
 seed: 0
-deterministic: true
+deterministic: false

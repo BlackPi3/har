@@ -27,7 +27,7 @@ optim:
 
 trainer:
   name: scenario2
-  epochs: 200
+  epochs: 100
   patience: 25
   # objective:
   #   metric: val_f1

@@ -695,6 +695,12 @@ def main():
         pass
     if getattr(cfg, "deterministic", False):
         try:
+            dev_str = str(getattr(cfg, "device", "")).lower()
+            if "cuda" in dev_str or torch.cuda.is_available():
+                os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+        except Exception:
+            pass
+        try:
             torch.use_deterministic_algorithms(True)
         except Exception:
             pass

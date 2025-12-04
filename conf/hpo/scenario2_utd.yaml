@@ -9,8 +9,7 @@ trial: scenario2_utd
 # Trainer selection for this HPO space
 trainer:
   name: scenario2
-  epochs: 60
-  patience: 15
+  epochs: 40
 
 hydra:
   sweeper:
@@ -20,25 +19,25 @@ hydra:
     storage: "sqlite:///experiments/hpo/${study_name}/${study_name}.db"
     params:
       # Optimizer
-      optim.lr: choice(1e-3, 5e-4)
-      optim.weight_decay: choice(5e-4, 1e-5)
-      # optim.warmup_epochs: choice(3, 4, 5, 6, 8)
+      # optim.lr: choice(1e-3, 5e-4)
+      # optim.weight_decay: choice(5e-4, 1e-5)
+      optim.warmup_epochs: choice(10, 15)
       # optim.warmup_start_factor: choice(0.05, 0.1, 0.15, 0.2)
-      # optim.scheduler.patience: choice(10, 20, 30, 40)
+      optim.scheduler.patience: choice(10, 15)
 
       # Trainer
-      # trainer.patience: choice(20, 25, 30)
-      trainer.gradient_clip: choice(null, 1.0)
+      trainer.patience: choice(15, 25)
+      # trainer.gradient_clip: choice(null, 1.0)
 
       # Scenario2-specific loss coefficients
-      trial.alpha: choice(0.1, 1, 10)
-      trial.beta: choice(0.1, 1, 10)
-      trial.gamma: choice(0.1, 1, 10)
+      trial.alpha: choice(0.5, 1)
+      trial.beta: choice(1, 2)
+      trial.gamma: choice(1, 2)
 
       # Data
-      data.batch_size: choice(64, 128)
-      data.sensor_window_length: choice(90, 100)
-      data.stride_seconds: choice(0.1, 0.15)
+      # data.batch_size: choice(64, 128)
+      # data.sensor_window_length: choice(90, 100)
+      # data.stride_seconds: choice(0.1, 0.15)
 
       # Model
       # model.feature_extractor.n_filters: range(8, 32, 4)
@@ -62,8 +61,8 @@ hydra:
 
 # Optional repeats for top-config evaluation
 repeat:
-  enabled: false
-  count: 1
+  enabled: true
+  count: 5
 
 # Number of top configs to keep for re-evaluation/reporting
-top_k: 1
+top_k: 5
