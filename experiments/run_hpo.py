@@ -404,11 +404,16 @@ def _extract_yaml_meta(yaml_path: Path) -> Dict[str, Any]:
     try:
         with yaml_path.open("r") as f:
             data = yaml.safe_load(f) or {}
+        # Prefer explicit top-level study_name
+        if isinstance(data.get("study_name"), str):
+            meta["study_name"] = data.get("study_name")
         # hydra.sweeper.study_name
         sweeper = (data.get("hydra", {}) or {}).get("sweeper", {}) or {}
         if isinstance(sweeper, dict):
             if isinstance(sweeper.get("study_name"), str):
-                meta["study_name"] = sweeper.get("study_name")
+                # Avoid propagating unresolved templates like "${study_name}"
+                if "${" not in sweeper.get("study_name"):
+                    meta["study_name"] = sweeper.get("study_name")
         if isinstance(data.get("trial"), str):
             meta["trial"] = data.get("trial")
         trainer_node = data.get("trainer")

@@ -76,10 +76,13 @@ def _parse_hpo_meta(yaml_path: Path) -> Dict[str, Any]:
     try:
         with yaml_path.open("r") as f:
             data = yaml.safe_load(f) or {}
+        if isinstance(data.get("study_name"), str):
+            meta["study_name"] = data.get("study_name")
         sweeper = (data.get("hydra", {}) or {}).get("sweeper", {}) or {}
         if isinstance(sweeper, dict):
             if isinstance(sweeper.get("study_name"), str):
-                meta["study_name"] = sweeper.get("study_name")
+                if "${" not in sweeper.get("study_name"):
+                    meta["study_name"] = sweeper.get("study_name")
         if isinstance(data.get("trial"), str):
             meta["trial"] = data.get("trial")
         trainer_node = data.get("trainer")
