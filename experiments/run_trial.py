@@ -174,6 +174,11 @@ def _load_data_config(name: str, visited: set[str] | None = None) -> Dict[str, A
 def _build_cfg(overrides: List[str]) -> SimpleNamespace:
     # Base config
     base = _load_yaml(REPO_ROOT / "conf/conf.yaml")
+    # Prepare model defaults that can be overridden by trial config
+    reg_cfg = _load_yaml(REPO_ROOT / "conf/model/regressor/regressor.yaml")
+    fe_cfg = _load_yaml(REPO_ROOT / "conf/model/feature_extractor/feature_extractor.yaml")
+    clf_cfg = _load_yaml(REPO_ROOT / "conf/model/classifier/classifier.yaml")
+    optim_cfg = _load_yaml(REPO_ROOT / "conf/optim/adam.yaml")
 
     # Determine env/data selections from overrides (must be provided)
     env_sel = None
@@ -199,11 +204,6 @@ def _build_cfg(overrides: List[str]) -> SimpleNamespace:
     # Load selected groups akin to Hydra defaults
     env_cfg = _load_yaml(REPO_ROOT / f"conf/env/{env_sel}.yaml")
     trial_cfg = _load_composite_yaml(REPO_ROOT / "conf/trial", trial_sel)
-
-    reg_cfg = _load_yaml(REPO_ROOT / "conf/model/regressor/regressor.yaml")
-    fe_cfg = _load_yaml(REPO_ROOT / "conf/model/feature_extractor/feature_extractor.yaml")
-    clf_cfg = _load_yaml(REPO_ROOT / "conf/model/classifier/classifier.yaml")
-    optim_cfg = _load_yaml(REPO_ROOT / "conf/optim/adam.yaml")
     # Compose a single dict
     cfg_dict: Dict[str, Any] = {}
     for part in (base, env_cfg):

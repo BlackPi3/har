@@ -61,6 +61,7 @@ model:
     # fc_hidden: 0
     # fc_dropout: 0.25
     # use_batch_norm: false
-classifier:
-  f_in: 100
-  n_classes: 21
+  classifier:
+    name: classifier
+    f_in: 100
+    n_classes: 21
