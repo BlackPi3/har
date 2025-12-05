@@ -12,6 +12,14 @@ trainer:
   epochs: 60
   patience: 15
 
+# Optional repeats for top-config evaluation
+repeat:
+  enabled: false
+  count: 1
+
+# Number of top configs to keep for re-evaluation/reporting
+top_k: 1
+
 hydra:
   sweeper:
     # Study name with a robust fallback: prefer env STUDY_NAME, else this file's canonical name
@@ -58,11 +66,3 @@ hydra:
     # Place all trials under a unified per-study directory
     dir: "experiments/hpo/${study_name}/trials"
     subdir: trial_${hydra.job.num}
-
-# Optional repeats for top-config evaluation
-repeat:
-  enabled: false
-  count: 1
-
-# Number of top configs to keep for re-evaluation/reporting
-top_k: 1

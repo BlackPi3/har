@@ -25,6 +25,8 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
+from src.config import merge_dicts
+
 try:
     import yaml
 except Exception:  # pragma: no cover
@@ -110,8 +112,53 @@ def _parse_hpo_meta(yaml_path: Path) -> Dict[str, Any]:
     return meta
 
 
+def _load_trial_default_epochs(trial_name: str | None) -> int | None:
+    if not trial_name:
+        return None
+    trial_path = Path("conf/trial") / f"{trial_name}.yaml"
+    if not trial_path.exists():
+        return None
+    try:
+        with trial_path.open("r") as f:
+            data = yaml.safe_load(f) or {}
+        trainer = data.get("trainer") if isinstance(data, dict) else None
+        if isinstance(trainer, dict):
+            epochs = trainer.get("epochs")
+            if isinstance(epochs, int) and epochs > 0:
+                return epochs
+    except Exception:
+        return None
+    return None
+
+
+def _load_trial_cfg(trial_name: str | None) -> Dict[str, Any]:
+    if not trial_name or yaml is None:
+        return {}
+    trial_path = Path("conf/trial") / f"{trial_name}.yaml"
+    if not trial_path.exists():
+        return {}
+    try:
+        with trial_path.open("r") as f:
+            return yaml.safe_load(f) or {}
+    except Exception:
+        return {}
+
+
 def _params_to_overrides(params: Dict[str, Any]) -> list[str]:
     return [f"{k}={_format_override_value(v)}" for k, v in params.items()]
+
+
+def _params_to_nested_dict(params: Dict[str, Any]) -> Dict[str, Any]:
+    nested: Dict[str, Any] = {}
+    for key, val in (params or {}).items():
+        parts = key.split(".")
+        d = nested
+        for p in parts[:-1]:
+            if p not in d or not isinstance(d[p], dict):
+                d[p] = {}
+            d = d[p]
+        d[parts[-1]] = val
+    return nested
 
 
 def _score_from_results(results: Dict[str, Any], metric: str):
@@ -204,9 +251,12 @@ def main():
     metric = topk_payload.get("metric", "val_f1")
 
     repeat_k = max(1, int(meta.get("repeat_k") or 1))
+    default_trial_epochs = _load_trial_default_epochs(meta.get("trial"))
+    trial_base_cfg = _load_trial_cfg(meta.get("trial"))
 
     out_root = Path(args.output_root) if args.output_root else Path("experiments") / "top_k" / study_name
     repeats_root = out_root / "repeats"
+    trial_export_root = out_root / "trials"
     out_root.mkdir(parents=True, exist_ok=True)
 
     base_cmd = [args.python, "-m", args.module]
@@ -227,9 +277,25 @@ def main():
         params_overrides: List[str]
         if resolved_cfg:
             resolved_cfg["seed"] = None  # will override below
+            # Restore trial default epochs for repeat runs if available
+            if default_trial_epochs:
+                resolved_cfg.setdefault("trainer", {})
+                if isinstance(resolved_cfg["trainer"], dict):
+                    resolved_cfg["trainer"]["epochs"] = default_trial_epochs
             params_overrides = _flatten_cfg_for_overrides(resolved_cfg)
         else:
             params_overrides = _params_to_overrides(params)
+
+        # Export merged trial config + params for clarity
+        merged_cfg = merge_dicts(trial_base_cfg or {}, _params_to_nested_dict(params))
+        export_dir = trial_export_root / f"trial_{tnum:04d}"
+        export_dir.mkdir(parents=True, exist_ok=True)
+        if merged_cfg and yaml is not None:
+            try:
+                with (export_dir / "merged_config.yaml").open("w") as f:
+                    yaml.safe_dump(merged_cfg, f, sort_keys=False)
+            except Exception:
+                pass
         for rep_idx in range(repeat_k):
             seed = args.base_seed + tnum * repeat_k + rep_idx
             run_overrides = params_overrides + [f"seed={seed}", f"env={args.env}", f"trial={meta['trial']}"]

@@ -481,6 +481,25 @@ def _resolve_space_yaml(args) -> Path:
     )
 
 
+def _load_trial_default_epochs(trial_name: str | None) -> int | None:
+    if not trial_name:
+        return None
+    trial_path = Path("conf/trial") / f"{trial_name}.yaml"
+    if not trial_path.exists():
+        return None
+    try:
+        with trial_path.open("r") as f:
+            data = yaml.safe_load(f) or {}
+        trainer = data.get("trainer") if isinstance(data, dict) else None
+        if isinstance(trainer, dict):
+            epochs = trainer.get("epochs")
+            if isinstance(epochs, int) and epochs > 0:
+                return epochs
+    except Exception:
+        return None
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser(description="Native Optuna HPO Orchestrator")
     parser.add_argument("--n-trials", type=int, default=10)
@@ -555,6 +574,9 @@ def main():
     if args.epochs is not None:
         base_overrides.append(f"trainer.epochs={args.epochs}")
 
+    # Default epochs from trial config (used for repeat stage to revert to canonical value)
+    default_trial_epochs = _load_trial_default_epochs(trial_override)
+
     # YAML path already resolved above; fail-fast happened earlier
 
     def objective(trial: optuna.trial.Trial) -> float:
@@ -596,9 +618,13 @@ def main():
         repeats_root = out_root / "repeats"
         for rank, t in enumerate(top_trials, start=1):
             params_overrides = _params_to_overrides(t.params)
+            # For repeat stage, drop any trainer.epochs override from the sweep and restore trial default if available
+            repeat_base_overrides = [ov for ov in base_overrides if not ov.startswith("trainer.epochs=")]
+            if default_trial_epochs:
+                repeat_base_overrides.append(f"trainer.epochs={default_trial_epochs}")
             for rep_idx in range(repeat_k):
                 rep_dir = repeats_root / f"trial_{t.number:04d}_rep_{rep_idx}"
-                rep_cmd = base_cmd + base_overrides + params_overrides
+                rep_cmd = base_cmd + repeat_base_overrides + params_overrides
                 if args.dry:
                     print(
                         f"DRY RUN repeat (rank {rank}, trial {t.number}, rep {rep_idx}):",
