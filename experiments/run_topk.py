@@ -285,6 +285,8 @@ def main():
             params_overrides = _flatten_cfg_for_overrides(resolved_cfg)
         else:
             params_overrides = _params_to_overrides(params)
+        # Ensure we don't carry forward the original seed; each repeat gets its own seed below
+        params_overrides = [ov for ov in params_overrides if not ov.startswith("seed=")]
 
         # Export merged trial config + params for clarity
         merged_cfg = merge_dicts(trial_base_cfg or {}, _params_to_nested_dict(params))

@@ -618,13 +618,16 @@ def main():
         repeats_root = out_root / "repeats"
         for rank, t in enumerate(top_trials, start=1):
             params_overrides = _params_to_overrides(t.params)
-            # For repeat stage, drop any trainer.epochs override from the sweep and restore trial default if available
-            repeat_base_overrides = [ov for ov in base_overrides if not ov.startswith("trainer.epochs=")]
+            # For repeat stage, drop sweep-specific overrides that shouldn't persist (epochs/seed) and restore defaults
+            repeat_base_overrides = [
+                ov for ov in base_overrides if not (ov.startswith("trainer.epochs=") or ov.startswith("seed="))
+            ]
             if default_trial_epochs:
                 repeat_base_overrides.append(f"trainer.epochs={default_trial_epochs}")
             for rep_idx in range(repeat_k):
                 rep_dir = repeats_root / f"trial_{t.number:04d}_rep_{rep_idx}"
-                rep_cmd = base_cmd + repeat_base_overrides + params_overrides
+                repeat_seed = args.seed + t.number * repeat_k + rep_idx
+                rep_cmd = base_cmd + repeat_base_overrides + params_overrides + [f"seed={repeat_seed}"]
                 if args.dry:
                     print(
                         f"DRY RUN repeat (rank {rank}, trial {t.number}, rep {rep_idx}):",

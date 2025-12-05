@@ -54,6 +54,7 @@ This document specifies the experimental design, data alignment policy, evaluati
 - Environment: freeze with `environment.yml`/`requirements.txt` and record `torch`, `numpy` versions.
 - Logging: persist metrics per epoch; save best checkpoint keyed by `val_loss` and track `val_f1`.
 - Artifacts: store confusion matrices and per-class F1 as JSON for later aggregation.
+- HPO: sweeps use Optuna TPE (Bayesian) by default, not grid. Budget trials based on space size (e.g., ~50–200 for small categorical spaces); duplicates are expected as TPE exploits the best region.
 
 ## 7) Implementation notes
 
