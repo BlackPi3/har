@@ -28,7 +28,7 @@ STORAGE=${STORAGE:-$OUTPUT_ROOT/$HPO.db}
 # Explicit run-time config (no aggregated overrides)
 ENV_NAME=${ENV_NAME:-remote}
 # EPOCHS=${EPOCHS:-50} # --epochs $EPOCHS
-LOG_ROOT=${LOG_ROOT:-/netscratch/zolfaghari/experiments/log}
+LOG_ROOT=${LOG_ROOT:-/netscratch/zolfaghari/experiments/log/hpo}
 RUN_TOPK=${RUN_TOPK:-1}
 TOPK_BASE_SEED=${TOPK_BASE_SEED:-0}
 

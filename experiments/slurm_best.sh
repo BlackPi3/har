@@ -15,7 +15,7 @@ CONTAINER_IMAGE=${CONTAINER_IMAGE:-/netscratch/zolfaghari/images/har.sqsh}
 ########################################
 ENV_NAME=${ENV_NAME:-remote}
 TRIAL_NAME=${TRIAL_NAME:-scenario2_utd}
-LOG_ROOT=${LOG_ROOT:-/netscratch/zolfaghari/experiments/log}
+LOG_ROOT=${LOG_ROOT:-/netscratch/zolfaghari/experiments/log/trial}
 
 # Logs
 set -euo pipefail
