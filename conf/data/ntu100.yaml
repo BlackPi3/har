@@ -1,6 +1,6 @@
 dataset_name: ntu
 
-pose_file:
+pose_file: pose_100hz.npy 
 acc_file: None
 
 # Subject splits (leave-one-subject-out style)
@@ -9,7 +9,7 @@ val_subjects:
 test_subjects:
 
 # Sampling + window policy (50 Hz, 2-second window)
-sampling_rate_hz: 50
-sensor_window_length: 100
-stride_seconds: 0.25
+sampling_rate_hz: 100
+sensor_window_length: 250
+stride_seconds: 0.2
 batch_size: 128

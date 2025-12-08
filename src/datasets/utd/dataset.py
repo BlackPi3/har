@@ -19,7 +19,13 @@ class _Clip:
 
 
 class UTDDataset(BaseHARDataset):
-    """Dataset that returns sliding windows from aligned UTD clips."""
+    """Dataset that returns sliding windows from aligned UTD clips.
+
+    Data layout summary:
+    - Preprocessed pose (`skeleton_aligned.npy`) is `(3, joints, frames)` at 50 Hz; inertial is `(3, frames)`.
+    - Loader keeps right-shoulder chain joints [8, 9, 10] (0-based) and pads clips shorter than the window.
+    - Output windows are `(3, joints, window)` for pose and `(3, window)` for accelerometer.
+    """
 
     def __init__(
         self,

@@ -18,6 +18,9 @@ def get_dataloaders(name: str, cfg) -> Dict[str, DataLoader]:
     elif name == "utd":
         from src.datasets.utd.factory import build_utd_datasets
         factory_fn = build_utd_datasets
+    elif name == "ntu":
+        from src.datasets.ntu.factory import build_ntu_datasets
+        factory_fn = build_ntu_datasets
     else:
         raise ValueError(f"Unknown dataset: {name}")
     
@@ -28,7 +31,8 @@ def get_dataloaders(name: str, cfg) -> Dict[str, DataLoader]:
     use_pin_memory = device.type == 'cuda'
     
     # Adjust num_workers for local vs cluster
-    num_workers = cfg.num_workers if getattr(cfg, 'cluster', False) else min(cfg.num_workers, 2)
+    cfg_num_workers = getattr(cfg, "num_workers", 0) or 0
+    num_workers = cfg_num_workers if getattr(cfg, "cluster", False) else min(cfg_num_workers, 2)
     
     batch_size = get_data_cfg_value(cfg, "batch_size")
     if batch_size is None:
@@ -47,9 +51,20 @@ def get_dataloaders(name: str, cfg) -> Dict[str, DataLoader]:
             g = torch.Generator()
             g.manual_seed(int(base_seed))
             loader_args["generator"] = g
+    def _as_dataset(name: str, ds, shuffle: bool):
+        if ds is None:
+            return None
+        try:
+            n = len(ds)
+        except Exception:
+            n = 0
+        if n == 0:
+            raise ValueError(f"{name} dataset is empty; check data_dir/subjects for dataset '{cfg.dataset_name}'.")
+        return DataLoader(ds, shuffle=shuffle, **loader_args)
+
     return {
-        "train": DataLoader(train_ds, shuffle=True, **loader_args),
-        "val": DataLoader(val_ds, shuffle=False, **loader_args),
-        "test": DataLoader(test_ds, shuffle=False, **loader_args),
+        "train": _as_dataset("train", train_ds, shuffle=True),
+        "val": _as_dataset("val", val_ds, shuffle=False),
+        "test": _as_dataset("test", test_ds, shuffle=False),
     }
 # ...existing code...

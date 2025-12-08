@@ -6,6 +6,7 @@ Contains dataset classes, loaders, and data utilities.
 # Import from new modular structure
 from .mmfit import MMFit, build_mmfit_datasets
 from .utd import UTDDataset, build_utd_datasets
+from .ntu import NTUDataset, build_ntu_datasets
 from .common import RandomStridedSampler, SequentialStridedSampler, BaseHARDataset
 
 # Other dataset classes (to be imported when needed)
@@ -19,6 +20,8 @@ __all__ = [
     'build_mmfit_datasets',
     'UTDDataset',
     'build_utd_datasets',
+    'NTUDataset',
+    'build_ntu_datasets',
     
     # Common utilities
     'RandomStridedSampler',
@@ -35,7 +38,7 @@ __all__ = [
 DATASET_FACTORIES = {
     'mmfit': build_mmfit_datasets,
     'utd': build_utd_datasets,
-    # 'ntu': build_ntu_datasets,    # TODO: Create factory function
+    'ntu': build_ntu_datasets,
 }
 
 def get_dataset_factory(dataset_name: str):

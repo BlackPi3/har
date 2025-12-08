@@ -1,5 +1,10 @@
 """
 MMFit Dataset implementation.
+
+Data layout summary:
+- Preprocessed pose files keep frame/time metadata plus 17 joints in a `(3, frames, 19)` array.
+- Loader selects joints [frame, timestamp, left shoulder, left elbow, left wrist] and yields
+  pose windows shaped `(3, joints, window)`; accelerometer windows are `(3, window)`.
 """
 import bisect
 import torch
