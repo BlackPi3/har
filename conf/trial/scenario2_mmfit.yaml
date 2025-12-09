@@ -7,8 +7,8 @@ seed: 0
 trial_name: scenario2_mmfit
 
 # Loss weighting coefficients
-alpha: 1 # weight for activity classification
-beta: 1 # weight for feature similarity
+alpha: 0.2 # weight for activity classification
+beta: 5 # weight for feature similarity
 gamma: 1 # weight for regression (MSE)
 
 # Data configuration (merged on top of conf/data/mmfit.yaml)
@@ -16,23 +16,24 @@ data:
   name: mmfit
   sensor_window_length: 500
   stride_seconds: 0.2
-  batch_size: 128
+  batch_size: 32
 
 ## Params
 optim:
   name: adam
-  lr: 0.001
-  # weight_decay: 0.0001
-  warmup_epochs: 15
+  lr: 0.0005
+  weight_decay: 0.00002
+  warmup_epochs: 5
   warmup_start_factor: 0.05
   scheduler:
-    patience: 12
+    patience: 10
+    factor: 0.05
 
 trainer:
   name: scenario2
   epochs: 200
   patience: 25
-  # gradient_clip: null
+  gradient_clip: 1.0
   # trainable_modules:
   #   pose2imu: true
   #   fe: true
@@ -51,6 +52,7 @@ model:
   #   filter_size: 7
   regressor:
     name: regressor
+    use_batch_norm: true
   #   joint_hidden_channels: [64, 64, 32, 32]
   #   joint_kernel_sizes: [3, 3, 3, 1]
   #   joint_dilations: [1, 2, 4, 1]
@@ -61,7 +63,6 @@ model:
   #   temporal_dropout: 0.4
   #   fc_hidden: 0
   #   fc_dropout: 0.25
-  #   use_batch_norm: false
   classifier:
     name: classifier
     f_in: 100
