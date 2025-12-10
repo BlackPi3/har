@@ -381,15 +381,19 @@ def _build_models(cfg) -> Dict[str, torch.nn.Module]:
         window_len = window_len.get("sensor_window_length", 300)
 
     fe_cfg = cfg.model.feature_extractor
-    fe_args = dict(
-        n_filters=getattr(fe_cfg, "n_filters", 9),
-        filter_size=getattr(fe_cfg, "filter_size", 5),
-        n_dense=getattr(fe_cfg, "n_dense", 100),
-        n_channels=getattr(fe_cfg, "input_channels", 3),
-        window_size=window_len,
-        drop_prob=getattr(fe_cfg, "drop_prob", 0.2),
-        pool_filter_size=getattr(fe_cfg, "pool_size", 2),
-    )
+    def _fe_args_from_cfg(node):
+        return dict(
+            n_filters=getattr(node, "n_filters", 9),
+            filter_size=getattr(node, "filter_size", 5),
+            n_dense=getattr(node, "n_dense", 100),
+            n_channels=getattr(node, "input_channels", 3),
+            window_size=window_len,
+            drop_prob=getattr(node, "drop_prob", 0.2),
+            pool_filter_size=getattr(node, "pool_size", 2),
+        )
+    fe_args = _fe_args_from_cfg(fe_cfg)
+    fe_sim_cfg = getattr(cfg.model, "feature_extractor_sim", None)
+    fe_sim_args = _fe_args_from_cfg(fe_sim_cfg) if fe_sim_cfg else fe_args
 
     clf_cfg = cfg.model.classifier
     f_in = getattr(clf_cfg, "f_in", 100)
@@ -412,15 +416,18 @@ def _build_models(cfg) -> Dict[str, torch.nn.Module]:
     reg_kwargs = {k: v for k, v in reg_kwargs.items() if v is not None}
 
     trainer_cfg = getattr(cfg, "trainer", None)
-    dual_cls = bool(getattr(trainer_cfg, "dual_classifiers", False)) if trainer_cfg else False
+    separate_cls = bool(getattr(trainer_cfg, "separate_classifiers", False)) if trainer_cfg else False
+    dual_fe = bool(getattr(trainer_cfg, "dual_feature_extractors", False)) if trainer_cfg else False
 
     models = {
         "pose2imu": Regressor(in_ch=in_ch, num_joints=num_joints, window_length=window_len, **reg_kwargs).to(cfg.device),
         "fe": FeatureExtractor(**fe_args).to(cfg.device),
         "ac": ActivityClassifier(f_in=f_in, n_classes=n_classes).to(cfg.device),
     }
-    if dual_cls:
+    if separate_cls:
         models["ac_sim"] = ActivityClassifier(f_in=f_in, n_classes=n_classes).to(cfg.device)
+    if dual_fe:
+        models["fe_sim"] = FeatureExtractor(**fe_sim_args).to(cfg.device)
     return models
 
 
@@ -436,6 +443,7 @@ def _build_optim(cfg, models):
         if value is None:
             alias_map = {
                 "fe": "feature_extractor",
+                "fe_sim": "feature_extractor",
                 "ac": "activity_classifier",
                 "ac_sim": "activity_classifier",
                 "pose2imu": "regressor",

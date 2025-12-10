@@ -83,7 +83,8 @@ class Trainer:
             self.use_activity_loss_sim = self.use_activity_loss_sim and flag
         self.use_activity_loss = self.use_activity_loss_real or self.use_activity_loss_sim
 
-        self.dual_classifiers = bool(getattr(self.trainer_cfg, "dual_classifiers", False))
+        self.dual_classifiers = bool(getattr(self.trainer_cfg, "separate_classifiers", False))
+        self.dual_feature_extractors = bool(getattr(self.trainer_cfg, "dual_feature_extractors", False))
         clip_val = getattr(self.trainer_cfg, "gradient_clip", None)
         try:
             clip_val = float(clip_val) if clip_val is not None else None
@@ -92,9 +93,14 @@ class Trainer:
         self.gradient_clip = clip_val if clip_val and clip_val > 0 else None
         self.real_classifier_key = "ac"
         self.sim_classifier_key = "ac_sim" if self.dual_classifiers else "ac"
+        self.sim_fe_key = "fe_sim" if self.dual_feature_extractors else "fe"
         if self.dual_classifiers and self.sim_classifier_key not in self.models:
             raise ValueError(
                 "dual_classifiers enabled but 'ac_sim' model is missing. Ensure experiments.run_trial builds it."
+            )
+        if self.dual_feature_extractors and self.sim_fe_key not in self.models:
+            raise ValueError(
+                "dual_feature_extractors enabled but 'fe_sim' model is missing. Ensure experiments.run_trial builds it."
             )
 
     def _cosine(self, a, b):
@@ -106,7 +112,7 @@ class Trainer:
         sim_acc = self.models["pose2imu"](pose)
         mse = torch.nn.functional.mse_loss(sim_acc, acc)
         real_feat = self.models["fe"](acc)
-        sim_feat = self.models["fe"](sim_acc)
+        sim_feat = self.models[self.sim_fe_key](sim_acc)
         logits_real = self.models[self.real_classifier_key](real_feat)
         logits_sim = self.models[self.sim_classifier_key](sim_feat)
         zero = torch.zeros((), device=self.device, dtype=pose.dtype)
