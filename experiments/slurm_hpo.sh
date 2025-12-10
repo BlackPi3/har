@@ -15,6 +15,7 @@ CONTAINER_IMAGE=${CONTAINER_IMAGE:-/netscratch/zolfaghari/images/har.sqsh}
 ########################################
 # Defaults (override via environment variables as needed)
 HPO=${HPO:-scenario2_utd}
+RUN_NAME=${RUN_NAME:-$HPO}  # folder/db name for this run (allows multiple concurrent runs of the same study)
 # Guidance: number of trials vs search space size (categorical combos)
 # - Tiny space (<1e3 combos): consider GridSampler, set N_TRIALS to full grid if affordable.
 # - Small space (~1e3–1e4 combos): TPE with 50–200 trials often suffices; increase if runs are cheap.
@@ -23,8 +24,8 @@ HPO=${HPO:-scenario2_utd}
 N_TRIALS=${N_TRIALS:-64}
 
 SPACE_CONFIG=${SPACE_CONFIG:-conf/hpo/$HPO.yaml}
-OUTPUT_ROOT=${OUTPUT_ROOT:-/netscratch/zolfaghari/experiments/hpo/$HPO}
-STORAGE=${STORAGE:-$OUTPUT_ROOT/$HPO.db}
+OUTPUT_ROOT=${OUTPUT_ROOT:-/netscratch/zolfaghari/experiments/hpo/$RUN_NAME}
+STORAGE=${STORAGE:-$OUTPUT_ROOT/$RUN_NAME.db}
 # Explicit run-time config (no aggregated overrides)
 ENV_NAME=${ENV_NAME:-remote}
 # EPOCHS=${EPOCHS:-50} # --epochs $EPOCHS
