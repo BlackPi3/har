@@ -538,8 +538,12 @@ def main():
     repeat_enabled = bool(meta.get("repeat_enabled"))
     repeat_k = max(1, int(meta.get("repeat_k") or 1))
 
-    # Adopt study name from YAML if provided
-    study_name = meta.get("study_name") or args.study_name
+    # Adopt study name from YAML if provided, unless user explicitly passed one
+    default_study = parser.get_default("study_name")
+    if args.study_name != default_study:
+        study_name = args.study_name
+    else:
+        study_name = meta.get("study_name") or args.study_name
 
     # Determine metric and direction; prefer trainer objective if present
     metric = meta.get("metric") or args.metric

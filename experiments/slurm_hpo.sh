@@ -57,6 +57,7 @@ srun \
     set -euo pipefail
     python -m experiments.run_hpo \
       --n-trials $N_TRIALS \
+      --study-name $RUN_NAME \
       --storage '$STORAGE' \
       --output-root '$OUTPUT_ROOT' \
       --space-config '$SPACE_CONFIG' \
