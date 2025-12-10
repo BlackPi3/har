@@ -198,19 +198,9 @@ def _parse_sweeper_spec(spec: str, trial: optuna.trial.Trial):
     return lambda name: trial.suggest_categorical(name, [spec])
 
 
-def build_space_from_yaml(trial: optuna.trial.Trial, yaml_path: Path) -> Dict[str, Any]:
-    if yaml is None:
-        raise RuntimeError("PyYAML not available; cannot load --space-config")
-    with yaml_path.open("r") as f:
-        data = yaml.safe_load(f)
-    # Expect Hydra sweeper style at hydra.sweeper.params
-    params_node = None
-    try:
-        params_node = data.get("hydra", {}).get("sweeper", {}).get("params", {})
-    except Exception:
-        params_node = {}
+def build_space_from_params(trial: optuna.trial.Trial, params_node: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(params_node, dict) or not params_node:
-        raise ValueError(f"No params found in YAML sweeper file: {yaml_path}")
+        raise ValueError("No params found in sweeper config.")
     suggested: Dict[str, Any] = {}
     for key, spec in params_node.items():
         suggest_fn = _parse_sweeper_spec(str(spec), trial)
@@ -393,7 +383,7 @@ def _export_topk(
             print(f"[hpo] Failed to copy {src_dir} to {dest_dir}: {e}")
 
 
-def _extract_yaml_meta(yaml_path: Path) -> Dict[str, Any]:
+def _extract_yaml_meta(yaml_path: Path, data: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """Extract optional metadata from conf/hpo YAML."""
     meta: Dict[str, Any] = {
         "study_name": None,
@@ -406,11 +396,14 @@ def _extract_yaml_meta(yaml_path: Path) -> Dict[str, Any]:
         "repeat_enabled": False,
         "repeat_k": 1,
     }
-    if yaml is None:
+    if yaml is None and data is None:
         return meta
     try:
-        with yaml_path.open("r") as f:
-            data = yaml.safe_load(f) or {}
+        if data is None:
+            with yaml_path.open("r") as f:
+                data = yaml.safe_load(f) or {}
+        else:
+            data = data or {}
         # Prefer explicit top-level study_name
         if isinstance(data.get("study_name"), str):
             meta["study_name"] = data.get("study_name")
@@ -530,7 +523,12 @@ def main():
 
     # Resolve space YAML first and extract metadata to drive study/metric
     space_yaml_path = _resolve_space_yaml(args)
-    meta = _extract_yaml_meta(space_yaml_path)
+    space_yaml_data = None
+    if yaml is None:
+        raise RuntimeError("PyYAML not available; cannot load --space-config")
+    with space_yaml_path.open("r") as f:
+        space_yaml_data = yaml.safe_load(f) or {}
+    meta = _extract_yaml_meta(space_yaml_path, space_yaml_data)
 
     trainer_overrides = meta.get("trainer_overrides") or []
     data_overrides = meta.get("data_overrides") or []
@@ -588,10 +586,19 @@ def main():
     # Default epochs from trial config (used for repeat stage to revert to canonical value)
     default_trial_epochs = _load_trial_default_epochs(trial_override)
 
+    # Extract sweeper params once to avoid mid-run mutations
+    try:
+        params_node = (space_yaml_data.get("hydra", {}) or {}).get("sweeper", {}) or {}
+        params_node = params_node.get("params", {}) if isinstance(params_node, dict) else {}
+    except Exception:
+        params_node = {}
+    if not isinstance(params_node, dict) or not params_node:
+        raise ValueError(f"No params found in YAML sweeper file: {space_yaml_path}")
+
     # YAML path already resolved above; fail-fast happened earlier
 
     def objective(trial: optuna.trial.Trial) -> float:
-        params = build_space_from_yaml(trial, space_yaml_path)
+        params = build_space_from_params(trial, params_node)
         trial_dir = out_root / "trials" / f"trial_{trial.number:04d}"
 
         # Convert params dict to hydra-style overrides
