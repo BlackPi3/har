@@ -417,7 +417,7 @@ def _build_models(cfg) -> Dict[str, torch.nn.Module]:
 
     trainer_cfg = getattr(cfg, "trainer", None)
     separate_cls = bool(getattr(trainer_cfg, "separate_classifiers", False)) if trainer_cfg else False
-    dual_fe = bool(getattr(trainer_cfg, "dual_feature_extractors", False)) if trainer_cfg else False
+    dual_fe = bool(getattr(trainer_cfg, "separate_feature_extractors", False)) if trainer_cfg else False
 
     models = {
         "pose2imu": Regressor(in_ch=in_ch, num_joints=num_joints, window_length=window_len, **reg_kwargs).to(cfg.device),

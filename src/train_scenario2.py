@@ -84,7 +84,7 @@ class Trainer:
         self.use_activity_loss = self.use_activity_loss_real or self.use_activity_loss_sim
 
         self.dual_classifiers = bool(getattr(self.trainer_cfg, "separate_classifiers", False))
-        self.dual_feature_extractors = bool(getattr(self.trainer_cfg, "dual_feature_extractors", False))
+        self.dual_feature_extractors = bool(getattr(self.trainer_cfg, "separate_feature_extractors", False))
         clip_val = getattr(self.trainer_cfg, "gradient_clip", None)
         try:
             clip_val = float(clip_val) if clip_val is not None else None
