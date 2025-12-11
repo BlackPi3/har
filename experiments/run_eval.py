@@ -19,6 +19,7 @@ import subprocess
 import sys
 from copy import deepcopy
 from pathlib import Path
+from statistics import mean, pstdev
 from typing import Any, Dict
 
 try:
@@ -54,6 +55,8 @@ def main():
     parser.add_argument("--trial", type=str, default=None, help="Optional explicit trial name to override inference")
     parser.add_argument("--eval-config", type=str, default=None, help="Optional path to eval config YAML")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--repeat-count", type=int, default=5, help="Number of eval repeats (seeds will increment)")
+    parser.add_argument("--no-resume", action="store_true", help="Do not skip already completed repeats")
     parser.add_argument("--python", type=str, default=sys.executable)
     parser.add_argument("--module", type=str, default="experiments.run_trial")
     args = parser.parse_args()
@@ -166,24 +169,11 @@ def main():
         with eval_cfg_path.open("r") as f:
             eval_cfg = yaml.safe_load(f) or {}
 
-    repeat_count = 1
-    # Prefer explicit eval config if provided
+    repeat_count = args.repeat_count
     if eval_cfg:
         repeat_count = int(
             eval_cfg.get("repeat", {}).get("count", eval_cfg.get("eval", {}).get("repeats", repeat_count))
         )
-    else:
-        # Fallback to global conf/conf.yaml for default repeats
-        global_conf = Path("conf") / "conf.yaml"
-        if global_conf.exists() and yaml is not None:
-            with global_conf.open("r") as gf:
-                try:
-                    gcfg = yaml.safe_load(gf) or {}
-                    repeat_count = int(gcfg.get("eval", {}).get("repeats", 5))
-                except Exception:
-                    repeat_count = 5
-        else:
-            repeat_count = 5
 
     eval_root = Path("experiments") / "eval" / args.study_name / f"best_trial_{best_trial:04d}"
     eval_root.mkdir(parents=True, exist_ok=True)
@@ -231,6 +221,25 @@ def main():
         seed_val = args.seed + rep_idx
         run_dir = eval_root / f"rep_{rep_idx:02d}"
         run_dir.mkdir(parents=True, exist_ok=True)
+
+        results_path = run_dir / "results.json"
+        if not args.no_resume and results_path.exists():
+            try:
+                with results_path.open("r") as rf:
+                    existing = json.load(rf)
+                metrics = existing.get("final_metrics", {})
+            except Exception:
+                metrics = {}
+            runs.append(
+                {
+                    "rep": rep_idx,
+                    "seed": seed_val,
+                    "run_dir": str(run_dir),
+                    "final_metrics": metrics,
+                    "skipped": True,
+                }
+            )
+            continue
         cmd = base_cmd + base_overrides + extra_overrides + [
             f"seed={seed_val}",
             f"run.dir={str(run_dir)}",
@@ -259,12 +268,35 @@ def main():
             }
         )
 
+    # Aggregate test metrics (mean/std) across repeats
+    aggregate: Dict[str, Dict[str, float]] = {}
+    metric_keys: set[str] = set()
+    for r in runs:
+        fm = r.get("final_metrics") or {}
+        for k in fm.keys():
+            if k.startswith("test_"):
+                metric_keys.add(k)
+
+    for key in metric_keys:
+        vals: list[float] = []
+        for r in runs:
+            fm = r.get("final_metrics") or {}
+            v = fm.get(key)
+            if isinstance(v, (int, float)):
+                vals.append(float(v))
+        if not vals:
+            continue
+        avg = mean(vals)
+        std = pstdev(vals) if len(vals) > 1 else 0.0
+        aggregate[key] = {"mean": avg, "std": std, "count": len(vals)}
+
     summary = {
         "study": args.study_name,
         "trial_number": best_trial,
         "trial_name": trial_name,
         "repeat_count": repeat_count,
         "runs": runs,
+        "aggregate_test_metrics": aggregate,
     }
     with (eval_root / "eval_summary.json").open("w") as sf:
         json.dump(summary, sf, indent=2)

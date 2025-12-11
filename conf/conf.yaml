@@ -10,7 +10,3 @@ defaults:
 # Global training hyperparameters
 seed: 0
 deterministic: false
-
-# Evaluation defaults
-eval:
-  repeats: 5
