@@ -52,6 +52,7 @@ def main():
     parser = argparse.ArgumentParser(description="Evaluate best HPO config on train/val/test")
     parser.add_argument("--study-name", required=True, help="Study/run name under experiments/hpo/<study>")
     parser.add_argument("--env", required=True, help="Hydra env override (e.g., remote, local)")
+    parser.add_argument("--hpo-root", type=str, default=None, help="Path to HPO study root (contains repeats/top_k)")
     parser.add_argument("--trial", type=str, default=None, help="Optional explicit trial name to override inference")
     parser.add_argument("--eval-config", type=str, default=None, help="Optional path to eval config YAML")
     parser.add_argument("--seed", type=int, default=0)
@@ -61,7 +62,10 @@ def main():
     parser.add_argument("--module", type=str, default="experiments.run_trial")
     args = parser.parse_args()
 
-    hpo_root = Path("experiments") / "hpo" / args.study_name
+    if args.hpo_root:
+        hpo_root = Path(args.hpo_root)
+    else:
+        hpo_root = Path("experiments") / "hpo" / args.study_name
     repeats_path = hpo_root / "repeats" / "repeats.json"
     topk_path = hpo_root / "top_k.json"
     snapshot_hpo = hpo_root / "snapshots" / "hpo.yaml"

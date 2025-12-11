@@ -17,6 +17,7 @@ CONTAINER_IMAGE=${CONTAINER_IMAGE:-/netscratch/zolfaghari/images/har.sqsh}
 STUDY_NAME=${STUDY_NAME:-scenario2_utd}
 ENV_NAME=remote
 REPEAT_COUNT=${REPEAT_COUNT:-5}
+HPO_ROOT=${HPO_ROOT:-/netscratch/$USER/experiments/hpo/$STUDY_NAME}
 LOG_ROOT=${LOG_ROOT:-/netscratch/zolfaghari/experiments/log/eval}
 
 # Logs
@@ -31,7 +32,7 @@ echo "Stderr: $LOG_ERR"
 
 export HYDRA_FULL_ERROR=1
 
-RUN_CMD="python -m experiments.run_eval --study-name \"$STUDY_NAME\" --env \"$ENV_NAME\" --repeat-count \"$REPEAT_COUNT\""
+RUN_CMD="python -m experiments.run_eval --study-name \"$STUDY_NAME\" --env \"$ENV_NAME\" --repeat-count \"$REPEAT_COUNT\" --hpo-root \"$HPO_ROOT\""
 
 srun \
   --container-image="$CONTAINER_IMAGE" \
