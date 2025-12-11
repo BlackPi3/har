@@ -512,17 +512,28 @@ def _write_results(
     best_epoch: int | None,
     include_history: bool,
     objective_meta: Dict[str, Any] | None = None,
+    test_metrics: Dict[str, Any] | None = None,
 ) -> None:
     history = history or {}
     val_f1_hist = history.get("val_f1", []) or []
     val_loss_hist = history.get("val_loss", []) or []
+    train_f1_hist = history.get("train_f1", []) or []
+    train_loss_hist = history.get("train_loss", []) or []
 
     final = {
         "val_f1_last": float(val_f1_hist[-1]) if val_f1_hist else None,
         "best_val_f1": float(max(val_f1_hist)) if val_f1_hist else None,
         "val_loss_last": float(val_loss_hist[-1]) if val_loss_hist else None,
         "best_val_loss": float(min(val_loss_hist)) if val_loss_hist else None,
+        "train_f1_last": float(train_f1_hist[-1]) if train_f1_hist else None,
+        "train_loss_last": float(train_loss_hist[-1]) if train_loss_hist else None,
     }
+    if test_metrics:
+        for k, v in test_metrics.items():
+            try:
+                final[k] = float(v)
+            except Exception:
+                final[k] = v
 
     out: Dict[str, Any] = {
         "final_metrics": final,
@@ -727,6 +738,7 @@ def main():
 
     trainer = None
     history: Dict[str, List[Any]] = {}
+    test_metrics: Dict[str, Any] | None = None
     try:
         dataset_name = get_data_cfg_value(cfg, "dataset_name", None) or get_data_cfg_value(cfg, "name", None)
         if not dataset_name:
@@ -738,6 +750,19 @@ def main():
         device = cfg.device
         trainer = Trainer(models=models, dataloaders=dls, optimizer=optimizer, scheduler=scheduler, cfg=cfg, device=device)
         history = trainer.fit(epochs)
+        run_group = getattr(getattr(cfg, "run", None), "group", None)
+        # Evaluate on test split (best model is restored inside fit) only for eval runs
+        if run_group == "eval" and dls.get("test") is not None:
+            with torch.no_grad():
+                test_loss, test_f1, test_mse, test_sim, test_act, test_acc = trainer._run_epoch("test")
+            test_metrics = {
+                "test_loss": test_loss,
+                "test_f1": test_f1,
+                "test_mse": test_mse,
+                "test_sim_loss": test_sim,
+                "test_act_loss": test_act,
+                "test_acc": test_acc,
+            }
     except Exception as e:
         print(f"[run_trial] ERROR: {e}")
         history = {"val_f1": [], "val_loss": []}
@@ -761,7 +786,14 @@ def main():
                 objective_meta["last_score"] = float(metric_hist[-1])
             except Exception:
                 pass
-    _write_results(run_dir, history, best_epoch, include_history=include_history, objective_meta=objective_meta)
+    _write_results(
+        run_dir,
+        history,
+        best_epoch,
+        include_history=include_history,
+        objective_meta=objective_meta,
+        test_metrics=test_metrics,
+    )
     if _SKIP_ARTIFACTS:
         print("[run_trial] Artifact saving disabled for this run.")
     else:

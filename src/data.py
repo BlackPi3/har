@@ -51,6 +51,9 @@ def get_dataloaders(name: str, cfg) -> Dict[str, DataLoader]:
             g = torch.Generator()
             g.manual_seed(int(base_seed))
             loader_args["generator"] = g
+    trainer_cfg = getattr(cfg, "trainer", None)
+    skip_val = bool(getattr(trainer_cfg, "disable_val", False))
+
     def _as_dataset(name: str, ds, shuffle: bool):
         if ds is None:
             return None
@@ -59,6 +62,8 @@ def get_dataloaders(name: str, cfg) -> Dict[str, DataLoader]:
         except Exception:
             n = 0
         if n == 0:
+            if name == "val" and skip_val:
+                return None
             raise ValueError(f"{name} dataset is empty; check data_dir/subjects for dataset '{cfg.dataset_name}'.")
         return DataLoader(ds, shuffle=shuffle, **loader_args)
 

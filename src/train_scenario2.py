@@ -54,6 +54,13 @@ class Trainer:
         if isinstance(mode, str):
             mode = mode.lower()
         self.objective_mode = "min" if mode == "min" else "max"
+        self.skip_val = (
+            not self.dl.get("val")
+            or (self.dl.get("val") is None)
+            or bool(getattr(self.trainer_cfg, "disable_val", False))
+        )
+        if self.skip_val and isinstance(self.objective_metric, str) and self.objective_metric.startswith("val_"):
+            self.objective_metric = f"train_{self.objective_metric[4:]}"
 
         losses_cfg = getattr(self.trainer_cfg, "losses", None) if self.trainer_cfg else None
 
@@ -102,6 +109,12 @@ class Trainer:
             raise ValueError(
                 "dual_feature_extractors enabled but 'fe_sim' model is missing. Ensure experiments.run_trial builds it."
             )
+        sched_cfg = getattr(self.trainer_cfg, "objective", None)
+        optim_cfg = getattr(cfg, "optim", None)
+        sched_cfg = getattr(optim_cfg, "scheduler", None) if optim_cfg else None
+        self.scheduler_metric = getattr(sched_cfg, "metric", None) if sched_cfg else None
+        if self.skip_val and isinstance(self.scheduler_metric, str) and self.scheduler_metric.startswith("val_"):
+            self.scheduler_metric = f"train_{self.scheduler_metric[4:]}"
 
     def _cosine(self, a, b):
         return (1 - F.cosine_similarity(a, b, dim=1)).mean()
@@ -260,7 +273,10 @@ class Trainer:
         for epoch in range(epochs):
             self._apply_lr_warmup(epoch)
             tr_loss, tr_f1, tr_mse, tr_sim, tr_act, tr_acc = self._run_epoch("train")
-            val_loss, val_f1, val_mse, val_sim, val_act, val_acc = self._run_epoch("val")
+            if self.skip_val:
+                val_loss, val_f1, val_mse, val_sim, val_act, val_acc = tr_loss, tr_f1, tr_mse, tr_sim, tr_act, tr_acc
+            else:
+                val_loss, val_f1, val_mse, val_sim, val_act, val_acc = self._run_epoch("val")
             current_lr = self.optimizer.param_groups[0]["lr"]
             
             history["train_loss"].append(tr_loss)
@@ -283,9 +299,7 @@ class Trainer:
                   f"LR: {current_lr:.3e}")
 
             if self.scheduler is not None and self._lr_warmup_finished:
-                sched_cfg = getattr(self.cfg, "optim", None)
-                sched_cfg = getattr(sched_cfg, "scheduler", None) if sched_cfg else None
-                metric_name = getattr(sched_cfg, "metric", None) if sched_cfg else None
+                metric_name = self.scheduler_metric
                 if not metric_name:
                     raise ValueError("Scheduler metric is not set; provide optim.scheduler.metric in the config.")
                 metric_history = history.get(metric_name)

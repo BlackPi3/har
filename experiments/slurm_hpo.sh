@@ -27,7 +27,7 @@ SPACE_CONFIG=${SPACE_CONFIG:-conf/hpo/$HPO.yaml}
 OUTPUT_ROOT=${OUTPUT_ROOT:-/netscratch/zolfaghari/experiments/hpo/$RUN_NAME}
 STORAGE=${STORAGE:-$OUTPUT_ROOT/$RUN_NAME.db}
 # Explicit run-time config (no aggregated overrides)
-ENV_NAME=${ENV_NAME:-remote}
+ENV_NAME=remote
 # EPOCHS=${EPOCHS:-50} # --epochs $EPOCHS
 LOG_ROOT=${LOG_ROOT:-/netscratch/zolfaghari/experiments/log/hpo}
 RUN_TOPK=${RUN_TOPK:-1}
