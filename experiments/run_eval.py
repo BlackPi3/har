@@ -180,7 +180,10 @@ def main():
             eval_cfg.get("repeat", {}).get("count", eval_cfg.get("eval", {}).get("repeats", repeat_count))
         )
 
-    eval_root = Path("experiments") / "eval" / args.study_name / f"best_trial_{best_trial:04d}"
+    base_eval_dir = Path(resolved_cfg.get("experiments_dir", "experiments")).expanduser()
+    if not base_eval_dir.is_absolute():
+        base_eval_dir = Path.cwd() / base_eval_dir
+    eval_root = base_eval_dir / "eval" / args.study_name / f"best_trial_{best_trial:04d}"
     eval_root.mkdir(parents=True, exist_ok=True)
 
     base_cmd = [
