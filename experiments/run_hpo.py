@@ -524,6 +524,25 @@ def main():
         raise RuntimeError("PyYAML not available; cannot load --space-config")
     with space_yaml_path.open("r") as f:
         space_yaml_data = yaml.safe_load(f) or {}
+    # Snapshot the HPO YAML and trial YAML for reproducibility/resume
+    snapshot_dir = (Path(args.output_root) if args.output_root else default_output_root(args.study_name)) / "snapshots"
+    snapshot_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        (snapshot_dir / "hpo.yaml").write_text(space_yaml_path.read_text())
+    except Exception:
+        pass
+    trial_name_for_snapshot = None
+    try:
+        trial_name_for_snapshot = space_yaml_data.get("trial")
+    except Exception:
+        trial_name_for_snapshot = None
+    if trial_name_for_snapshot:
+        trial_yaml_path = Path("conf/trial") / f"{trial_name_for_snapshot}.yaml"
+        if trial_yaml_path.exists():
+            try:
+                (snapshot_dir / "trial.yaml").write_text(trial_yaml_path.read_text())
+            except Exception:
+                pass
     meta = _extract_yaml_meta(space_yaml_path, space_yaml_data)
 
     trainer_overrides = meta.get("trainer_overrides") or []
