@@ -361,7 +361,9 @@ def _ensure_run_dir(cfg: SimpleNamespace, overrides: List[str]) -> Path:
         else:
             run_dir = experiments_root / str(group) / str(scenario) / suffix
 
-    p = Path(run_dir)
+    p = Path(run_dir).expanduser()
+    if not p.is_absolute():
+        p = Path.cwd() / p
     p.mkdir(parents=True, exist_ok=True)
     try:
         os.chdir(p)
