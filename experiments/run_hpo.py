@@ -332,20 +332,16 @@ def _maintain_topk(
 ):
     if top_k <= 0:
         return
-    trials_root = out_root / "trials"
     completed_sorted = _sorted_completed_trials(study, direction)
     # Deduplicate by params: keep best trial per unique params
     unique: Dict[str, Any] = {}
     for t in completed_sorted:
         key = json.dumps(t.params, sort_keys=True)
-        # Since completed_sorted is sorted best-first, first occurrence wins
         if key not in unique:
             unique[key] = t
     top_trials = list(unique.values())[:top_k] if unique else []
     if not top_trials:
         return
-    keep_numbers = {t.number for t in top_trials}
-    _prune_trial_dirs(trials_root, keep_numbers, dry_run=dry_run)
     _write_topk_summary(top_trials, out_root / "top_k.json", metric, direction)
 
 
@@ -625,7 +621,13 @@ def main():
     study.optimize(objective, n_trials=args.n_trials, gc_after_trial=True, callbacks=[_trial_callback])
 
     completed_sorted = _sorted_completed_trials(study, direction)
-    top_trials = completed_sorted[:top_k] if top_k > 0 else []
+    # Deduplicate by params to avoid re-pruning the same config and causing mismatches
+    unique: Dict[str, Any] = {}
+    for t in completed_sorted:
+        key = json.dumps(t.params, sort_keys=True)
+        if key not in unique:
+            unique[key] = t
+    top_trials = list(unique.values())[:top_k] if top_k > 0 else []
     if top_trials:
         keep_numbers = {t.number for t in top_trials}
         _prune_trial_dirs(out_root / "trials", keep_numbers, dry_run=args.dry)
