@@ -278,16 +278,10 @@ def main():
             }
         )
 
-    # Aggregate test metrics (mean/std) across repeats
+    # Aggregate only the key test metrics we care about (F1, accuracy)
+    target_metrics = ["test_f1", "test_acc"]
     aggregate: Dict[str, Dict[str, float]] = {}
-    metric_keys: set[str] = set()
-    for r in runs:
-        fm = r.get("final_metrics") or {}
-        for k in fm.keys():
-            if k.startswith("test_"):
-                metric_keys.add(k)
-
-    for key in metric_keys:
+    for key in target_metrics:
         vals: list[float] = []
         for r in runs:
             fm = r.get("final_metrics") or {}
@@ -305,8 +299,7 @@ def main():
         "trial_number": best_trial,
         "trial_name": trial_name,
         "repeat_count": repeat_count,
-        "runs": runs,
-        "aggregate_test_metrics": aggregate,
+        "test_metrics": aggregate,
     }
     with (eval_root / "eval_summary.json").open("w") as sf:
         json.dump(summary, sf, indent=2)

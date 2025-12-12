@@ -515,21 +515,36 @@ def _write_results(
     include_history: bool,
     objective_meta: Dict[str, Any] | None = None,
     test_metrics: Dict[str, Any] | None = None,
+    skip_val: bool = False,
 ) -> None:
     history = history or {}
-    val_f1_hist = history.get("val_f1", []) or []
-    val_loss_hist = history.get("val_loss", []) or []
     train_f1_hist = history.get("train_f1", []) or []
     train_loss_hist = history.get("train_loss", []) or []
+    val_f1_hist = history.get("val_f1", []) or []
+    val_loss_hist = history.get("val_loss", []) or []
 
     final = {
-        "val_f1_last": float(val_f1_hist[-1]) if val_f1_hist else None,
-        "best_val_f1": float(max(val_f1_hist)) if val_f1_hist else None,
-        "val_loss_last": float(val_loss_hist[-1]) if val_loss_hist else None,
-        "best_val_loss": float(min(val_loss_hist)) if val_loss_hist else None,
         "train_f1_last": float(train_f1_hist[-1]) if train_f1_hist else None,
         "train_loss_last": float(train_loss_hist[-1]) if train_loss_hist else None,
     }
+    if not skip_val:
+        final.update(
+            {
+                "val_f1_last": float(val_f1_hist[-1]) if val_f1_hist else None,
+                "best_val_f1": float(max(val_f1_hist)) if val_f1_hist else None,
+                "val_loss_last": float(val_loss_hist[-1]) if val_loss_hist else None,
+                "best_val_loss": float(min(val_loss_hist)) if val_loss_hist else None,
+            }
+        )
+    else:
+        final.update(
+            {
+                "val_f1_last": None,
+                "best_val_f1": None,
+                "val_loss_last": None,
+                "best_val_loss": None,
+            }
+        )
     if test_metrics:
         for k, v in test_metrics.items():
             try:
@@ -795,6 +810,7 @@ def main():
         include_history=include_history,
         objective_meta=objective_meta,
         test_metrics=test_metrics,
+        skip_val=bool(getattr(trainer, "skip_val", False)) if trainer else False,
     )
     if _SKIP_ARTIFACTS:
         print("[run_trial] Artifact saving disabled for this run.")
