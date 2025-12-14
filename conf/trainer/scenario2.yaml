@@ -2,12 +2,15 @@
 defaults:
   - _self_
 
+# todo add weights here later
+
 # Number of epochs/patience used by experiments.run_trial Trainer wrapper
 epochs: 100
 patience: 25  # early-stopping tolerance (epochs without val improvement)
+gradient_clip: 1.0  # set to a positive value (e.g., 1.0) to enable grad clipping
+
 separate_classifiers: false  # when true, use separate classifier for sim stream
 separate_feature_extractors: false  # when true, use a separate feature extractor for sim stream
-gradient_clip: 1.0  # set to a positive value (e.g., 1.0) to enable grad clipping
 
 objective:
   metric: val_f1   # Any key from Trainer history (e.g., val_f1, val_mse, val_loss)
@@ -27,3 +30,10 @@ losses:
   activity: true       # Master switch for activity losses
   activity_real: true  # Cross-entropy on real accelerometer branch
   activity_sim: true   # Cross-entropy on simulated accelerometer branch
+
+# Optional secondary pose-only stream (e.g., NTU). Disabled by default.
+secondary:
+  enabled: false
+  loss_weight: 1.0
+  data: ntu50.yaml  # name of a config under conf/data (e.g., ntu50.yaml or ntu100.yaml)
+  n_classes: 60

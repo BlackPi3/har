@@ -16,7 +16,7 @@ data:
   name: mmfit
   sensor_window_length: 500
   stride_seconds: 0.2
-  batch_size: 32
+  batch_size: 64
 
 ## Params
 optim:
@@ -34,35 +34,18 @@ trainer:
   epochs: 200
   patience: 25
   gradient_clip: 1.0
-  # trainable_modules:
-  #   pose2imu: true
-  #   fe: true
-  #   ac: true
-  # losses:
-  #   mse: true
-  #   feature_similarity: true
-  #   activity: true
-  #   activity_real: true
-  #   activity_sim: true
+  secondary:
+    enabled: false
+    loss_weight: 1.0
+    data: ntu100.yaml
+
 
 model:
   feature_extractor:
     name: feature_extractor
-  #   n_filters: 16
-  #   filter_size: 7
   regressor:
     name: regressor
     use_batch_norm: true
-  #   joint_hidden_channels: [64, 64, 32, 32]
-  #   joint_kernel_sizes: [3, 3, 3, 1]
-  #   joint_dilations: [1, 2, 4, 1]
-  #   joint_dropouts: [0.0, 0.1, 0.1, 0.1]
-  #   temporal_hidden_channels: 16
-  #   temporal_kernel_size: 7
-  #   temporal_dilation: 2
-  #   temporal_dropout: 0.4
-  #   fc_hidden: 0
-  #   fc_dropout: 0.25
   classifier:
     name: classifier
     f_in: 100

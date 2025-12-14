@@ -3,6 +3,8 @@ import math
 import numpy as np
 import torch
 import torch.nn.functional as F
+from torch.utils.data import DataLoader
+from types import SimpleNamespace
 
 try:  # Keep optional import; fallback if sklearn not installed
     from sklearn.metrics import f1_score  # type: ignore
@@ -32,6 +34,9 @@ class Trainer:
         self.cfg = cfg
         self.device = device
 
+        # Trainer-specific controls (objective + loss toggles)
+        self.trainer_cfg = getattr(cfg, "trainer", None)
+
         # Use scenario-specific naming; fall back to generic if present
         self.alpha = getattr(cfg, "scenario2_alpha", getattr(cfg, "alpha", 1.0))
         self.beta = getattr(cfg, "scenario2_beta", getattr(cfg, "beta", 0.0))
@@ -45,8 +50,65 @@ class Trainer:
         self._lr_warmup_finished = self.lr_warmup_epochs <= 0
         self.ce = torch.nn.CrossEntropyLoss()
 
-        # Trainer-specific controls (objective + loss toggles)
-        self.trainer_cfg = getattr(cfg, "trainer", None)
+        # Secondary pose dataset support (optional, pose-only)
+        sec_cfg = getattr(self.trainer_cfg, "secondary", None) if self.trainer_cfg else None
+        self.use_secondary_pose = bool(getattr(sec_cfg, "enabled", False))
+        self.secondary_loss_weight = float(getattr(sec_cfg, "loss_weight", 1.0)) if sec_cfg else 1.0
+        self.secondary_classifier_key = getattr(sec_cfg, "classifier_key", "ac_secondary") if sec_cfg else None
+        self.secondary_loader = None
+        if self.use_secondary_pose:
+            if not self.secondary_classifier_key or self.secondary_classifier_key not in self.models:
+                raise ValueError(
+                    f"secondary classifier '{self.secondary_classifier_key}' missing in models while secondary is enabled."
+                )
+            sec_data = getattr(sec_cfg, "data", None) if sec_cfg else None
+            data_cfg_name = sec_data or "ntu50.yaml"
+            from src.config import load_config
+            from pathlib import Path
+            repo_root = Path(__file__).resolve().parents[2]
+            sec_cfg_path = (repo_root / "conf" / "data" / data_cfg_name).resolve()
+            base_sec_cfg = load_config(exp_path=str(sec_cfg_path))
+
+            sec_params = {
+                "data_dir": getattr(base_sec_cfg, "data_dir", "datasets/ntu"),
+                "sampling_rate_hz": int(getattr(base_sec_cfg, "sampling_rate_hz", 50)),
+                "sensor_window_length": int(getattr(base_sec_cfg, "sensor_window_length", 100)),
+                "stride_seconds": float(getattr(base_sec_cfg, "stride_seconds", 0.1)),
+                "batch_size": int(getattr(base_sec_cfg, "batch_size", getattr(cfg, "batch_size", 128) or 128)),
+                "pad_short_clips": bool(getattr(base_sec_cfg, "pad_short_clips", True)),
+                "train_subjects": getattr(base_sec_cfg, "train_subjects", None),
+            }
+            from src.datasets.ntu.factory import build_ntu_datasets
+            sec_cfg_ns = SimpleNamespace(
+                data_dir=sec_params["data_dir"],
+                sampling_rate_hz=sec_params["sampling_rate_hz"],
+                sensor_window_length=sec_params["sensor_window_length"],
+                stride_seconds=sec_params["stride_seconds"],
+                batch_size=sec_params["batch_size"],
+                pad_short_clips=sec_params["pad_short_clips"],
+                train_subjects=sec_params["train_subjects"],
+                val_subjects=[],
+                test_subjects=[],
+                dtype=getattr(cfg, "dtype", torch.float32),
+                device=getattr(cfg, "device", "cpu"),
+                torch_device=device,
+                num_workers=getattr(cfg, "num_workers", 0),
+                cluster=getattr(cfg, "cluster", False),
+            )
+            sec_train, _, _ = build_ntu_datasets(sec_cfg_ns)
+            # Build a minimal loader for secondary; no val/test needed
+            pin = device.type == "cuda"
+            num_workers = getattr(cfg, "num_workers", 0)
+            if not getattr(cfg, "cluster", False):
+                num_workers = min(num_workers, 2)
+            self.secondary_loader = DataLoader(
+                sec_train,
+                batch_size=sec_params["batch_size"],
+                shuffle=True,
+                num_workers=num_workers,
+                pin_memory=pin,
+            )
+
         objective_cfg = getattr(self.trainer_cfg, "objective", None) if self.trainer_cfg else None
         metric_name = getattr(objective_cfg, "metric", None) if objective_cfg else None
         self.objective_metric = metric_name or "val_f1"
@@ -119,7 +181,7 @@ class Trainer:
     def _cosine(self, a, b):
         return (1 - F.cosine_similarity(a, b, dim=1)).mean()
 
-    def _forward_losses(self, batch):
+    def _forward_losses(self, batch, secondary_batch=None):
         pose, acc, labels = batch
         pose, acc, labels = pose.to(self.device), acc.to(self.device), labels.to(self.device)
         sim_acc = self.models["pose2imu"](pose)
@@ -141,6 +203,17 @@ class Trainer:
                 act_loss = act_loss + self.ce(logits_real, labels)
             if self.use_activity_loss_sim:
                 act_loss = act_loss + self.ce(logits_sim, labels)
+
+        # Secondary pose-only batch (e.g., NTU)
+        if secondary_batch is not None:
+            sec_pose, sec_labels = secondary_batch
+            sec_pose = sec_pose.to(self.device)
+            sec_labels = sec_labels.to(self.device)
+            sec_sim_acc = self.models["pose2imu"](sec_pose)
+            sec_sim_feat = self.models[self.sim_fe_key](sec_sim_acc)
+            sec_logits = self.models[self.secondary_classifier_key](sec_sim_feat)
+            sec_act_loss = self.ce(sec_logits, sec_labels)
+            act_loss = act_loss + self.secondary_loss_weight * sec_act_loss
 
         total = torch.zeros((), device=self.device, dtype=pose.dtype)
         if self.use_mse_loss:
@@ -189,11 +262,21 @@ class Trainer:
         for m in self.models.values():
             m.train() if is_train else m.eval()
 
+        secondary_iter = None
+        if self.use_secondary_pose and split == "train":
+            secondary_iter = iter(self.secondary_loader) if self.secondary_loader is not None else None
+
         total, mse_acc, sim_acc, act_acc = 0.0, 0.0, 0.0, 0.0
         preds, trues = [], []
         with torch.set_grad_enabled(is_train):
             for batch in self.dl[split]:
-                total_loss, mse_l, sim_l, act_l, logits, labels = self._forward_losses(batch)
+                sec_batch = None
+                if secondary_iter is not None:
+                    try:
+                        sec_batch = next(secondary_iter)
+                    except StopIteration:
+                        secondary_iter = None
+                total_loss, mse_l, sim_l, act_l, logits, labels = self._forward_losses(batch, sec_batch)
                 if is_train:
                     self.optimizer.zero_grad()
                     total_loss.backward()
