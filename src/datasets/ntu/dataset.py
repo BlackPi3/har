@@ -42,6 +42,7 @@ class NTUDataset(BaseHARDataset):
         window_length: int,
         stride_seconds: float,
         pad_short_clips: bool = True,
+        selected_joints: List[int] | None = None,
         dtype: torch.dtype = torch.float32,
     ) -> None:
         super().__init__()
@@ -49,6 +50,7 @@ class NTUDataset(BaseHARDataset):
         stride = int(round(stride_seconds * sampling_rate_hz))
         self.stride = max(1, stride)
         self.dtype = dtype
+        self.selected_joints = selected_joints or [8, 9, 10]  # default to right shoulder/elbow/wrist
 
         self.ACTIONS = self._discover_actions(data_dir, sampling_rate_hz)
         self.action_to_idx = {act: idx for idx, act in enumerate(sorted(self.ACTIONS))}
@@ -96,6 +98,10 @@ class NTUDataset(BaseHARDataset):
         elif pose.shape[-1] == 3:
             pose = np.transpose(pose, (2, 1, 0))
         pose = np.array(pose, dtype=np.float32, copy=True)
+
+        # Select subset of joints if requested
+        if self.selected_joints:
+            pose = pose[:, self.selected_joints, :]
 
         length = pose.shape[2]
         if length < self.window_length and pad_short:

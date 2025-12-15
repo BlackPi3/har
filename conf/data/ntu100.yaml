@@ -13,3 +13,4 @@ sampling_rate_hz: 100
 sensor_window_length: 250
 stride_seconds: 0.2
 batch_size: 64
+selected_joints: [4, 5, 6]  # left shoulder, elbow, wrist (0-based)

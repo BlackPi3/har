@@ -17,6 +17,10 @@ def build_ntu_datasets(cfg) -> Tuple[Dataset, Dataset, Dataset]:
     window = int(get_data_cfg_value(cfg, "sensor_window_length", 100))
     stride = float(get_data_cfg_value(cfg, "stride_seconds", 0.5))
     pad_short = bool(get_data_cfg_value(cfg, "pad_short_clips", True))
+    selected_joints = get_data_cfg_value(cfg, "selected_joints", [8, 9, 10])
+    if selected_joints is not None:
+        # Ensure ints and zero-based indexing
+        selected_joints = [int(j) for j in selected_joints]
     dtype = getattr(cfg, "dtype", None) or torch.float32
 
     def _normalize_subjects(raw):
@@ -46,6 +50,7 @@ def build_ntu_datasets(cfg) -> Tuple[Dataset, Dataset, Dataset]:
             window_length=window,
             stride_seconds=stride,
             pad_short_clips=pad_short,
+            selected_joints=selected_joints,
             dtype=dtype,
         )
 

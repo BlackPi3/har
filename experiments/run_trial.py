@@ -21,6 +21,7 @@ from typing import Any, Dict, List
 
 import yaml
 import torch
+from src.datasets.ntu.factory import build_ntu_datasets
 
 from src.config import merge_dicts, get_data_cfg_value, set_seed
 from src.data import get_dataloaders
@@ -420,6 +421,9 @@ def _build_models(cfg) -> Dict[str, torch.nn.Module]:
     trainer_cfg = getattr(cfg, "trainer", None)
     separate_cls = bool(getattr(trainer_cfg, "separate_classifiers", False)) if trainer_cfg else False
     dual_fe = bool(getattr(trainer_cfg, "separate_feature_extractors", False)) if trainer_cfg else False
+    secondary_cfg = getattr(trainer_cfg, "secondary", None) if trainer_cfg else None
+    secondary_enabled = bool(getattr(secondary_cfg, "enabled", False)) if secondary_cfg else False
+    secondary_classes = int(getattr(secondary_cfg, "n_classes", 60)) if secondary_cfg else 60
 
     models = {
         "pose2imu": Regressor(in_ch=in_ch, num_joints=num_joints, window_length=window_len, **reg_kwargs).to(cfg.device),
@@ -430,6 +434,8 @@ def _build_models(cfg) -> Dict[str, torch.nn.Module]:
         models["ac_sim"] = ActivityClassifier(f_in=f_in, n_classes=n_classes).to(cfg.device)
     if dual_fe:
         models["fe_sim"] = FeatureExtractor(**fe_sim_args).to(cfg.device)
+    if secondary_enabled:
+        models["ac_secondary"] = ActivityClassifier(f_in=f_in, n_classes=secondary_classes).to(cfg.device)
     return models
 
 
@@ -761,6 +767,33 @@ def main():
         if not dataset_name:
             dataset_name = getattr(cfg, "dataset_name", "mmfit")
         dls = get_dataloaders(dataset_name, cfg)
+        # Optional secondary loader (built here to keep Trainer pure)
+        sec_cfg = getattr(getattr(cfg, "trainer", None), "secondary", None)
+        if sec_cfg and getattr(sec_cfg, "enabled", False):
+            sec_name = getattr(sec_cfg, "data", None)
+            if not sec_name:
+                raise ValueError("trainer.secondary.enabled is true but trainer.secondary.data is not set.")
+            sec_data_cfg = _load_data_config(sec_name.replace(".yaml", ""))
+            sec_ns = _dict_to_ns(sec_data_cfg)
+            # Attach runtime defaults expected by NTU factory
+            sec_ns.dtype = getattr(cfg, "dtype", torch.float32)
+            sec_ns.device = getattr(cfg, "device", "cpu")
+            sec_ns.torch_device = getattr(cfg, "torch_device", torch.device(cfg.device if cfg.device else "cpu"))
+            sec_ns.num_workers = getattr(cfg, "num_workers", 0)
+            sec_ns.cluster = getattr(cfg, "cluster", False)
+            sec_train, _, _ = build_ntu_datasets(sec_ns)
+            pin_memory = sec_ns.torch_device.type == "cuda"
+            num_workers = sec_ns.num_workers
+            if not sec_ns.cluster:
+                num_workers = min(num_workers, 2)
+            sec_loader = torch.utils.data.DataLoader(
+                sec_train,
+                batch_size=get_data_cfg_value(sec_ns, "batch_size"),
+                shuffle=True,
+                num_workers=num_workers,
+                pin_memory=pin_memory,
+            )
+            dls["secondary_train"] = sec_loader
         models = _build_models(cfg)
         optimizer, scheduler = _build_optim(cfg, models)
         epochs = getattr(cfg.trainer, "epochs", 1)

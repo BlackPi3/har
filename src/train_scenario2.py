@@ -55,59 +55,14 @@ class Trainer:
         self.use_secondary_pose = bool(getattr(sec_cfg, "enabled", False))
         self.secondary_loss_weight = float(getattr(sec_cfg, "loss_weight", 1.0)) if sec_cfg else 1.0
         self.secondary_classifier_key = getattr(sec_cfg, "classifier_key", "ac_secondary") if sec_cfg else None
-        self.secondary_loader = None
+        self.secondary_loader = self.dl.get("secondary_train") if self.use_secondary_pose else None
         if self.use_secondary_pose:
             if not self.secondary_classifier_key or self.secondary_classifier_key not in self.models:
                 raise ValueError(
                     f"secondary classifier '{self.secondary_classifier_key}' missing in models while secondary is enabled."
                 )
-            sec_data = getattr(sec_cfg, "data", None) if sec_cfg else None
-            data_cfg_name = sec_data or "ntu50.yaml"
-            from src.config import load_config
-            from pathlib import Path
-            repo_root = Path(__file__).resolve().parents[2]
-            sec_cfg_path = (repo_root / "conf" / "data" / data_cfg_name).resolve()
-            base_sec_cfg = load_config(exp_path=str(sec_cfg_path))
-
-            sec_params = {
-                "data_dir": getattr(base_sec_cfg, "data_dir", "datasets/ntu"),
-                "sampling_rate_hz": int(getattr(base_sec_cfg, "sampling_rate_hz", 50)),
-                "sensor_window_length": int(getattr(base_sec_cfg, "sensor_window_length", 100)),
-                "stride_seconds": float(getattr(base_sec_cfg, "stride_seconds", 0.1)),
-                "batch_size": int(getattr(base_sec_cfg, "batch_size", getattr(cfg, "batch_size", 128) or 128)),
-                "pad_short_clips": bool(getattr(base_sec_cfg, "pad_short_clips", True)),
-                "train_subjects": getattr(base_sec_cfg, "train_subjects", None),
-            }
-            from src.datasets.ntu.factory import build_ntu_datasets
-            sec_cfg_ns = SimpleNamespace(
-                data_dir=sec_params["data_dir"],
-                sampling_rate_hz=sec_params["sampling_rate_hz"],
-                sensor_window_length=sec_params["sensor_window_length"],
-                stride_seconds=sec_params["stride_seconds"],
-                batch_size=sec_params["batch_size"],
-                pad_short_clips=sec_params["pad_short_clips"],
-                train_subjects=sec_params["train_subjects"],
-                val_subjects=[],
-                test_subjects=[],
-                dtype=getattr(cfg, "dtype", torch.float32),
-                device=getattr(cfg, "device", "cpu"),
-                torch_device=device,
-                num_workers=getattr(cfg, "num_workers", 0),
-                cluster=getattr(cfg, "cluster", False),
-            )
-            sec_train, _, _ = build_ntu_datasets(sec_cfg_ns)
-            # Build a minimal loader for secondary; no val/test needed
-            pin = device.type == "cuda"
-            num_workers = getattr(cfg, "num_workers", 0)
-            if not getattr(cfg, "cluster", False):
-                num_workers = min(num_workers, 2)
-            self.secondary_loader = DataLoader(
-                sec_train,
-                batch_size=sec_params["batch_size"],
-                shuffle=True,
-                num_workers=num_workers,
-                pin_memory=pin,
-            )
+            if self.secondary_loader is None:
+                raise ValueError("secondary is enabled but no secondary_train loader was provided.")
 
         objective_cfg = getattr(self.trainer_cfg, "objective", None) if self.trainer_cfg else None
         metric_name = getattr(objective_cfg, "metric", None) if objective_cfg else None

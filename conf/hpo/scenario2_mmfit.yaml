@@ -9,8 +9,10 @@ trial: scenario2_mmfit
 # Trainer selection for this HPO space
 trainer:
   name: scenario2
-  epochs: 40
-  patience: 15
+  epochs: 30
+  patience: 10
+  separate_classifiers: true
+  separate_feature_extractors: true
 
 # Optional repeats for top-config evaluation
 repeat:
