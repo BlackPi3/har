@@ -373,12 +373,8 @@ def _write_topk_space(trials: list, path: Path, metric: str, direction: str):
         top_vals = [v for v, c in counts.items() if c == maxc]
         suggested[k] = _format_choice(top_vals)
 
-    suggested_space = {
-        "metric": metric,
-        "direction": direction,
-        "top_k_used": len(trials),
-        "hydra": {"sweeper": {"params": suggested}},
-    }
+    # Keep this minimal: only the refined sweeper params, no extra metadata.
+    suggested_space = {"hydra": {"sweeper": {"params": suggested}}}
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("w") as f:
@@ -397,6 +393,7 @@ def _maintain_topk(
     metric: str,
     direction: str,
     dry_run: bool,
+    last_trial=None,
 ):
     if top_k <= 0:
         return
@@ -410,6 +407,37 @@ def _maintain_topk(
     top_trials = list(unique.values())[:top_k] if unique else []
     if not top_trials:
         return
+    topk_path = out_root / "top_k.json"
+
+    def _is_better(val, ref, mode):
+        if ref is None:
+            return True
+        return val > ref if mode == "maximize" else val < ref
+
+    # Decide whether to update based on last_trial vs current worst in existing top_k
+    should_update = False
+    if topk_path.exists():
+        try:
+            with topk_path.open("r") as f:
+                current = json.load(f).get("trials", [])
+        except Exception:
+            current = []
+        current_vals = [t.get("value") for t in current if t.get("value") is not None]
+        worst_current = None
+        if current_vals:
+            worst_current = min(current_vals) if direction == "maximize" else max(current_vals)
+        if len(current) < top_k:
+            should_update = True
+        elif last_trial and getattr(last_trial, "value", None) is not None:
+            should_update = _is_better(last_trial.value, worst_current, direction)
+        else:
+            should_update = True
+    else:
+        should_update = True
+
+    if not should_update:
+        return
+
     _write_topk_summary(top_trials, out_root / "top_k.json", metric, direction)
     _write_topk_space(top_trials, out_root / "top_k_report.yaml", metric, direction)
 
@@ -740,7 +768,7 @@ def main():
         return score
 
     def _trial_callback(study, trial):
-        _maintain_topk(study, out_root, top_k, metric, direction, args.dry)
+        _maintain_topk(study, out_root, top_k, metric, direction, args.dry, last_trial=trial)
 
     study.optimize(objective, n_trials=args.n_trials, gc_after_trial=True, callbacks=[_trial_callback])
 
