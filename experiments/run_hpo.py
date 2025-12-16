@@ -33,6 +33,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 from typing import Dict, Any
 
@@ -322,6 +323,73 @@ def _write_topk_summary(trials: list, path: Path, metric: str, direction: str):
         print(f"[hpo] Failed to write top_k summary: {e}")
 
 
+def _format_choice(values):
+    tokens = []
+    for v in values:
+        if isinstance(v, str):
+            tokens.append(f"'{v}'")
+        else:
+            tokens.append(str(v))
+    return f"choice({', '.join(tokens)})"
+
+
+def _format_numeric(values):
+    vals = [float(v) for v in values]
+    lo, hi = min(vals), max(vals)
+    if lo == hi:
+        return str(lo)
+    if all(float(v).is_integer() for v in vals):
+        return f"int({int(lo)}, {int(hi)})"
+    if lo > 0 and hi > 0:
+        return f"loguniform({lo}, {hi})"
+    return f"uniform({lo}, {hi})"
+
+
+def _write_topk_space(trials: list, path: Path, metric: str, direction: str):
+    """
+    Emit a suggested narrowed search space based on top-k trials.
+    Numeric -> loguniform/uniform (ints -> int range); categorical/bool -> mode choice(s).
+    """
+    params_seen: Dict[str, list] = {}
+    for t in trials:
+        for k, v in t.params.items():
+            params_seen.setdefault(k, []).append(v)
+
+    suggested: Dict[str, str] = {}
+    for k, vals in params_seen.items():
+        numeric = True
+        parsed = []
+        for v in vals:
+            try:
+                parsed.append(float(v))
+            except Exception:
+                numeric = False
+                break
+        if numeric:
+            suggested[k] = _format_numeric(parsed)
+            continue
+        counts = Counter(vals)
+        maxc = max(counts.values())
+        top_vals = [v for v, c in counts.items() if c == maxc]
+        suggested[k] = _format_choice(top_vals)
+
+    suggested_space = {
+        "metric": metric,
+        "direction": direction,
+        "top_k_used": len(trials),
+        "hydra": {"sweeper": {"params": suggested}},
+    }
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w") as f:
+            if yaml:
+                yaml.safe_dump(suggested_space, f, sort_keys=False)
+            else:
+                json.dump(suggested_space, f, indent=2)
+    except Exception as e:
+        print(f"[hpo] Failed to write top_k_space: {e}")
+
+
 def _maintain_topk(
     study,
     out_root: Path,
@@ -343,6 +411,7 @@ def _maintain_topk(
     if not top_trials:
         return
     _write_topk_summary(top_trials, out_root / "top_k.json", metric, direction)
+    _write_topk_space(top_trials, out_root / "top_k_report.yaml", metric, direction)
 
 
 def _export_topk(
@@ -508,6 +577,13 @@ def main():
     parser.add_argument("--python", type=str, default=sys.executable)
     parser.add_argument("--module", type=str, default="experiments.run_trial")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--search-mode",
+        type=str,
+        default="coarse",
+        choices=["coarse", "fine"],
+        help="Use the original search space (coarse) or a narrowed space from top_k_report (fine)",
+    )
     parser.add_argument("--prune", action="store_true", help="Enable MedianPruner")
     parser.add_argument("--space-config", type=str, default=None, help="Hydra sweeper YAML defining the search space (conf/hpo/*.yaml)")
     parser.add_argument("--dry", action="store_true", help="Print commands without running")
@@ -518,11 +594,30 @@ def main():
     args = parser.parse_args()
 
     # Resolve space YAML first and extract metadata to drive study/metric.
-    # If resuming an existing run (study dir already has snapshots/hpo.yaml), prefer that snapshot.
+    # If resuming an existing run (snapshots/hpo.yaml), always use that snapshot.
+    # If a snapshot exists and space_mode=fine, error out (fine search should start as a new study).
+    # Otherwise, use the provided space-config resolver.
     base_out_root = Path(args.output_root) if args.output_root else default_output_root(args.study_name)
     snapshot_space = base_out_root / "snapshots" / "hpo.yaml"
+    snapshot_trial = base_out_root / "snapshots" / "trial.yaml"
+    report_space = base_out_root / "top_k_report.yaml"
     using_snapshot = False
+    study_root_exists = base_out_root.exists()
+    if study_root_exists and (not snapshot_space.exists() or not snapshot_trial.exists()):
+        missing = []
+        if not snapshot_space.exists():
+            missing.append("hpo.yaml")
+        if not snapshot_trial.exists():
+            missing.append("trial.yaml")
+        raise FileNotFoundError(
+            f"Study '{args.study_name}' exists at {base_out_root} but snapshots missing: {', '.join(missing)}; cannot resume."
+        )
+
     if snapshot_space.exists():
+        if args.search_mode == "fine" and report_space.exists():
+            raise ValueError(
+                f"Study '{args.study_name}' already exists with snapshots; fine mode must start a new study or RUN_NAME."
+            )
         space_yaml_path = snapshot_space
         using_snapshot = True
     else:
@@ -661,6 +756,7 @@ def main():
         keep_numbers = {t.number for t in top_trials}
         _prune_trial_dirs(out_root / "trials", keep_numbers, dry_run=args.dry)
         _write_topk_summary(top_trials, out_root / "top_k.json", metric, direction)
+        _write_topk_space(top_trials, out_root / "top_k_report.yaml", metric, direction)
 
     repeat_summary = []
     if repeat_enabled and top_trials:

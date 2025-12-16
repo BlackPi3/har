@@ -14,21 +14,15 @@ CONTAINER_IMAGE=${CONTAINER_IMAGE:-/netscratch/zolfaghari/images/har.sqsh}
 # HPO configuration (study via conf/hpo)
 ########################################
 # Defaults (override via environment variables as needed)
-HPO=${HPO:-scenario2_utd}
-RUN_NAME=${RUN_NAME:-$HPO}  # folder/db name for this run (allows multiple concurrent runs of the same study)
-# Guidance: number of trials vs search space size (categorical combos)
-# - Tiny space (<1e3 combos): consider GridSampler, set N_TRIALS to full grid if affordable.
-# - Small space (~1e3–1e4 combos): TPE with 50–200 trials often suffices; increase if runs are cheap.
-# - Large space (>1e4 combos): TPE/random with a fixed budget (e.g., 100–300) and monitor convergence.
-# Adjust N_TRIALS accordingly for your budget and space size.
+HPO_SPACE=${HPO_SPACE:-scenario2_utd}
+STUDY_NAME=${STUDY_NAME:-$HPO_SPACE}  # folder/db name for this run (allows multiple concurrent runs of the same study)
 N_TRIALS=${N_TRIALS:-64}
+SEARCH_MODE=${SEARCH_MODE:-coarse}  # coarse | fine
 
-SPACE_CONFIG=${SPACE_CONFIG:-conf/hpo/$HPO.yaml}
-OUTPUT_ROOT=${OUTPUT_ROOT:-/netscratch/zolfaghari/experiments/hpo/$RUN_NAME}
-STORAGE=${STORAGE:-$OUTPUT_ROOT/$RUN_NAME.db}
-# Explicit run-time config (no aggregated overrides)
+SPACE_CONFIG=${SPACE_CONFIG:-conf/hpo/$HPO_SPACE.yaml}
+OUTPUT_ROOT=${OUTPUT_ROOT:-/netscratch/zolfaghari/experiments/hpo/$STUDY_NAME}
+STORAGE=${STORAGE:-$OUTPUT_ROOT/$STUDY_NAME.db}
 ENV_NAME=remote
-# EPOCHS=${EPOCHS:-50} # --epochs $EPOCHS
 LOG_ROOT=${LOG_ROOT:-/netscratch/zolfaghari/experiments/log/hpo}
 RUN_TOPK=${RUN_TOPK:-1}
 TOPK_BASE_SEED=${TOPK_BASE_SEED:-0}
@@ -57,14 +51,15 @@ srun \
     set -euo pipefail
     python -m experiments.run_hpo \
       --n-trials $N_TRIALS \
-      --study-name $RUN_NAME \
+      --study-name $STUDY_NAME \
       --storage '$STORAGE' \
       --output-root '$OUTPUT_ROOT' \
       --space-config '$SPACE_CONFIG' \
+      --search-mode $SEARCH_MODE \
       --env $ENV_NAME
-    if [[ \"$RUN_TOPK\" == \"1\" ]]; then
+    if [[ \"$RUN_TOPK\" == \"1\" && \"$SEARCH_MODE\" == \"fine\" ]]; then
       python -m experiments.run_topk \
-        --study-name $HPO \
+        --study-name $HPO_SPACE \
         --space-config '$SPACE_CONFIG' \
         --topk-source-root '$OUTPUT_ROOT' \
         --env $ENV_NAME \
