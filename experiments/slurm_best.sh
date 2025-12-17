@@ -21,7 +21,7 @@ LOG_ROOT=${LOG_ROOT:-/netscratch/zolfaghari/experiments/log/trial}
 set -euo pipefail
 mkdir -p "$LOG_ROOT"
 timestamp=$(date +%y%m%d_%H%M)
-LOG_STEM="$LOG_ROOT/trial_${timestamp}"
+LOG_STEM="$LOG_ROOT/trial_${timestamp}_${TRIAL_NAME}"
 LOG_OUT="${LOG_STEM}.out"
 LOG_ERR="${LOG_STEM}.err"
 echo "Stdout: $LOG_OUT"

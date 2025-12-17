@@ -32,7 +32,7 @@ set -euo pipefail
 mkdir -p "$OUTPUT_ROOT"
 mkdir -p "$LOG_ROOT"
 timestamp=$(date +%y%m%d_%H%M)
-LOG_STEM="$LOG_ROOT/hpo_${timestamp}"
+LOG_STEM="$LOG_ROOT/hpo_${timestamp}_${STUDY_NAME}"
 LOG_OUT="${LOG_STEM}.out"
 LOG_ERR="${LOG_STEM}.err"
 echo "Stdout: $LOG_OUT"
