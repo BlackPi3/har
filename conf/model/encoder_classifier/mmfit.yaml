@@ -1,0 +1,25 @@
+type: mmfit
+n_classes: 11
+feature_extractor:
+  type: mmfit_encoder
+  input_channels: 3
+  layers: 3
+  kernel_size: 11
+  kernel_stride: 2
+  grouped:
+    - 3
+    - 3
+    - 1
+  base_filters:
+    - 9
+    - 15
+    - 24
+  pool_kernel: 2
+  embedding_dim: 100
+classifier:
+  type: mlp_classifier
+  f_in: ${model.encoder_classifier.feature_extractor.embedding_dim}
+  n_classes: ${model.encoder_classifier.n_classes}
+  hidden_units:
+    - 100
+  dropout: 0.2

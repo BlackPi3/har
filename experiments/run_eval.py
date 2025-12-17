@@ -68,7 +68,7 @@ def main():
     else:
         hpo_root = Path("experiments") / "hpo" / args.study_name
     repeats_path = hpo_root / "repeats" / "repeats.json"
-    topk_path = hpo_root / "top_k.json"
+    topk_path = hpo_root / "top_k.yaml"
     snapshot_hpo = hpo_root / "snapshots" / "hpo.yaml"
     # Backward compatibility: if snapshots missing, fall back to HPO search space file
     snapshot_trial = hpo_root / "snapshots" / "trial.yaml"
@@ -77,7 +77,7 @@ def main():
     if not repeats_path.exists():
         raise FileNotFoundError(f"Repeats not found: {repeats_path}")
     if not topk_path.exists():
-        raise FileNotFoundError(f"top_k.json not found: {topk_path}")
+        raise FileNotFoundError(f"top_k.yaml not found: {topk_path}")
 
     with repeats_path.open("r") as f:
         repeats = json.load(f).get("repeats", [])

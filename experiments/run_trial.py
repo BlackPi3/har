@@ -25,7 +25,7 @@ from src.datasets.ntu.factory import build_ntu_datasets
 
 from src.config import merge_dicts, get_data_cfg_value, set_seed
 from src.data import get_dataloaders
-from src.models import Regressor, FeatureExtractor, ActivityClassifier
+from src.models import Regressor, FeatureExtractor, ActivityClassifier, MmfitEncoder1D, MlpClassifier
 from src.train_scenario2 import Trainer
 
 try:
@@ -172,13 +172,39 @@ def _load_data_config(name: str, visited: set[str] | None = None) -> Dict[str, A
     return merge_dicts(merged, data)
 
 
+def _lookup_path(root: dict, path: str):
+    cur = root
+    for part in path.split("."):
+        if isinstance(cur, dict) and part in cur:
+            cur = cur[part]
+        else:
+            raise KeyError(path)
+    return cur
+
+
+def _resolve_placeholders(obj, root):
+    import re
+
+    if isinstance(obj, dict):
+        return {k: _resolve_placeholders(v, root) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_resolve_placeholders(v, root) for v in obj]
+    if isinstance(obj, str):
+        m = re.fullmatch(r"\$\{([^}]+)\}", obj.strip())
+        if m:
+            try:
+                return _lookup_path(root, m.group(1))
+            except Exception:
+                return obj
+    return obj
+
+
 def _build_cfg(overrides: List[str]) -> SimpleNamespace:
     # Base config
     base = _load_yaml(REPO_ROOT / "conf/conf.yaml")
-    # Prepare model defaults that can be overridden by trial config
+    # Prepare defaults (will be overridden by selections below)
     reg_cfg = _load_yaml(REPO_ROOT / "conf/model/regressor/regressor.yaml")
-    fe_cfg = _load_yaml(REPO_ROOT / "conf/model/feature_extractor/feature_extractor.yaml")
-    clf_cfg = _load_yaml(REPO_ROOT / "conf/model/classifier/classifier.yaml")
+    enc_cfg = _load_yaml(REPO_ROOT / "conf/model/encoder_classifier/legacy.yaml")
     optim_cfg = _load_yaml(REPO_ROOT / "conf/optim/adam.yaml")
 
     # Determine env/data selections from overrides (must be provided)
@@ -212,8 +238,7 @@ def _build_cfg(overrides: List[str]) -> SimpleNamespace:
     # Nest model/optim/trainer under dedicated keys to avoid collisions
     cfg_dict["model"] = {
         "regressor": reg_cfg or {},
-        "feature_extractor": fe_cfg or {},
-        "classifier": clf_cfg or {},
+        "encoder_classifier": enc_cfg or {},
     }
     cfg_dict["optim"] = optim_cfg or {}
 
@@ -247,9 +272,14 @@ def _build_cfg(overrides: List[str]) -> SimpleNamespace:
         data_sel = data_meta
 
     if not data_sel:
-        raise ValueError(
-            "Dataset selection is missing. Provide data=<name> override or set data.name in the trial/HPO config."
-        )
+        # Fallback: if a data config matches the trial name, use it
+        data_candidate = REPO_ROOT / "conf/data" / f"{trial_sel}.yaml"
+        if data_candidate.exists():
+            data_sel = trial_sel
+        else:
+            raise ValueError(
+                "Dataset selection is missing. Provide data=<name> override or set data.name in the trial/HPO config."
+            )
 
     data_cfg = _load_data_config(data_sel)
     final_data = merge_dicts(data_cfg, data_overrides or {})
@@ -285,6 +315,25 @@ def _build_cfg(overrides: List[str]) -> SimpleNamespace:
     cfg_dict["trainer"] = merge_dicts(trainer_cfg or {}, trainer_overrides or {})
     cfg_dict["trainer"]["name"] = trainer_sel
 
+    # Resolve optim selection (optional, default to current contents or name field)
+    optim_node = cfg_dict.get("optim", {}) or {}
+    optim_name = None
+    optim_overrides = {}
+    if isinstance(optim_node, str):
+        optim_name = optim_node
+    elif isinstance(optim_node, dict):
+        optim_name = optim_node.get("name") or optim_node.get("selection") or optim_node.get("type")
+        optim_overrides = {k: v for k, v in optim_node.items() if k not in ("name", "selection", "type")}
+    if not optim_name:
+        optim_name = "adam"
+    optim_file = REPO_ROOT / "conf/optim" / f"{optim_name}.yaml"
+    if not optim_file.exists():
+        raise FileNotFoundError(f"Optim config not found: {optim_file}")
+    optim_cfg_sel = _load_yaml(optim_file)
+    merged_opt = merge_dicts(optim_cfg_sel or {}, optim_overrides or {})
+    merged_opt["name"] = optim_name
+    cfg_dict["optim"] = merged_opt
+
     # Stamp the selected config surface explicitly for reproducibility
     if not isinstance(cfg_dict.get("env"), dict):
         cfg_dict["env"] = env_sel
@@ -297,9 +346,53 @@ def _build_cfg(overrides: List[str]) -> SimpleNamespace:
     # Keep legacy key for downstream consumers that still expect `scenario`
     cfg_dict["scenario"] = trial_sel
 
+    # Resolve model selections (regressor, encoder_classifier)
+    model_node = cfg_dict.get("model", {}) or {}
+    # Regressor selection
+    reg_node = model_node.get("regressor", {}) or {}
+    reg_name = None
+    reg_overrides = {}
+    if isinstance(reg_node, str):
+        reg_name = reg_node
+    elif isinstance(reg_node, dict):
+        reg_name = reg_node.get("name") or reg_node.get("selection") or reg_node.get("type")
+        reg_overrides = {k: v for k, v in reg_node.items() if k not in ("name", "selection")}
+    if not reg_name:
+        reg_name = "regressor"
+    reg_file = REPO_ROOT / "conf/model/regressor" / f"{reg_name}.yaml"
+    if not reg_file.exists():
+        raise FileNotFoundError(f"Regressor config not found: {reg_file}")
+    reg_cfg_sel = _load_yaml(reg_file)
+    merged_reg = merge_dicts(reg_cfg_sel or {}, reg_overrides)
+    merged_reg["name"] = reg_name
+    model_node["regressor"] = merged_reg
+
+    # Encoder-classifier selection
+    enc_node = model_node.get("encoder_classifier", {}) or {}
+    enc_name = None
+    enc_overrides = {}
+    if isinstance(enc_node, str):
+        enc_name = enc_node
+    elif isinstance(enc_node, dict):
+        enc_name = enc_node.get("name") or enc_node.get("selection") or enc_node.get("type")
+        enc_overrides = {k: v for k, v in enc_node.items() if k not in ("name", "selection", "type")}
+    if not enc_name:
+        enc_name = "legacy"
+    enc_file = REPO_ROOT / "conf/model/encoder_classifier" / f"{enc_name}.yaml"
+    if not enc_file.exists():
+        raise FileNotFoundError(f"Encoder/classifier config not found: {enc_file}")
+    enc_cfg_sel = _load_yaml(enc_file)
+    merged_enc = merge_dicts(enc_cfg_sel or {}, enc_overrides)
+    merged_enc["name"] = enc_name
+    model_node["encoder_classifier"] = merged_enc
+    cfg_dict["model"] = model_node
+
     # Drop Hydra-specific metadata so resolved configs only contain final values
     cfg_dict.pop("defaults", None)
     cfg_dict.pop("hydra", None)
+
+    # Resolve ${...} placeholders against the merged dict
+    cfg_dict = _resolve_placeholders(cfg_dict, cfg_dict)
 
     # Device/cluster auto-detect if not explicitly set
     is_cluster = bool(os.environ.get("SLURM_JOB_ID") or os.environ.get("SLURM_CPUS_ON_NODE"))
@@ -382,8 +475,19 @@ def _build_models(cfg) -> Dict[str, torch.nn.Module]:
         window_len = getattr(cfg, "sensor_window_length", None)
     if isinstance(window_len, dict):  # defensive: if not fully merged
         window_len = window_len.get("sensor_window_length", 300)
+    if window_len is None:
+        raise ValueError("sensor_window_length is required (set under data.sensor_window_length).")
 
-    fe_cfg = cfg.model.feature_extractor
+    # Combined encoder/classifier config (required)
+    enc_cfg = getattr(cfg.model, "encoder_classifier", None)
+    if not enc_cfg:
+        raise ValueError("model.encoder_classifier must be provided (contains feature_extractor + classifier).")
+    fe_cfg = getattr(enc_cfg, "feature_extractor", None)
+    clf_cfg = getattr(enc_cfg, "classifier", None)
+    enc_n_classes = getattr(enc_cfg, "n_classes", None)
+
+    fe_type = getattr(fe_cfg, "type", "temporal_feature_extractor")
+
     def _fe_args_from_cfg(node):
         return dict(
             n_filters=getattr(node, "n_filters", 9),
@@ -394,13 +498,32 @@ def _build_models(cfg) -> Dict[str, torch.nn.Module]:
             drop_prob=getattr(node, "drop_prob", 0.2),
             pool_filter_size=getattr(node, "pool_size", 2),
         )
-    fe_args = _fe_args_from_cfg(fe_cfg)
-    fe_sim_cfg = getattr(cfg.model, "feature_extractor_sim", None)
-    fe_sim_args = _fe_args_from_cfg(fe_sim_cfg) if fe_sim_cfg else fe_args
 
-    clf_cfg = cfg.model.classifier
-    f_in = getattr(clf_cfg, "f_in", 100)
-    n_classes = getattr(clf_cfg, "n_classes", 11)
+    def _build_fe(node, dtype="temporal_feature_extractor"):
+        if dtype == "mmfit_encoder":
+            grouped = getattr(node, "grouped", None) or [1, 1, 1]
+            base_filters = getattr(node, "base_filters", None) or [9, 15, 24]
+            return MmfitEncoder1D(
+                input_channels=getattr(node, "input_channels", 3),
+                layers=getattr(node, "layers", 3),
+                kernel_size=getattr(node, "kernel_size", 11),
+                kernel_stride=getattr(node, "kernel_stride", 2),
+                grouped=list(grouped),
+                base_filters=list(base_filters),
+                pool_kernel=getattr(node, "pool_kernel", 2),
+                embedding_dim=getattr(node, "embedding_dim", getattr(node, "n_dense", 100)),
+            )
+        # default legacy extractor
+        return FeatureExtractor(**_fe_args_from_cfg(node))
+
+    fe_model = _build_fe(fe_cfg, fe_type)
+    fe_sim_cfg = getattr(cfg.model, "feature_extractor_sim", None)
+    fe_sim_type = getattr(fe_sim_cfg, "type", fe_type) if fe_sim_cfg else fe_type
+    fe_sim_model = _build_fe(fe_sim_cfg, fe_sim_type) if fe_sim_cfg else None
+
+    clf_cfg = clf_cfg if clf_cfg else SimpleNamespace()
+    n_classes = getattr(clf_cfg, "n_classes", enc_n_classes if enc_n_classes is not None else 11)
+    clf_type = getattr(clf_cfg, "type", None)
 
     reg_cfg = cfg.model.regressor
     reg_kwargs = dict(
@@ -425,17 +548,42 @@ def _build_models(cfg) -> Dict[str, torch.nn.Module]:
     secondary_enabled = bool(getattr(secondary_cfg, "enabled", False)) if secondary_cfg else False
     secondary_classes = int(getattr(secondary_cfg, "n_classes", 60)) if secondary_cfg else 60
 
+    # Default classifier type based on encoder if not provided
+    if clf_type is None:
+        clf_type = "mlp_classifier" if fe_type == "mmfit_encoder" else "activity_classifier"
+
+    # Infer embedding dim from encoder to align classifier input
+    inferred_f_in = getattr(fe_model, "embedding_dim", None)
+    if inferred_f_in is None:
+        inferred_f_in = getattr(fe_cfg, "n_dense", None)
+    if inferred_f_in is None:
+        inferred_f_in = getattr(clf_cfg, "f_in", 100)
+    if inferred_f_in is None:
+        raise ValueError("Could not infer classifier input dim; set embedding_dim (encoder) or f_in (classifier).")
+
+    def _build_classifier(cfg_node, dtype="activity_classifier", f_override=None):
+        fin_local = f_override if f_override is not None else getattr(cfg_node, "f_in", 100)
+        if dtype == "mlp_classifier":
+            hidden_units = getattr(cfg_node, "hidden_units", [100])
+            return MlpClassifier(
+                f_in=fin_local,
+                n_classes=n_classes,
+                hidden_units=hidden_units,
+                dropout=getattr(cfg_node, "dropout", 0.0),
+            )
+        return ActivityClassifier(f_in=fin_local, n_classes=n_classes)
+
     models = {
         "pose2imu": Regressor(in_ch=in_ch, num_joints=num_joints, window_length=window_len, **reg_kwargs).to(cfg.device),
-        "fe": FeatureExtractor(**fe_args).to(cfg.device),
-        "ac": ActivityClassifier(f_in=f_in, n_classes=n_classes).to(cfg.device),
+        "fe": fe_model.to(cfg.device),
+        "ac": _build_classifier(clf_cfg, clf_type, inferred_f_in).to(cfg.device),
     }
     if separate_cls:
-        models["ac_sim"] = ActivityClassifier(f_in=f_in, n_classes=n_classes).to(cfg.device)
+        models["ac_sim"] = _build_classifier(clf_cfg, clf_type, inferred_f_in).to(cfg.device)
     if dual_fe:
-        models["fe_sim"] = FeatureExtractor(**fe_sim_args).to(cfg.device)
+        models["fe_sim"] = (fe_sim_model or fe_model).to(cfg.device)
     if secondary_enabled:
-        models["ac_secondary"] = ActivityClassifier(f_in=f_in, n_classes=secondary_classes).to(cfg.device)
+        models["ac_secondary"] = ActivityClassifier(f_in=inferred_f_in, n_classes=secondary_classes).to(cfg.device)
     return models
 
 

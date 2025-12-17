@@ -209,7 +209,7 @@ def main():
     parser.add_argument("--study-name", type=str, required=True)
     parser.add_argument("--space-config", type=str, required=True, help="conf/hpo/<study>.yaml (for repeat.k and trial defaults)")
     parser.add_argument("--topk-source-root", type=str, default=None,
-                        help="Root where top_k.json lives (default: experiments/top_k/<study-name>, falls back to experiments/hpo/<study-name>)")
+                        help="Root where top_k.yaml lives (default: experiments/top_k/<study-name>, falls back to experiments/hpo/<study-name>)")
     parser.add_argument("--output-root", type=str, default=None,
                         help="Destination root for repeat runs (default: experiments/top_k/<study-name>)")
     parser.add_argument("--env", type=str, required=True, help="Hydra env override (e.g., local, remote)")
@@ -236,17 +236,17 @@ def main():
             Path("experiments") / "hpo" / study_name,
         ]
     topk_root = None
-    topk_json = None
+    topk_yaml = None
     for cand in topk_root_candidates:
-        cand_json = cand / "top_k.json"
-        if cand_json.exists():
+        cand_y = cand / "top_k.yaml"
+        if cand_y.exists():
             topk_root = cand
-            topk_json = cand_json
+            topk_yaml = cand_y
             break
-    if topk_json is None or topk_root is None:
-        raise FileNotFoundError("top_k.json not found. Run HPO first.")
-    with topk_json.open("r") as f:
-        topk_payload = json.load(f)
+    if topk_yaml is None or topk_root is None:
+        raise FileNotFoundError("top_k.yaml not found. Run HPO first.")
+    with topk_yaml.open("r") as f:
+        topk_payload = yaml.safe_load(f) if yaml else json.load(f)
     trials: List[Dict[str, Any]] = topk_payload.get("trials", [])
     metric = topk_payload.get("metric", "val_f1")
 

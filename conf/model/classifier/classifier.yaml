@@ -1,5 +1,0 @@
-## Activity classifier configuration
-type: activity_classifier
-# Interpolate from feature_extractor to avoid mismatch (will resolve once we adopt structured configs)
-f_in: 100 # this should match feature extractor's n_dense
-n_classes: 11

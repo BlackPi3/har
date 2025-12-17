@@ -36,12 +36,9 @@ trainer:
     data: ntu50.yaml
 
 model:
-  feature_extractor:
-    name: feature_extractor
   regressor:
     name: regressor
     use_batch_norm: true
-  classifier:
-    name: classifier
-    f_in: 100
+  encoder_classifier:
+    name: mmfit
     n_classes: 21

@@ -1,0 +1,15 @@
+type: legacy
+n_classes: 11
+feature_extractor:
+  type: temporal_feature_extractor
+  input_channels: 3
+  window_size: ${data.sensor_window_length}
+  n_filters: 9
+  filter_size: 5
+  n_dense: 100
+  drop_prob: 0.3
+  pool_size: 2
+classifier:
+  type: activity_classifier
+  f_in: ${model.encoder_classifier.feature_extractor.n_dense}
+  n_classes: ${model.encoder_classifier.n_classes}

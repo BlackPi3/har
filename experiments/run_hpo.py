@@ -333,10 +333,19 @@ def _format_choice(values):
 
 
 def _format_numeric(values):
+    # Handle booleans explicitly (bool is subclass of int)
+    if any(isinstance(v, bool) for v in values):
+        counts = Counter(values)
+        maxc = max(counts.values())
+        top = [v for v, c in counts.items() if c == maxc]
+        if len(top) == 1:
+            return "choice(true)" if top[0] else "choice(false)"
+        return f"choice({', '.join('true' if v else 'false' for v in top)})"
+
     vals = [float(v) for v in values]
     lo, hi = min(vals), max(vals)
     if lo == hi:
-        return str(lo)
+        return lo if not lo.is_integer() else int(lo)
     if all(float(v).is_integer() for v in vals):
         return f"int({int(lo)}, {int(hi)})"
     if lo > 0 and hi > 0:
@@ -454,10 +463,10 @@ def _export_topk(
         print(f"[hpo] DRY-RUN would create top-k bundle at {dest_root}")
         return
     dest_root.mkdir(parents=True, exist_ok=True)
-    src_topk_json = out_root / "top_k.json"
-    if src_topk_json.exists():
+    src_topk = out_root / "top_k.yaml"
+    if src_topk.exists():
         try:
-            shutil.copy(src_topk_json, dest_root / "top_k.json")
+            shutil.copy(src_topk, dest_root / "top_k.yaml")
         except Exception as e:
             print(f"[hpo] Failed to copy top_k.json to {dest_root}: {e}")
     # Copy top-k trial dirs so resolved_config/results are preserved

@@ -4,13 +4,15 @@ Reusable models for human activity recognition.
 
 from .tcn import TCNBlock
 from .regressor import Regressor
-from .classifier import FeatureExtractor, ActivityClassifier
+from .classifier import FeatureExtractor, ActivityClassifier, MmfitEncoder1D, MlpClassifier
 from .discriminator import Discriminator
 
 __all__ = [
     'TCNBlock',
     'Regressor',
     'FeatureExtractor',
-    'ActivityClassifier', 
+    'ActivityClassifier',
+    'MmfitEncoder1D',
+    'MlpClassifier',
     'Discriminator'
 ]

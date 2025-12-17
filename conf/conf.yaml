@@ -2,8 +2,7 @@
 defaults:
   - env: local
   - model/regressor: regressor
-  - model/feature_extractor: feature_extractor
-  - model/classifier: classifier
+  - model/encoder_classifier: legacy
   - optim: adam
   - _self_
  

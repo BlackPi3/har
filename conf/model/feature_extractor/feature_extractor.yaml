@@ -1,9 +1,0 @@
-## Temporal feature extractor LEGACY configuration
-type: temporal_feature_extractor
-input_channels: 3
-window_size: ${data.sensor_window_length}
-n_filters: 9
-filter_size: 5
-n_dense: 100 # this should match classifier's f_in
-# drop_prob: 0.3
-# pool_size: 2
