@@ -9,6 +9,10 @@ epochs: 100
 patience: 25  # early-stopping tolerance (epochs without val improvement)
 gradient_clip: 1.0  # set to a positive value (e.g., 1.0) to enable grad clipping
 
+alpha: 1.0  # activity loss weight
+beta: 1.0   # feature similarity weight
+gamma: 1.0  # regression (MSE) weight
+
 separate_classifiers: false  # when true, use separate classifier for sim stream
 separate_feature_extractors: false  # when true, use a separate feature extractor for sim stream
 

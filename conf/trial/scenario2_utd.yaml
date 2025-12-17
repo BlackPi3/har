@@ -5,10 +5,6 @@ seed: 0
 
 trial_name: scenario2_utd
 
-alpha: 0.2
-beta: 2
-gamma: 1
-
 data:
   name: utd
   sensor_window_length: 100 # Best
@@ -27,6 +23,9 @@ optim:
 
 trainer:
   name: scenario2
+  alpha: 0.2
+  beta: 2
+  gamma: 1
   epochs: 100
   patience: 25
   gradient_clip: 1.0 # Best

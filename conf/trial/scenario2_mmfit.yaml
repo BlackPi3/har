@@ -6,11 +6,6 @@ seed: 0
 ## Scenario 2 trial configuration
 trial_name: scenario2_mmfit
 
-# Loss weighting coefficients
-alpha: 0.2 # weight for activity classification
-beta: 5 # weight for feature similarity
-gamma: 1 # weight for regression (MSE)
-
 # Data configuration (merged on top of conf/data/mmfit.yaml)
 data:
   name: mmfit
@@ -31,6 +26,9 @@ optim:
 
 trainer:
   name: scenario2
+  alpha: 0.2
+  beta: 5
+  gamma: 1
   epochs: 200
   patience: 25
   gradient_clip: 1.0

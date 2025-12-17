@@ -315,6 +315,11 @@ def _build_cfg(overrides: List[str]) -> SimpleNamespace:
     cfg_dict["trainer"] = merge_dicts(trainer_cfg or {}, trainer_overrides or {})
     cfg_dict["trainer"]["name"] = trainer_sel
 
+    # Hoist loss weights from trainer into top-level for Trainer compatibility
+    for k in ("alpha", "beta", "gamma"):
+        if k in cfg_dict["trainer"]:
+            cfg_dict[k] = cfg_dict["trainer"][k]
+
     # Resolve optim selection (optional, default to current contents or name field)
     optim_node = cfg_dict.get("optim", {}) or {}
     optim_name = None
