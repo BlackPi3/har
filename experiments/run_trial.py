@@ -702,7 +702,7 @@ def _save_plots(run_dir: Path, history: Dict[str, List[Any]], best_epoch: int | 
         history.get("train_sim_loss"),
         history.get("val_sim_loss"),
         ("Train Sim Loss", "Val Sim Loss"),
-        "Simulation Loss",
+        "Similarity Loss",
         "sim_loss.png",
         use_dual_axis=True,
     )
