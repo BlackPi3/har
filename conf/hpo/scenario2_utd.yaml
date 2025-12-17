@@ -10,14 +10,15 @@ trial: scenario2_utd
 trainer:
   name: scenario2
   epochs: 40
+  patience: 40
+
+# Number of top configs to keep for re-evaluation/reporting
+top_k: 5
 
 # Optional repeats for top-config evaluation
 repeat:
   enabled: true
-  count: 1
-
-# Number of top configs to keep for re-evaluation/reporting
-top_k: 1
+  count: 5
 
 hydra:
   sweeper:
@@ -27,27 +28,32 @@ hydra:
     storage: "sqlite:///experiments/hpo/${study_name}/${study_name}.db"
     params:
       # Optimizer
-      optim.lr: choice(1e-3, 5e-4, 2e-4)
-      optim.weight_decay: choice(1e-3, 5e-4, 2e-5)
+      optim.lr: tag(log,interval(1e-4,1e-3))
+      optim.weight_decay: tag(log,interval(1e-6,1e-3))
+
       optim.warmup_epochs: choice(5, 10, 15)
-      optim.warmup_start_factor: choice(0.1, 0.05, 0.02)
+      optim.warmup_start_factor: choice(0.05, 0.02)
+      
       optim.scheduler.patience: choice(5, 10, 15)
-      optim.scheduler.factor: choice(0.1, 0.05, 0.02)
+      optim.scheduler.factor: choice(0.1, 0.05)
 
       # Trainer
-      # trainer.patience: choice(15, 25)
-
-      # Scenario2-specific loss coefficients
-      trial.alpha: choice(0.2, 0.5)
-      trial.beta: choice(2, 5)
-      # trial.gamma: choice(0.5, 1)
+      trainer.alpha: choice(0.2, 0.5, 1)
+      trainer.beta: choice(1, 2, 5)
+      trainer.gamma: choice(1, 2, 5)
 
       # Data
-      data.batch_size: choice(32, 64, 128)
-      # data.sensor_window_length: choice(100)
-      # data.stride_seconds: choice(0.1)
+      data.batch_size: choice(32, 64)
+      data.stride_seconds: choice(0.1, 0.15)
 
-      # Model
+      # Model/encoder_classifier
+      model.encoder_classifier.feature_extractor.kernel_size: choice(7, 9, 11)
+      model.encoder_classifier.feature_extractor.kernel_stride: choice(2, 3)
+      model.encoder_classifier.feature_extractor.base_filters: choice([9,15,24], [12,18,24], [16,24,32])
+      model.encoder_classifier.feature_extractor.embedding_dim: choice(64, 128, 256)
+
+      model.encoder_classifier.classifier.hidden_units: choice([100], [128, 64])
+      model.encoder_classifier.classifier.dropout: choice(0.0, 0.2, 0.3)
       # model.feature_extractor.n_filters: range(8, 32, 4)
       # model.feature_extractor.filter_size: range(3, 9, 2)
       # model.regressor.joint_hidden_channels: choice([32, 32, 32, 16], [48, 48, 32, 16], [64, 64, 32, 32])
@@ -60,7 +66,6 @@ hydra:
       # model.regressor.temporal_dropout: choice(0.1, 0.2, 0.3, 0.4, 0.5)
       # model.regressor.fc_hidden: choice(0, 64, 128)
       # model.regressor.fc_dropout: choice(0.05, 0.1, 0.15, 0.2, 0.25)
-      model.regressor.use_batch_norm: choice(true, false)
       # TODO I don't see any hyperparams for classifier. shouldn't we search that space too?
 
   sweep:

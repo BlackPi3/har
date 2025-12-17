@@ -157,12 +157,18 @@ def _parse_sweeper_spec(spec: str, trial: optuna.trial.Trial):
         else:
             inner = s[len("tag(log,interval(") :]
         lo, hi = inner.split(",")
-        return lambda name: trial.suggest_float(name, float(lo), float(hi), log=True)
+        lo_f, hi_f = float(lo), float(hi)
+        if lo_f > hi_f:
+            lo_f, hi_f = hi_f, lo_f
+        return lambda name: trial.suggest_float(name, lo_f, hi_f, log=True)
     # interval(a,b)
     if s.startswith("interval(") and s.endswith(")"):
         inner = s[len("interval("):-1]
         lo, hi = inner.split(",")
-        return lambda name: trial.suggest_float(name, float(lo), float(hi))
+        lo_f, hi_f = float(lo), float(hi)
+        if lo_f > hi_f:
+            lo_f, hi_f = hi_f, lo_f
+        return lambda name: trial.suggest_float(name, lo_f, hi_f)
     # range(start,stop,step)
     if s.startswith("range(") and s.endswith(")"):
         inner = s[len("range("):-1]

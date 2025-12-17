@@ -1,43 +1,44 @@
 defaults:
   - _self_
 
-seed: 0
-
 trial_name: scenario2_utd
 
 data:
   name: utd
-  sensor_window_length: 100 # Best
-  stride_seconds: 0.1 # Best
+
+  sensor_window_length: 100
+  stride_seconds: 0.1
   batch_size: 32
 
 optim:
   name: adam
+
   lr: 0.001
   weight_decay: 0.00002
+
   warmup_epochs: 10
   warmup_start_factor: 0.02
+
   scheduler:
     patience: 15
     factor: 0.05
 
 trainer:
   name: scenario2
+
   alpha: 0.2
   beta: 2
   gamma: 1
+
   epochs: 100
   patience: 25
   gradient_clip: 1.0 # Best
-  secondary:
-    enabled: false
-    loss_weight: 1.0
-    data: ntu50.yaml
+
+
 
 model:
   regressor:
     name: regressor
-    use_batch_norm: true
   encoder_classifier:
     name: mmfit
     n_classes: 21

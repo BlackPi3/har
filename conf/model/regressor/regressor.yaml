@@ -13,4 +13,4 @@ temporal_dilation: 1
 temporal_dropout: 0.1
 fc_hidden: 0
 fc_dropout: 0
-use_batch_norm: false
+use_batch_norm: true
