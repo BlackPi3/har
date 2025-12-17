@@ -310,15 +310,14 @@ def _write_topk_summary(trials: list, path: Path, metric: str, direction: str):
                 "params": t.params,
             }
         )
-    payload = {
-        "metric": metric,
-        "direction": direction,
-        "trials": entries,
-    }
+    payload = {"metric": metric, "direction": direction, "trials": entries}
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("w") as f:
-            json.dump(payload, f, indent=2)
+            if yaml:
+                yaml.safe_dump(payload, f, sort_keys=False)
+            else:
+                json.dump(payload, f, indent=2)
     except Exception as e:
         print(f"[hpo] Failed to write top_k summary: {e}")
 
@@ -407,7 +406,7 @@ def _maintain_topk(
     top_trials = list(unique.values())[:top_k] if unique else []
     if not top_trials:
         return
-    topk_path = out_root / "top_k.json"
+    topk_path = out_root / "top_k.yaml"
 
     def _is_better(val, ref, mode):
         if ref is None:
@@ -807,7 +806,7 @@ def main():
                         " ".join(shlex.quote(x) for x in rep_cmd),
                     )
                     continue
-                rep_results = run_trial(rep_cmd, rep_dir, skip_artifacts=False, study_name=study_name, group="repeat")
+                rep_results = run_trial(rep_cmd, rep_dir, skip_artifacts=True, study_name=study_name, group="repeat")
                 rep_score = _score_from_results(rep_results, metric) if rep_results else None
                 repeat_summary.append(
                     {
@@ -821,16 +820,45 @@ def main():
         if repeat_summary and not args.dry:
             try:
                 repeats_root.mkdir(parents=True, exist_ok=True)
-                with (repeats_root / "repeats.json").open("w") as f:
-                    json.dump(
-                        {
-                            "metric": metric,
-                            "direction": direction,
-                            "repeats": repeat_summary,
-                        },
-                        f,
-                        indent=2,
-                    )
+                # Build repeats report (mean/std per trial_number)
+                grouped: Dict[int, Dict[str, Any]] = {}
+                for entry in repeat_summary:
+                    tnum = entry["trial_number"]
+                    grouped.setdefault(tnum, {"values": []})
+                    if entry.get("value") is not None:
+                        grouped[tnum]["values"].append(entry["value"])
+                repeat_report = {"metric": metric, "direction": direction, "trials": []}
+                params_lookup = {t.number: t.params for t in top_trials}
+                for tnum, info in grouped.items():
+                    vals = info["values"]
+                    if not vals:
+                        continue
+                    avg = sum(vals) / len(vals)
+                    var = sum((v - avg) ** 2 for v in vals) / len(vals) if len(vals) > 1 else 0.0
+                    entry = {
+                        "trial_number": tnum,
+                        "mean": avg,
+                        "std": var ** 0.5,
+                        "count": len(vals),
+                    }
+                    repeat_report["trials"].append(entry)
+                reverse = direction == "maximize"
+                repeat_report["trials"].sort(key=lambda x: x["mean"], reverse=reverse)
+                best_params = None
+                if repeat_report["trials"]:
+                    best_tnum = repeat_report["trials"][0]["trial_number"]
+                    best_params = params_lookup.get(best_tnum, {})
+                with (out_root / "repeats_report.yaml").open("w") as f:
+                    if yaml:
+                        yaml.safe_dump(repeat_report, f, sort_keys=False)
+                    else:
+                        json.dump(repeat_report, f, indent=2)
+                if best_params is not None:
+                    with (out_root / "best_params.yaml").open("w") as f:
+                        if yaml:
+                            yaml.safe_dump(best_params, f, sort_keys=False)
+                        else:
+                            json.dump(best_params, f, indent=2)
             except Exception as e:
                 print(f"[hpo] Failed to write repeats summary: {e}")
 
