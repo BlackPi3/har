@@ -645,7 +645,11 @@ def main():
     report_space = base_out_root / "top_k_report.yaml"
     using_snapshot = False
     study_root_exists = base_out_root.exists()
-    if study_root_exists and (not snapshot_space.exists() or not snapshot_trial.exists()):
+    # Only enforce snapshot presence if we truly need to resume (db/trials present).
+    db_path = base_out_root / f"{args.study_name}.db"
+    trials_path = base_out_root / "trials"
+    resume_expected = snapshot_space.exists() or db_path.exists() or trials_path.exists()
+    if resume_expected and (not snapshot_space.exists() or not snapshot_trial.exists()):
         missing = []
         if not snapshot_space.exists():
             missing.append("hpo.yaml")
