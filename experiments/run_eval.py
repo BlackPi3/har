@@ -4,7 +4,7 @@ Run a fresh training/evaluation for the best config of an HPO study.
 
 Heuristics:
 - Picks the best trial by mean repeat score from experiments/hpo/<study>/repeats/repeats.json.
-- Pulls the hyperparameters for that trial from experiments/hpo/<study>/top_k.json.
+- Pulls the hyperparameters for that trial from experiments/hpo/<study>/topk.yaml.
 - Reads the trial name from the saved HPO snapshot (snapshots/hpo.yaml).
 - Retrains via experiments.run_trial with those overrides and writes outputs under experiments/eval/<study>/best_trial_<id>.
 - Supports running multiple eval repeats (different seeds) via conf/eval/<study>.yaml or conf/eval/default.yaml.
@@ -52,7 +52,7 @@ def main():
     parser = argparse.ArgumentParser(description="Evaluate best HPO config on train/val/test")
     parser.add_argument("--study-name", required=True, help="Study/run name under experiments/hpo/<study>")
     parser.add_argument("--env", required=True, help="Hydra env override (e.g., remote, local)")
-    parser.add_argument("--hpo-root", type=str, default=None, help="Path to HPO study root (contains repeats/top_k)")
+    parser.add_argument("--hpo-root", type=str, default=None, help="Path to HPO study root (contains repeats/topk)")
     parser.add_argument("--trial", type=str, default=None, help="Optional explicit trial name to override inference")
     parser.add_argument("--eval-config", type=str, default=None, help="Optional path to eval config YAML")
     parser.add_argument("--seed", type=int, default=0)
@@ -68,7 +68,7 @@ def main():
     else:
         hpo_root = Path("experiments") / "hpo" / args.study_name
     repeats_path = hpo_root / "repeats" / "repeats.json"
-    topk_path = hpo_root / "top_k.yaml"
+    topk_path = hpo_root / "topk.yaml"
     snapshot_hpo = hpo_root / "snapshots" / "hpo.yaml"
     # Backward compatibility: if snapshots missing, fall back to HPO search space file
     snapshot_trial = hpo_root / "snapshots" / "trial.yaml"
@@ -77,7 +77,7 @@ def main():
     if not repeats_path.exists():
         raise FileNotFoundError(f"Repeats not found: {repeats_path}")
     if not topk_path.exists():
-        raise FileNotFoundError(f"top_k.yaml not found: {topk_path}")
+        raise FileNotFoundError(f"topk.yaml not found: {topk_path}")
 
     with repeats_path.open("r") as f:
         repeats = json.load(f).get("repeats", [])
@@ -94,14 +94,17 @@ def main():
     best_trial = max(by_trial.items(), key=lambda kv: sum(kv[1]) / len(kv[1]))[0]
 
     with topk_path.open("r") as f:
-        topk = json.load(f).get("trials", [])
+        if yaml:
+            topk = (yaml.safe_load(f) or {}).get("trials", [])
+        else:
+            topk = json.load(f).get("trials", [])
     params = None
     for entry in topk:
         if int(entry.get("trial_number", -1)) == best_trial:
             params = entry.get("params", {})
             break
     if params is None:
-        raise RuntimeError(f"No params found in top_k.json for trial {best_trial}")
+        raise RuntimeError(f"No params found in topk.yaml for trial {best_trial}")
 
     # Require a resolved config from repeats/trials for full overrides
     resolved_cfg = None

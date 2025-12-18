@@ -325,7 +325,7 @@ def _write_topk_summary(trials: list, path: Path, metric: str, direction: str):
             else:
                 json.dump(payload, f, indent=2)
     except Exception as e:
-        print(f"[hpo] Failed to write top_k summary: {e}")
+        print(f"[hpo] Failed to write topk summary: {e}")
 
 
 def _format_choice(values):
@@ -397,7 +397,7 @@ def _write_topk_space(trials: list, path: Path, metric: str, direction: str):
             else:
                 json.dump(suggested_space, f, indent=2)
     except Exception as e:
-        print(f"[hpo] Failed to write top_k_space: {e}")
+        print(f"[hpo] Failed to write topk_searchspace: {e}")
 
 
 def _maintain_topk(
@@ -421,19 +421,22 @@ def _maintain_topk(
     top_trials = list(unique.values())[:top_k] if unique else []
     if not top_trials:
         return
-    topk_path = out_root / "top_k.yaml"
+    topk_path = out_root / "topk.yaml"
 
     def _is_better(val, ref, mode):
         if ref is None:
             return True
         return val > ref if mode == "maximize" else val < ref
 
-    # Decide whether to update based on last_trial vs current worst in existing top_k
+    # Decide whether to update based on last_trial vs current worst in existing topk
     should_update = False
     if topk_path.exists():
         try:
             with topk_path.open("r") as f:
-                current = json.load(f).get("trials", [])
+                if yaml:
+                    current = (yaml.safe_load(f) or {}).get("trials", [])
+                else:
+                    current = json.load(f).get("trials", [])
         except Exception:
             current = []
         current_vals = [t.get("value") for t in current if t.get("value") is not None]
@@ -452,8 +455,8 @@ def _maintain_topk(
     if not should_update:
         return
 
-    _write_topk_summary(top_trials, out_root / "top_k.json", metric, direction)
-    _write_topk_space(top_trials, out_root / "top_k_report.yaml", metric, direction)
+    _write_topk_summary(top_trials, out_root / "topk.yaml", metric, direction)
+    _write_topk_space(top_trials, out_root / "topk_searchspace.yaml", metric, direction)
 
 
 def _export_topk(
@@ -464,17 +467,17 @@ def _export_topk(
 ):
     if not top_trials:
         return
-    dest_root = Path("experiments") / "top_k" / study_name
+    dest_root = Path("experiments") / "topk" / study_name
     if dry_run:
         print(f"[hpo] DRY-RUN would create top-k bundle at {dest_root}")
         return
     dest_root.mkdir(parents=True, exist_ok=True)
-    src_topk = out_root / "top_k.yaml"
+    src_topk = out_root / "topk.yaml"
     if src_topk.exists():
         try:
-            shutil.copy(src_topk, dest_root / "top_k.yaml")
+            shutil.copy(src_topk, dest_root / "topk.yaml")
         except Exception as e:
-            print(f"[hpo] Failed to copy top_k.json to {dest_root}: {e}")
+            print(f"[hpo] Failed to copy topk.yaml to {dest_root}: {e}")
     # Copy top-k trial dirs so resolved_config/results are preserved
     src_trials_root = out_root / "trials"
     dest_trials_root = dest_root / "trials"
@@ -624,7 +627,7 @@ def main():
         type=str,
         default="coarse",
         choices=["coarse", "fine"],
-        help="Use the original search space (coarse) or a narrowed space from top_k_report (fine)",
+        help="Use the original search space (coarse) or a narrowed space from topk_searchspace (fine)",
     )
     parser.add_argument("--prune", action="store_true", help="Enable MedianPruner")
     parser.add_argument("--space-config", type=str, default=None, help="Hydra sweeper YAML defining the search space (conf/hpo/*.yaml)")
@@ -642,7 +645,7 @@ def main():
     base_out_root = Path(args.output_root) if args.output_root else default_output_root(args.study_name)
     snapshot_space = base_out_root / "snapshots" / "hpo.yaml"
     snapshot_trial = base_out_root / "snapshots" / "trial.yaml"
-    report_space = base_out_root / "top_k_report.yaml"
+    report_space = base_out_root / "topk_searchspace.yaml"
     using_snapshot = False
     study_root_exists = base_out_root.exists()
     # Only enforce snapshot presence if we truly need to resume (db/trials present).
@@ -801,11 +804,11 @@ def main():
     if top_trials:
         keep_numbers = {t.number for t in top_trials}
         _prune_trial_dirs(out_root / "trials", keep_numbers, dry_run=args.dry)
-        _write_topk_summary(top_trials, out_root / "top_k.json", metric, direction)
-        _write_topk_space(top_trials, out_root / "top_k_report.yaml", metric, direction)
+        _write_topk_summary(top_trials, out_root / "topk.yaml", metric, direction)
+        _write_topk_space(top_trials, out_root / "topk_searchspace.yaml", metric, direction)
 
     repeat_summary = []
-    if repeat_enabled and top_trials:
+    if repeat_enabled and top_trials and args.search_mode == "fine":
         repeats_root = out_root / "repeats"
         for rank, t in enumerate(top_trials, start=1):
             params_overrides = _params_to_overrides(t.params)
@@ -873,7 +876,7 @@ def main():
                     else:
                         json.dump(repeat_report, f, indent=2)
                 if best_params is not None:
-                    with (out_root / "best_params.yaml").open("w") as f:
+                    with (out_root / "repeats_best_params.yaml").open("w") as f:
                         if yaml:
                             yaml.safe_dump(best_params, f, sort_keys=False)
                         else:
@@ -881,7 +884,7 @@ def main():
             except Exception as e:
                 print(f"[hpo] Failed to write repeats summary: {e}")
 
-    # Export top-k artifacts to experiments/top_k/<study_name>
+    # Export top-k artifacts to experiments/topk/<study_name>
     _export_topk(top_trials, out_root, study_name, args.dry)
 
     if study.best_trial:

@@ -517,6 +517,7 @@ def _build_models(cfg) -> Dict[str, torch.nn.Module]:
                 base_filters=list(base_filters),
                 pool_kernel=getattr(node, "pool_kernel", 2),
                 embedding_dim=getattr(node, "embedding_dim", getattr(node, "n_dense", 100)),
+                use_batch_norm=bool(getattr(node, "use_batch_norm", False)),
             )
         # default legacy extractor
         return FeatureExtractor(**_fe_args_from_cfg(node))

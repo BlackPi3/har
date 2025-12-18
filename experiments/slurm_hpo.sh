@@ -24,8 +24,6 @@ OUTPUT_ROOT=${OUTPUT_ROOT:-/netscratch/zolfaghari/experiments/hpo/$STUDY_NAME}
 STORAGE=${STORAGE:-$OUTPUT_ROOT/$STUDY_NAME.db}
 ENV_NAME=remote
 LOG_ROOT=${LOG_ROOT:-/netscratch/zolfaghari/experiments/log/hpo}
-RUN_TOPK=${RUN_TOPK:-1}
-TOPK_BASE_SEED=${TOPK_BASE_SEED:-0}
 
 # Logs
 set -euo pipefail
@@ -57,12 +55,4 @@ srun \
       --space-config '$SPACE_CONFIG' \
       --search-mode $SEARCH_MODE \
       --env $ENV_NAME
-    if [[ \"$RUN_TOPK\" == \"1\" && \"$SEARCH_MODE\" == \"fine\" ]]; then
-      python -m experiments.run_topk \
-        --study-name $HPO_SPACE \
-        --space-config '$SPACE_CONFIG' \
-        --topk-source-root '$OUTPUT_ROOT' \
-        --env $ENV_NAME \
-        --base-seed $TOPK_BASE_SEED
-    fi
   " >"$LOG_OUT" 2>"$LOG_ERR"

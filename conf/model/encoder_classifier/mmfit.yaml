@@ -16,6 +16,7 @@ feature_extractor:
     - 24
   pool_kernel: 2
   embedding_dim: 100
+  use_batch_norm: true
 classifier:
   type: mlp_classifier
   f_in: ${model.encoder_classifier.feature_extractor.embedding_dim}

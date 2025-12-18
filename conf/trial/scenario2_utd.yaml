@@ -32,7 +32,7 @@ trainer:
 
   epochs: 100
   patience: 25
-  gradient_clip: 1.0 # Best
+  gradient_clip: 1.0
 
 
 

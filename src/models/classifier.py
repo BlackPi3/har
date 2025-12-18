@@ -108,6 +108,7 @@ class MmfitEncoder1D(nn.Module):
         base_filters: list | None = None,
         pool_kernel: int = 2,
         embedding_dim: int = 100,
+        use_batch_norm: bool = False,
     ):
         super().__init__()
         self.layers = max(1, int(layers))
@@ -117,18 +118,24 @@ class MmfitEncoder1D(nn.Module):
         self.base_filters = base_filters or [9, 15, 24]
         self.pool_kernel = pool_kernel
         self.embedding_dim = embedding_dim
+        self.use_batch_norm = bool(use_batch_norm)
 
         padding = (kernel_size - 1) // 2
         g1, g2, g3 = (self.grouped + [1, 1, 1])[:3]
         f1, f2, f3 = (self.base_filters + [self.base_filters[-1]] * 3)[:3]
 
         convs = []
+        norms = []
         convs.append(nn.Conv1d(input_channels, f1, kernel_size=kernel_size, stride=kernel_stride, padding=padding, groups=g1))
+        norms.append(nn.BatchNorm1d(f1) if self.use_batch_norm else nn.Identity())
         if self.layers > 1:
             convs.append(nn.Conv1d(f1, f2, kernel_size=kernel_size, stride=kernel_stride, padding=padding, groups=g2))
+            norms.append(nn.BatchNorm1d(f2) if self.use_batch_norm else nn.Identity())
         if self.layers > 2:
             convs.append(nn.Conv1d(f2, f3, kernel_size=kernel_size, stride=kernel_stride, padding=padding, groups=g3))
+            norms.append(nn.BatchNorm1d(f3) if self.use_batch_norm else nn.Identity())
         self.convs = nn.ModuleList(convs)
+        self.norms = nn.ModuleList(norms)
         self.pool = nn.MaxPool1d(kernel_size=self.pool_kernel, stride=self.pool_kernel)
         # Initialize convs similarly to MMFit (default init OK, keep simple)
 
@@ -138,8 +145,10 @@ class MmfitEncoder1D(nn.Module):
 
     def forward(self, x):
         out = x
-        for conv in self.convs:
-            out = self.relu(conv(out))
+        for conv, norm in zip(self.convs, self.norms):
+            out = conv(out)
+            out = norm(out)
+            out = self.relu(out)
         out = self.pool(out)
         b, c, l = out.shape
         flat = out.view(b, c * l)
