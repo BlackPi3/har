@@ -252,6 +252,26 @@ def _sorted_completed_trials(study, direction: str):
     return sorted(completed, key=lambda t: t.value, reverse=reverse)
 
 
+def _best_completed_value_for_params(study, params: Dict[str, Any], direction: str):
+    """Return best value among completed trials that match the exact params."""
+    try:
+        trials = study.get_trials(states=(optuna.trial.TrialState.COMPLETE,), deepcopy=False)
+    except Exception:
+        return None
+    best_val = None
+    for t in trials:
+        if t.params == params and t.value is not None:
+            v = float(t.value)
+            if best_val is None:
+                best_val = v
+            else:
+                if direction == "maximize":
+                    best_val = max(best_val, v)
+                else:
+                    best_val = min(best_val, v)
+    return best_val
+
+
 def _parse_trial_number(path: Path) -> int | None:
     name = path.name
     if not name.startswith("trial_"):
@@ -768,6 +788,13 @@ def main():
 
     def objective(trial: optuna.trial.Trial) -> float:
         params = build_space_from_params(trial, params_node)
+
+        # Skip exact duplicate parameter sets to save compute; reuse best completed value.
+        dup_val = _best_completed_value_for_params(study, params, direction)
+        if dup_val is not None:
+            print(f"[hpo] Duplicate params detected (trial {trial.number}); reusing value {dup_val:.4f}")
+            return dup_val
+
         trial_dir = out_root / "trials" / f"trial_{trial.number:04d}"
 
         # Convert params dict to hydra-style overrides
