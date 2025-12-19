@@ -28,7 +28,7 @@ hydra:
     storage: "sqlite:///experiments/hpo/${study_name}/${study_name}.db"
     params:
 
-      # Regularization
+      # 1- Regularization pass
       optim.lr: tag(log,interval(1e-4,1e-3))
       optim.weight_decay: tag(log,interval(1e-5, 1e-4))
 

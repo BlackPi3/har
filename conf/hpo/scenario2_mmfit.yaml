@@ -9,10 +9,10 @@ trial: scenario2_mmfit
 # Trainer selection for this HPO space
 trainer:
   name: scenario2
-  epochs: 30
-  patience: 10
-  separate_classifiers: true
-  separate_feature_extractors: true
+  epochs: 40
+  patience: 40
+  # separate_classifiers: true
+  # separate_feature_extractors: true
 
 # Optional repeats for top-config evaluation
 repeat:
@@ -29,40 +29,33 @@ hydra:
     # Store Optuna DB alongside trials inside the repo
     storage: "sqlite:///experiments/hpo/${study_name}/${study_name}.db"
     params:
-      # Optimizer
-      optim.lr: choice(5e-4, 2e-4, 1e-4)
-      optim.weight_decay: choice(1e-2, 1e-3, 5e-4, 2e-5)
+    
+      # 1- Regularization pass
+      optim.lr: tag(log,interval(1e-4,1e-3))
+      optim.weight_decay: tag(log,interval(1e-5, 1e-4))
+
       optim.warmup_epochs: choice(5, 10, 15)
-      optim.warmup_start_factor: choice(0.1, 0.05, 0.02)
+      optim.warmup_start_factor: choice(0.05, 0.02)
+      
       optim.scheduler.patience: choice(5, 10, 15)
-      optim.scheduler.factor: choice(0.1, 0.05, 0.02)
+      optim.scheduler.factor: choice(0.1, 0.2, 0.3)
+
+      model.encoder_classifier.classifier.dropout: choice(0.3, 0.4, 0.5, 0.6)
 
       # Trainer
-      # trainer.gradient_clip: choice(null, 1.0)
-
-      # Scenario2-specific loss coefficients
-      trial.alpha: choice(0.2, 0.5)
-      trial.beta: choice(1, 2, 5)
-      # trial.gamma: choice(0.1, 1, 10)
+      # trainer.alpha: choice(0.2, 0.5, 1)
+      # trainer.beta: choice(1, 2, 5)
+      # trainer.gamma: choice(1, 2, 5)
 
       # Data
       # data.batch_size: choice(32, 64, 128)
 
-      # Model 
-      # model.feature_extractor.n_filters: range(8, 32, 4)
-      # model.feature_extractor.filter_size: range(3, 9, 2)
-      # model.regressor.joint_hidden_channels: choice([32, 32, 32, 16], [48, 48, 32, 16], [64, 64, 32, 32])
-      # model.regressor.joint_kernel_sizes: choice([3, 3, 3, 1], [5, 5, 5, 1], [7, 5, 3, 1])
-      # model.regressor.joint_dilations: choice([1, 2, 4, 1], [1, 3, 5, 1])
-      # model.regressor.joint_dropouts: choice([0.0, 0.1, 0.1, 0.1], [0.0, 0.2, 0.2, 0.2], [0.1, 0.3, 0.3, 0.3])
-      # model.regressor.temporal_hidden_channels: choice(16, 24, 32, 48)
-      # model.regressor.temporal_kernel_size: choice(3, 5, 7)
-      # model.regressor.temporal_dilation: choice(1, 2, 3)
-      # model.regressor.temporal_dropout: choice(0.1, 0.2, 0.3, 0.4, 0.5)
-      # model.regressor.fc_hidden: choice(0, 64, 128)
-      # model.regressor.fc_dropout: choice(0.05, 0.1, 0.15, 0.2, 0.25)
-      # model.regressor.use_batch_norm: choice(true, false)
-      # TODO I don't see any hyperparams for classifier. shouldn't we search that space too?
+      # Model/encoder_classifier
+      # model.encoder_classifier.feature_extractor.kernel_size: choice(7, 9, 11)
+      # model.encoder_classifier.feature_extractor.kernel_stride: choice(2, 3)
+      # model.encoder_classifier.feature_extractor.base_filters: choice([9,15,24], [12,18,24], [16,24,32])
+      # model.encoder_classifier.feature_extractor.embedding_dim: choice(64, 128, 256)
+      # model.encoder_classifier.classifier.hidden_units: choice([100], [128, 64])
 
   sweep:
     # Place all trials under a unified per-study directory

@@ -1,47 +1,43 @@
 defaults:
   - _self_
 
-seed: 0
-
-## Scenario 2 trial configuration
 trial_name: scenario2_mmfit
 
-# Data configuration (merged on top of conf/data/mmfit.yaml)
 data:
   name: mmfit
+
   sensor_window_length: 500
   stride_seconds: 0.2
   batch_size: 64
 
-## Params
 optim:
   name: adam
+
   lr: 0.0005
   weight_decay: 0.00002
+
   warmup_epochs: 5
   warmup_start_factor: 0.05
+
   scheduler:
     patience: 10
     factor: 0.05
 
 trainer:
   name: scenario2
+
   alpha: 0.2
   beta: 5
   gamma: 1
+
   epochs: 200
   patience: 25
   gradient_clip: 1.0
-  secondary:
-    enabled: false
-    loss_weight: 1.0
-    data: ntu100.yaml
 
 
 model:
   regressor:
     name: regressor
-    use_batch_norm: true
   encoder_classifier:
-    name: legacy
+    name: mmfit
     n_classes: 11
