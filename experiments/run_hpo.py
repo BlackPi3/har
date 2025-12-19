@@ -479,40 +479,6 @@ def _maintain_topk(
     _write_topk_space(top_trials, out_root / "topk_searchspace.yaml", metric, direction)
 
 
-def _export_topk(
-    top_trials: list,
-    out_root: Path,
-    study_name: str,
-    dry_run: bool,
-):
-    if not top_trials:
-        return
-    dest_root = Path("experiments") / "topk" / study_name
-    if dry_run:
-        print(f"[hpo] DRY-RUN would create top-k bundle at {dest_root}")
-        return
-    dest_root.mkdir(parents=True, exist_ok=True)
-    src_topk = out_root / "topk.yaml"
-    if src_topk.exists():
-        try:
-            shutil.copy(src_topk, dest_root / "topk.yaml")
-        except Exception as e:
-            print(f"[hpo] Failed to copy topk.yaml to {dest_root}: {e}")
-    # Copy top-k trial dirs so resolved_config/results are preserved
-    src_trials_root = out_root / "trials"
-    dest_trials_root = dest_root / "trials"
-    for t in top_trials:
-        src_dir = src_trials_root / f"trial_{t.number:04d}"
-        dest_dir = dest_trials_root / f"trial_{t.number:04d}"
-        if not src_dir.exists():
-            continue
-        try:
-            dest_dir.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copytree(src_dir, dest_dir, dirs_exist_ok=True)
-        except Exception as e:
-            print(f"[hpo] Failed to copy {src_dir} to {dest_dir}: {e}")
-
-
 def _extract_yaml_meta(yaml_path: Path, data: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """Extract optional metadata from conf/hpo YAML."""
     meta: Dict[str, Any] = {
