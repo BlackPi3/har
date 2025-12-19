@@ -28,7 +28,7 @@ htmlcov/
 outputs/
 experiments/hpo/
 experiments/best_run/
-experiments/top_k/
+experiments/eval/
 *.log
 multirun
 
