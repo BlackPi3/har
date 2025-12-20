@@ -877,9 +877,6 @@ def main():
             except Exception as e:
                 print(f"[hpo] Failed to write repeats summary: {e}")
 
-    # Export top-k artifacts to experiments/topk/<study_name>
-    _export_topk(top_trials, out_root, study_name, args.dry)
-
     if study.best_trial:
         summary = {
             "best_value": study.best_trial.value,
