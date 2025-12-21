@@ -31,7 +31,7 @@ trainer:
   gamma: 1
 
   epochs: 100
-  patience: 25
+  patience: 35
   gradient_clip: 1.0
 
 
