@@ -50,14 +50,16 @@ hydra:
       model.regressor.joint_hidden_channels: choice([24,24,16,12], [32,32,24,16])
       model.regressor.temporal_hidden_channels: choice(10, 12) # LOWERED choice(12, 16)
       model.regressor.joint_kernel_sizes: choice([3, 3, 3, 1]) # FIXED choice([3, 3, 3, 1], [5,5,3,1])
-
-      trainer.label_smoothing: choice(0.0, 0.05, 0.1)
       
-
-      # 3- Loss weights
+      # 3- Fine
       trainer.alpha: choice(0.2, 0.5, 1)
       trainer.beta: choice(0.5, 1, 2)
       trainer.gamma: choice(0.5, 1, 2)
+
+      trainer.label_smoothing: choice(0.0, 0.05, 0.1)
+
+      data.stride_seconds: choice (0.08, 0.1)
+      data.batch_size: choice(32, 48, 64)
 
   sweep:
     dir: "experiments/hpo/${study_name}/trials"
