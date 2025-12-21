@@ -48,7 +48,12 @@ class Trainer:
         self.lr_warmup_start_factor = float(min(max(start_factor, 0.0), 1.0))
         self.base_lrs = [group["lr"] for group in self.optimizer.param_groups]
         self._lr_warmup_finished = self.lr_warmup_epochs <= 0
-        self.ce = torch.nn.CrossEntropyLoss()
+        smoothing = 0.0
+        try:
+            smoothing = float(getattr(self.trainer_cfg, "label_smoothing", 0.0))
+        except Exception:
+            smoothing = 0.0
+        self.ce = torch.nn.CrossEntropyLoss(label_smoothing=smoothing if smoothing > 0 else 0.0)
 
         # Secondary pose dataset support (optional, pose-only)
         sec_cfg = getattr(self.trainer_cfg, "secondary", None) if self.trainer_cfg else None
