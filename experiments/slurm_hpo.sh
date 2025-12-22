@@ -15,9 +15,8 @@ CONTAINER_IMAGE=${CONTAINER_IMAGE:-/netscratch/zolfaghari/images/har.sqsh}
 ########################################
 # Defaults (override via environment variables as needed)
 HPO_SPACE=${HPO_SPACE:-scenario2_utd} # scenario2_utd | scenario2_mmfit
-STUDY_NAME=${STUDY_NAME:-sc2_utd_coarse}  # sc2_utd_coarse | sc2_utd_fine | sc2_mmfit_coarse | sc2_mmfit_fine
+STUDY_NAME=${STUDY_NAME:-sc2_utd}  # descriptive study name
 N_TRIALS=${N_TRIALS:-100} # 100-150
-SEARCH_MODE=${SEARCH_MODE:-coarse}  # coarse | fine
 
 SPACE_CONFIG=${SPACE_CONFIG:-conf/hpo/$HPO_SPACE.yaml}
 OUTPUT_ROOT=${OUTPUT_ROOT:-/netscratch/zolfaghari/experiments/hpo/$STUDY_NAME}
@@ -53,6 +52,5 @@ srun \
       --storage '$STORAGE' \
       --output-root '$OUTPUT_ROOT' \
       --space-config '$SPACE_CONFIG' \
-      --search-mode $SEARCH_MODE \
       --env $ENV_NAME
   " >"$LOG_OUT" 2>"$LOG_ERR"

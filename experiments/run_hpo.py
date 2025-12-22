@@ -608,13 +608,6 @@ def main():
     parser.add_argument("--python", type=str, default=sys.executable)
     parser.add_argument("--module", type=str, default="experiments.run_trial")
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument(
-        "--search-mode",
-        type=str,
-        default="coarse",
-        choices=["coarse", "fine"],
-        help="Use the original search space (coarse) or a narrowed space from topk_searchspace (fine)",
-    )
     parser.add_argument("--prune", action="store_true", help="Enable MedianPruner")
     parser.add_argument("--space-config", type=str, default=None, help="Hydra sweeper YAML defining the search space (conf/hpo/*.yaml)")
     parser.add_argument("--dry", action="store_true", help="Print commands without running")
@@ -631,13 +624,13 @@ def main():
     base_out_root = Path(args.output_root) if args.output_root else default_output_root(args.study_name)
     snapshot_space = base_out_root / "snapshots" / "hpo.yaml"
     snapshot_trial = base_out_root / "snapshots" / "trial.yaml"
-    report_space = base_out_root / "topk_searchspace.yaml"
     using_snapshot = False
     study_root_exists = base_out_root.exists()
     # Only enforce snapshot presence if we truly need to resume (db/trials present).
     db_path = base_out_root / f"{args.study_name}.db"
     trials_path = base_out_root / "trials"
-    resume_expected = snapshot_space.exists() or db_path.exists() or trials_path.exists()
+    repeats_path = base_out_root / "repeats"
+    resume_expected = snapshot_space.exists() or db_path.exists() or trials_path.exists() or repeats_path.exists()
     if resume_expected and (not snapshot_space.exists() or not snapshot_trial.exists()):
         missing = []
         if not snapshot_space.exists():
@@ -649,10 +642,6 @@ def main():
         )
 
     if snapshot_space.exists():
-        if args.search_mode == "fine" and report_space.exists():
-            raise ValueError(
-                f"Study '{args.study_name}' already exists with snapshots; fine mode must start a new study or RUN_NAME."
-            )
         space_yaml_path = snapshot_space
         using_snapshot = True
     else:
@@ -688,7 +677,7 @@ def main():
     trainer_overrides = meta.get("trainer_overrides") or []
     data_overrides = meta.get("data_overrides") or []
     top_k = max(1, int(meta.get("top_k") or 1))
-    repeat_enabled = bool(meta.get("repeat_enabled"))
+    repeat_enabled = True
     repeat_k = max(1, int(meta.get("repeat_k") or 1))
 
     # Adopt study name from YAML if provided, unless user explicitly passed one
@@ -722,6 +711,9 @@ def main():
     study = optuna.create_study(direction=direction, study_name=study_name,
                                 storage=storage_url, load_if_exists=True, sampler=sampler, pruner=pruner)
 
+    # If repeats already exist, we'll skip new trials and just finish repeats.
+    skip_trials = repeats_path.exists()
+
     base_cmd = [args.python, "-m", args.module]
     # Build explicit CLI overrides from flags
     base_overrides = [
@@ -750,70 +742,87 @@ def main():
     if not isinstance(params_node, dict) or not params_node:
         raise ValueError(f"No params found in YAML sweeper file: {space_yaml_path}")
 
+    repeats_done = False
+    # If repeats already exist, skip new trials and only finish repeats
+    if repeats_path.exists():
+        print(f"[hpo] Repeats directory exists at {repeats_path}; skipping new trials and finishing repeats.")
+        completed_sorted = _sorted_completed_trials(study, direction)
+        unique: Dict[str, Any] = {}
+        for t in completed_sorted:
+            key = json.dumps(t.params, sort_keys=True)
+            if key not in unique:
+                unique[key] = t
+        top_trials = list(unique.values())[:top_k] if top_k > 0 else []
+        # Proceed to repeats stage after this block
+        repeats_done = False
+    else:
+        top_trials = None
+
     # YAML path already resolved above; fail-fast happened earlier
 
-    def objective(trial: optuna.trial.Trial) -> float:
-        params = build_space_from_params(trial, params_node)
+    top_trials = []
+    if not skip_trials:
+        def objective(trial: optuna.trial.Trial) -> float:
+            params = build_space_from_params(trial, params_node)
 
-        # Skip exact duplicate parameter sets to save compute; reuse best completed value.
-        dup_val = _best_completed_value_for_params(study, params, direction)
-        if dup_val is not None:
-            print(f"[hpo] Duplicate params detected (trial {trial.number}); reusing value {dup_val:.4f}")
-            return dup_val
+            # Skip exact duplicate parameter sets to save compute; reuse best completed value.
+            dup_val = _best_completed_value_for_params(study, params, direction)
+            if dup_val is not None:
+                print(f"[hpo] Duplicate params detected (trial {trial.number}); reusing value {dup_val:.4f}")
+                return dup_val
 
-        trial_dir = out_root / "trials" / f"trial_{trial.number:04d}"
+            trial_dir = out_root / "trials" / f"trial_{trial.number:04d}"
 
-        # Convert params dict to hydra-style overrides
-        trial_overrides = base_overrides + [f"{k}={v}" for k, v in params.items()]
-        cmd = base_cmd + trial_overrides
+            # Convert params dict to hydra-style overrides
+            trial_overrides = base_overrides + [f"{k}={v}" for k, v in params.items()]
+            cmd = base_cmd + trial_overrides
 
-        if args.dry:
-            print("DRY RUN:", " ".join(shlex.quote(x) for x in cmd))
-            return 0.0
+            if args.dry:
+                print("DRY RUN:", " ".join(shlex.quote(x) for x in cmd))
+                return 0.0
 
-        results = run_trial(cmd, trial_dir, skip_artifacts=True, study_name=study_name)
-        if not results:
-            # Failed run; assign a bad score so it's pruned from consideration
-            return -1e9 if direction == "maximize" else 1e9
+            results = run_trial(cmd, trial_dir, skip_artifacts=True, study_name=study_name)
+            if not results:
+                # Failed run; assign a bad score so it's pruned from consideration
+                return -1e9 if direction == "maximize" else 1e9
 
-        score = _score_from_results(results, metric)
-        if score is None:
-            return -1e9 if direction == "maximize" else 1e9
-        return score
+            score = _score_from_results(results, metric)
+            if score is None:
+                return -1e9 if direction == "maximize" else 1e9
+            return score
 
-    def _trial_callback(study, trial):
-        _maintain_topk(study, out_root, top_k, metric, direction, args.dry, last_trial=trial)
+        def _trial_callback(study, trial):
+            _maintain_topk(study, out_root, top_k, metric, direction, args.dry, last_trial=trial)
 
-    study.optimize(objective, n_trials=args.n_trials, gc_after_trial=True, callbacks=[_trial_callback])
+        study.optimize(objective, n_trials=args.n_trials, gc_after_trial=True, callbacks=[_trial_callback])
 
+    # Whether trials were run or not, refresh top_trials from completed trials
     completed_sorted = _sorted_completed_trials(study, direction)
-    # Deduplicate by params to avoid re-pruning the same config and causing mismatches
     unique: Dict[str, Any] = {}
     for t in completed_sorted:
         key = json.dumps(t.params, sort_keys=True)
         if key not in unique:
             unique[key] = t
     top_trials = list(unique.values())[:top_k] if top_k > 0 else []
-    if top_trials:
+    if top_trials and not args.dry:
         keep_numbers = {t.number for t in top_trials}
         _prune_trial_dirs(out_root / "trials", keep_numbers, dry_run=args.dry)
         _write_topk_summary(top_trials, out_root / "topk.yaml", metric, direction)
         _write_topk_space(top_trials, out_root / "topk_searchspace.yaml", metric, direction)
 
     repeat_summary = []
-    if repeat_enabled and top_trials and args.search_mode == "fine":
+    if repeat_enabled and top_trials:
         repeats_root = out_root / "repeats"
         for rank, t in enumerate(top_trials, start=1):
             params_overrides = _params_to_overrides(t.params)
-            # For repeat stage, drop sweep-specific overrides that shouldn't persist (epochs/seed) and restore defaults
-            repeat_base_overrides = [
-                ov for ov in base_overrides if not (ov.startswith("trainer.epochs=") or ov.startswith("seed="))
-            ]
-            if default_trial_epochs:
-                repeat_base_overrides.append(f"trainer.epochs={default_trial_epochs}")
+            # For repeats, keep the same overrides as HPO runs, only changing the seed.
+            repeat_base_overrides = [ov for ov in base_overrides if not ov.startswith("seed=")]
             for rep_idx in range(repeat_k):
                 rep_dir = repeats_root / f"trial_{t.number:04d}_rep_{rep_idx}"
-                repeat_seed = args.seed + t.number * repeat_k + rep_idx
+                repeat_seed = rep_idx  # fixed seed set per trial: 0..repeat_k-1
+                # Skip if this repeat already has results
+                if (rep_dir / "results.json").exists():
+                    continue
                 rep_cmd = base_cmd + repeat_base_overrides + params_overrides + [f"seed={repeat_seed}"]
                 if args.dry:
                     print(
