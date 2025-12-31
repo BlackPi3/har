@@ -252,24 +252,27 @@ def _sorted_completed_trials(study, direction: str):
     return sorted(completed, key=lambda t: t.value, reverse=reverse)
 
 
-def _best_completed_value_for_params(study, params: Dict[str, Any], direction: str):
-    """Return best value among completed trials that match the exact params."""
+def _get_duplicate_info_for_params(study, params: Dict[str, Any]):
+    """Return (count, max_seed) for completed trials that match the exact params.
+    
+    Returns:
+        Tuple of (count of matching trials, maximum seed used among them).
+        Returns (0, -1) if no matching trials found.
+    """
     try:
         trials = study.get_trials(states=(optuna.trial.TrialState.COMPLETE,), deepcopy=False)
     except Exception:
-        return None
-    best_val = None
+        return 0, -1
+    count = 0
+    max_seed = -1
     for t in trials:
         if t.params == params and t.value is not None:
-            v = float(t.value)
-            if best_val is None:
-                best_val = v
-            else:
-                if direction == "maximize":
-                    best_val = max(best_val, v)
-                else:
-                    best_val = min(best_val, v)
-    return best_val
+            count += 1
+            # Try to extract seed from user_attrs if stored
+            trial_seed = t.user_attrs.get("seed", -1)
+            if trial_seed > max_seed:
+                max_seed = trial_seed
+    return count, max_seed
 
 
 def _parse_trial_number(path: Path) -> int | None:
@@ -765,16 +768,23 @@ def main():
         def objective(trial: optuna.trial.Trial) -> float:
             params = build_space_from_params(trial, params_node)
 
-            # Skip exact duplicate parameter sets to save compute; reuse best completed value.
-            dup_val = _best_completed_value_for_params(study, params, direction)
-            if dup_val is not None:
-                print(f"[hpo] Duplicate params detected (trial {trial.number}); reusing value {dup_val:.4f}")
-                return dup_val
+            # Check for duplicate parameter sets and increment seed if found
+            dup_count, max_seed = _get_duplicate_info_for_params(study, params)
+            if dup_count > 0:
+                new_seed = max_seed + 1
+                print(f"[hpo] Duplicate params detected (trial {trial.number}, seen {dup_count}x); re-running with seed={new_seed}")
+            else:
+                new_seed = args.seed
+            
+            # Store seed in trial user_attrs for future duplicate detection
+            trial.set_user_attr("seed", new_seed)
 
             trial_dir = out_root / "trials" / f"trial_{trial.number:04d}"
 
-            # Convert params dict to hydra-style overrides
-            trial_overrides = base_overrides + [f"{k}={v}" for k, v in params.items()]
+            # Convert params dict to hydra-style overrides, with updated seed
+            seed_override = f"seed={new_seed}"
+            trial_overrides_no_seed = [ov for ov in base_overrides if not ov.startswith("seed=")]
+            trial_overrides = trial_overrides_no_seed + [f"{k}={v}" for k, v in params.items()] + [seed_override]
             cmd = base_cmd + trial_overrides
 
             if args.dry:

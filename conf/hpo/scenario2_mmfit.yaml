@@ -1,7 +1,12 @@
 # Per-scenario, per-dataset search space for Hydra Optuna Sweeper
 # Activate with: -m hydra/sweeper=optuna hpo=scenario2_mmfit
-
-# This file declares the search space (params) and the objective.
+#
+# Multi-pass HPO Strategy:
+# - Pass 1: Loss weights + Data (most impactful for scenario2)
+# - Pass 2: Regularization (after fixing pass 1 winners)
+# - Pass 3: Capacity (after fixing pass 1+2 winners)
+#
+# Comment/uncomment params sections for each pass.
 
 study_name: scenario2_mmfit
 trial: scenario2_mmfit
@@ -9,10 +14,8 @@ trial: scenario2_mmfit
 # Trainer selection for this HPO space
 trainer:
   name: scenario2
-  epochs: 40
-  patience: 40
-  # separate_classifiers: true
-  # separate_feature_extractors: true
+  epochs: 30       # HPO epochs: ~30-40% of full training is enough to differentiate
+  patience: 30
 
 # Optional repeats for top-config evaluation
 repeat:
@@ -24,47 +27,100 @@ top_k: 5
 
 hydra:
   sweeper:
-    # Study name with a robust fallback: prefer env STUDY_NAME, else this file's canonical name
     study_name: ${study_name}
-    # Store Optuna DB alongside trials inside the repo
     storage: "sqlite:///experiments/hpo/${study_name}/${study_name}.db"
     params:
     
-      # 1- Regularization pass
-      optim.lr: tag(log,interval(9e-4,1e-3)) # NARROWED tag(log,interval(1e-4,1e-3))
-      optim.weight_decay: tag(log,interval(1.2e-5, 1.6e-5)) # NARROWED tag(log,interval(1e-5, 1e-4))
-
-      optim.warmup_epochs: choice(5) # FIXED choice(5, 10, 15)
-      optim.warmup_start_factor: choice(0.05) # FIXED choice(0.05, 0.02)
+      # ============================================================
+      # PASS 1: Loss weights + Data (ACTIVE)
+      # ============================================================
+      trainer.alpha: choice(0.2, 0.5, 1.0, 2.0)
+      trainer.beta: choice(1, 2, 5, 10, 20)  # Higher range - legacy uses beta=100
+      trainer.gamma: choice(0.5, 1.0, 2.0)
       
-      optim.scheduler.patience: choice(15) # FIXED choice(5, 10, 15)
-      optim.scheduler.factor: choice(0.1) # FIXED choice(0.1, 0.2, 0.3)
-
-      model.encoder_classifier.classifier.dropout: choice(0.3) # FIXED choice(0.3, 0.4, 0.5, 0.6)
-
-      # 2- Capacity pass
-      model.encoder_classifier.feature_extractor.kernel_size: choice(7, 9)
-      model.encoder_classifier.feature_extractor.base_filters: choice([8,12,16], [9,12,16])
-      model.encoder_classifier.feature_extractor.embedding_dim: choice(80, 100)
-
-      model.encoder_classifier.classifier.hidden_units: choice([64], [100], [64, 64])
-
-      model.regressor.joint_hidden_channels: choice([24,24,16,12], [32,32,24,16])
-      model.regressor.temporal_hidden_channels: choice(10, 12, 14)
-      model.regressor.joint_kernel_sizes: choice([3, 3, 3, 1])
-
-      trainer.alpha: choice(0.2, 0.5, 1)
-      trainer.beta: choice(0.5, 1, 2)
-      trainer.gamma: choice(0.5, 1, 2)
-
-      trainer.label_smoothing: choice(0.0, 0.05, 0.1)
-
       data.sensor_window_length: choice(300, 400, 500)
       data.stride_seconds: choice(0.15, 0.2, 0.25)
       data.batch_size: choice(32, 64, 128)
 
+      # --- Pass 1 DEFAULTS for Pass 2+3 params ---
+      # Regularization defaults
+      optim.lr: choice(0.0008)
+      optim.weight_decay: choice(0.00002)
+      optim.warmup_epochs: choice(5)
+      optim.warmup_start_factor: choice(0.05)
+      optim.scheduler.patience: choice(15)
+      optim.scheduler.factor: choice(0.1)
+      model.encoder_classifier.feature_extractor.drop_prob: choice(0.2)
+      model.encoder_classifier.classifier.dropout: choice(0.3)
+      trainer.label_smoothing: choice(0.0)
+      
+      # Capacity defaults
+      model.encoder_classifier.feature_extractor.kernel_size: choice(11)
+      model.encoder_classifier.feature_extractor.base_filters: choice([9,15,24])
+      model.encoder_classifier.feature_extractor.embedding_dim: choice(100)
+      model.encoder_classifier.classifier.hidden_units: choice([100])
+      model.regressor.joint_hidden_channels: choice([32,32,32,16])
+      model.regressor.temporal_hidden_channels: choice(16)
+      model.regressor.joint_kernel_sizes: choice([5,5,5,1])
+
+      # ============================================================
+      # PASS 2: Regularization (UNCOMMENT after Pass 1)
+      # ============================================================
+      # # Fix Pass 1 winners here:
+      # trainer.alpha: choice(WINNER)
+      # trainer.beta: choice(WINNER)
+      # trainer.gamma: choice(WINNER)
+      # data.sensor_window_length: choice(WINNER)
+      # data.stride_seconds: choice(WINNER)
+      # data.batch_size: choice(WINNER)
+      #
+      # # Search regularization:
+      # optim.lr: tag(log, interval(5e-4, 2e-3))
+      # optim.weight_decay: tag(log, interval(1e-5, 1e-4))
+      # optim.warmup_epochs: choice(0, 5, 10)
+      # optim.scheduler.patience: choice(10, 15, 20)
+      # optim.scheduler.factor: choice(0.05, 0.1, 0.2)
+      # model.encoder_classifier.feature_extractor.drop_prob: choice(0.1, 0.2, 0.3)
+      # model.encoder_classifier.classifier.dropout: choice(0.2, 0.3, 0.4)
+      # trainer.label_smoothing: choice(0.0, 0.05, 0.1)
+      #
+      # # Keep capacity defaults
+      # model.encoder_classifier.feature_extractor.kernel_size: choice(11)
+      # model.encoder_classifier.feature_extractor.base_filters: choice([9,15,24])
+      # model.encoder_classifier.feature_extractor.embedding_dim: choice(100)
+      # model.encoder_classifier.classifier.hidden_units: choice([100])
+      # model.regressor.joint_hidden_channels: choice([32,32,32,16])
+      # model.regressor.temporal_hidden_channels: choice(16)
+      # model.regressor.joint_kernel_sizes: choice([5,5,5,1])
+
+      # ============================================================
+      # PASS 3: Capacity (UNCOMMENT after Pass 2)
+      # ============================================================
+      # # Fix Pass 1+2 winners here:
+      # trainer.alpha: choice(WINNER)
+      # trainer.beta: choice(WINNER)
+      # trainer.gamma: choice(WINNER)
+      # data.sensor_window_length: choice(WINNER)
+      # data.stride_seconds: choice(WINNER)
+      # data.batch_size: choice(WINNER)
+      # optim.lr: choice(WINNER)
+      # optim.weight_decay: choice(WINNER)
+      # optim.warmup_epochs: choice(WINNER)
+      # optim.scheduler.patience: choice(WINNER)
+      # optim.scheduler.factor: choice(WINNER)
+      # model.encoder_classifier.feature_extractor.drop_prob: choice(WINNER)
+      # model.encoder_classifier.classifier.dropout: choice(WINNER)
+      # trainer.label_smoothing: choice(WINNER)
+      #
+      # # Search capacity:
+      # model.encoder_classifier.feature_extractor.kernel_size: choice(7, 9, 11)
+      # model.encoder_classifier.feature_extractor.base_filters: choice([8,12,16], [9,15,24], [12,18,24])
+      # model.encoder_classifier.feature_extractor.embedding_dim: choice(80, 100, 128)
+      # model.encoder_classifier.classifier.hidden_units: choice([64], [100], [64,64], [100,50])
+      # model.regressor.joint_hidden_channels: choice([24,24,16,12], [32,32,24,16], [32,32,32,16])
+      # model.regressor.temporal_hidden_channels: choice(10, 12, 16)
+      # model.regressor.joint_kernel_sizes: choice([3,3,3,1], [5,5,5,1])
 
   sweep:
-    # Place all trials under a unified per-study directory
     dir: "experiments/hpo/${study_name}/trials"
     subdir: trial_${hydra.job.num}
