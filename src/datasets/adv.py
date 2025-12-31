@@ -92,4 +92,11 @@ class AdvDataset(Dataset):
         return len(self.adv_skel_windows)
 
     def __getitem__(self, i):
-        return self.accel_windows[i], self.adv_skel_windows[i], self.label_windows[i]#, self.real_fake_labels[i]
+        """Return (pose, acc, label) following the standard HAR dataset convention.
+        
+        Returns:
+            pose: (3, joints, window_length) - skeleton pose data
+            acc: (3, window_length) - accelerometer data  
+            label: activity class label
+        """
+        return self.adv_skel_windows[i], self.accel_windows[i], self.label_windows[i]  # pose, acc, label

@@ -60,11 +60,18 @@ class MHADDataset(Dataset):
         return len(self.accel_windows)
 
     def __getitem__(self, idx):
-        accel = self.accel_windows[idx]
-        skel = self.skel_windows[idx]
+        """Return (pose, acc, label) following the standard HAR dataset convention.
+        
+        Returns:
+            pose: (3, joints, window_length) - skeleton pose data
+            acc: (3, window_length) - accelerometer data  
+            label: activity class label
+        """
+        acc = self.accel_windows[idx]
+        pose = self.skel_windows[idx]
         label = self.label_windows[idx]
 
-        return accel, skel, label
+        return pose, acc, label
     
     
     def _create_windows(self, accel_list, skel_list, label_list):

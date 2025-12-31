@@ -17,6 +17,8 @@ feature_extractor:
   pool_kernel: 2
   embedding_dim: 100
   use_batch_norm: true
+  drop_prob: 0.2
+  pool_between_layers: true  # Apply pooling after each conv layer like legacy
 classifier:
   type: mlp_classifier
   f_in: ${model.encoder_classifier.feature_extractor.embedding_dim}

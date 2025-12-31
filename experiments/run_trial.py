@@ -508,6 +508,8 @@ def _build_models(cfg) -> Dict[str, torch.nn.Module]:
         if dtype == "mmfit_encoder":
             grouped = getattr(node, "grouped", None) or [1, 1, 1]
             base_filters = getattr(node, "base_filters", None) or [9, 15, 24]
+            # Get window_size from data config
+            window_size = getattr(cfg.data, "sensor_window_length", 256)
             return MmfitEncoder1D(
                 input_channels=getattr(node, "input_channels", 3),
                 layers=getattr(node, "layers", 3),
@@ -518,6 +520,9 @@ def _build_models(cfg) -> Dict[str, torch.nn.Module]:
                 pool_kernel=getattr(node, "pool_kernel", 2),
                 embedding_dim=getattr(node, "embedding_dim", getattr(node, "n_dense", 100)),
                 use_batch_norm=bool(getattr(node, "use_batch_norm", False)),
+                window_size=window_size,
+                drop_prob=getattr(node, "drop_prob", 0.2),
+                pool_between_layers=bool(getattr(node, "pool_between_layers", True)),
             )
         # default legacy extractor
         return FeatureExtractor(**_fe_args_from_cfg(node))
@@ -644,16 +649,15 @@ def _build_optim(cfg, models):
     factor = (getattr(sched_cfg, "factor", 0.1) if not isinstance(sched_cfg, dict) else sched_cfg.get("factor", 0.1))
     patience = (getattr(sched_cfg, "patience", 10) if not isinstance(sched_cfg, dict) else sched_cfg.get("patience", 10))
     if (name or "").lower().startswith("reduce"):
+        # Always create scheduler - the Trainer will skip .step() during warmup via _lr_warmup_finished()
         if warmup_epochs > 0:
-            print("[run_trial] Skipping ReduceLROnPlateau because warmup_epochs > 0")
-            scheduler = None
-        else:
-            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-                optimizer,
-                mode=mode,
-                factor=float(factor),
-                patience=int(patience),
-            )
+            print(f"[run_trial] ReduceLROnPlateau created (will only step after {warmup_epochs} warmup epochs)")
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer,
+            mode=mode,
+            factor=float(factor),
+            patience=int(patience),
+        )
     else:
         scheduler = None
     return optimizer, scheduler
