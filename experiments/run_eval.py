@@ -58,6 +58,8 @@ def main():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--repeat-count", type=int, default=5, help="Number of eval repeats (seeds will increment)")
     parser.add_argument("--no-resume", action="store_true", help="Do not skip already completed repeats")
+    parser.add_argument("--direction", type=str, default="maximize", choices=["maximize", "minimize"],
+                        help="Optimization direction: maximize for F1, minimize for loss")
     parser.add_argument("--epochs", type=int, default=None, help="Override trainer.epochs for eval runs")
     parser.add_argument("--python", type=str, default=sys.executable)
     parser.add_argument("--module", type=str, default="experiments.run_trial")
@@ -91,7 +93,11 @@ def main():
             continue
     if not by_trial:
         raise RuntimeError("No repeat scores found.")
-    best_trial = max(by_trial.items(), key=lambda kv: sum(kv[1]) / len(kv[1]))[0]
+    # Select best trial based on direction (maximize for F1, minimize for loss)
+    if args.direction == "maximize":
+        best_trial = max(by_trial.items(), key=lambda kv: sum(kv[1]) / len(kv[1]))[0]
+    else:
+        best_trial = min(by_trial.items(), key=lambda kv: sum(kv[1]) / len(kv[1]))[0]
 
     with topk_path.open("r") as f:
         if yaml:
@@ -161,6 +167,19 @@ def main():
     if not trial_name:
         raise RuntimeError("Could not determine trial name from snapshot or search_space.yaml")
 
+    # Load the base trial config to get full training epochs (not HPO epochs)
+    trial_cfg_path = Path("conf") / "trial" / f"{trial_name}.yaml"
+    full_epochs = None
+    if trial_cfg_path.exists() and yaml is not None:
+        try:
+            with trial_cfg_path.open("r") as f:
+                trial_cfg_data = yaml.safe_load(f) or {}
+            trainer_section = trial_cfg_data.get("trainer", {})
+            if isinstance(trainer_section, dict):
+                full_epochs = trainer_section.get("epochs")
+        except Exception:
+            pass
+
     # Eval config (repeat counts)
     eval_cfg_path = None
     if args.eval_config:
@@ -220,8 +239,12 @@ def main():
         trainer_cfg = merged_cfg.get("trainer", {})
         if isinstance(trainer_cfg, dict):
             trainer_cfg["disable_val"] = True
+            # Use epochs priority: CLI arg > trial config full epochs > resolved config
             if args.epochs is not None:
                 trainer_cfg["epochs"] = int(args.epochs)
+            elif full_epochs is not None:
+                trainer_cfg["epochs"] = int(full_epochs)
+                print(f"[eval] Using full training epochs from trial config: {full_epochs}")
             merged_cfg["trainer"] = trainer_cfg
     except Exception:
         merged_cfg = resolved_cfg
@@ -281,10 +304,18 @@ def main():
             }
         )
 
-    # Aggregate only the key test metrics we care about (F1, accuracy)
-    target_metrics = ["test_f1", "test_acc"]
+    # Aggregate test metrics (expand to include more metrics if available)
+    target_metrics = ["test_f1", "test_acc", "test_precision", "test_recall", "test_loss"]
+    # Also collect any other test_* metrics dynamically
+    all_test_keys: set[str] = set(target_metrics)
+    for r in runs:
+        fm = r.get("final_metrics") or {}
+        for k in fm.keys():
+            if k.startswith("test_"):
+                all_test_keys.add(k)
+    
     aggregate: Dict[str, Dict[str, float]] = {}
-    for key in target_metrics:
+    for key in sorted(all_test_keys):
         vals: list[float] = []
         for r in runs:
             fm = r.get("final_metrics") or {}

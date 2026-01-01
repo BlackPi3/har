@@ -13,7 +13,7 @@ Search space source of truth: conf/hpo/*.yaml
 
 Usage examples:
     python experiments/run_hpo.py \
-        --n-trials 10 \
+        --n-trials 100 \
         --study-name scenario2_mmfit \
         --space-config conf/hpo/scenario2_mmfit.yaml \
         --metric val_f1 --direction maximize \
@@ -24,6 +24,13 @@ Notes:
     - Arguments after "--" are forwarded as Hydra overrides to experiments.run_trial.
     - If --storage is a filesystem path, it's converted to a SQLite URL.
     - Each trial runs under: <output_root>/trials/trial_<N>/
+    
+Robustness features:
+    - Duplicate detection: When TPE samples the same params again, we run with a
+      new seed and report the RUNNING MEAN of all runs to Optuna (not just the
+      latest score). This prevents "lucky" runs from misleading the search.
+    - After HPO, run repeats on top-K configs to get reliable performance estimates.
+      Use repeats_report.yaml rankings for final config selection.
 """
 from __future__ import annotations
 import argparse
@@ -253,26 +260,31 @@ def _sorted_completed_trials(study, direction: str):
 
 
 def _get_duplicate_info_for_params(study, params: Dict[str, Any]):
-    """Return (count, max_seed) for completed trials that match the exact params.
+    """Return (count, max_seed, all_scores) for completed trials that match the exact params.
     
     Returns:
-        Tuple of (count of matching trials, maximum seed used among them).
-        Returns (0, -1) if no matching trials found.
+        Tuple of:
+        - count: number of matching trials
+        - max_seed: maximum seed used among them
+        - scores: list of all scores from matching trials
+        Returns (0, -1, []) if no matching trials found.
     """
     try:
         trials = study.get_trials(states=(optuna.trial.TrialState.COMPLETE,), deepcopy=False)
     except Exception:
-        return 0, -1
+        return 0, -1, []
     count = 0
     max_seed = -1
+    scores = []
     for t in trials:
         if t.params == params and t.value is not None:
             count += 1
+            scores.append(t.value)
             # Try to extract seed from user_attrs if stored
             trial_seed = t.user_attrs.get("seed", -1)
             if trial_seed > max_seed:
                 max_seed = trial_seed
-    return count, max_seed
+    return count, max_seed, scores
 
 
 def _parse_trial_number(path: Path) -> int | None:
@@ -331,14 +343,20 @@ def _score_from_results(results: Dict[str, Any], metric: str):
 def _write_topk_summary(trials: list, path: Path, metric: str, direction: str):
     entries = []
     for rank, t in enumerate(trials, start=1):
-        entries.append(
-            {
-                "rank": rank,
-                "trial_number": t.number,
-                "value": t.value,
-                "params": t.params,
-            }
-        )
+        entry = {
+            "rank": rank,
+            "trial_number": t.number,
+            "value": t.value,
+            "params": t.params,
+        }
+        # Include running stats if available (for duplicate-aware ranking)
+        user_attrs = getattr(t, "user_attrs", {}) or {}
+        if "running_mean" in user_attrs:
+            entry["running_mean"] = user_attrs["running_mean"]
+            entry["running_std"] = user_attrs.get("running_std", 0.0)
+            entry["n_runs"] = user_attrs.get("n_runs", 1)
+            entry["raw_score"] = user_attrs.get("raw_score")
+        entries.append(entry)
     payload = {"metric": metric, "direction": direction, "trials": entries}
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -769,7 +787,7 @@ def main():
             params = build_space_from_params(trial, params_node)
 
             # Check for duplicate parameter sets and increment seed if found
-            dup_count, max_seed = _get_duplicate_info_for_params(study, params)
+            dup_count, max_seed, prev_scores = _get_duplicate_info_for_params(study, params)
             if dup_count > 0:
                 new_seed = max_seed + 1
                 print(f"[hpo] Duplicate params detected (trial {trial.number}, seen {dup_count}x); re-running with seed={new_seed}")
@@ -782,24 +800,41 @@ def main():
             trial_dir = out_root / "trials" / f"trial_{trial.number:04d}"
 
             # Convert params dict to hydra-style overrides, with updated seed
-            seed_override = f"seed={new_seed}"
             trial_overrides_no_seed = [ov for ov in base_overrides if not ov.startswith("seed=")]
+            seed_override = f"seed={new_seed}"
             trial_overrides = trial_overrides_no_seed + [f"{k}={v}" for k, v in params.items()] + [seed_override]
             cmd = base_cmd + trial_overrides
 
             if args.dry:
-                print("DRY RUN:", " ".join(shlex.quote(x) for x in cmd))
+                print(f"DRY RUN (seed {new_seed}):", " ".join(shlex.quote(x) for x in cmd))
                 return 0.0
 
             results = run_trial(cmd, trial_dir, skip_artifacts=True, study_name=study_name)
             if not results:
-                # Failed run; assign a bad score so it's pruned from consideration
+                return -1e9 if direction == "maximize" else 1e9
+            
+            raw_score = _score_from_results(results, metric)
+            if raw_score is None:
                 return -1e9 if direction == "maximize" else 1e9
 
-            score = _score_from_results(results, metric)
-            if score is None:
-                return -1e9 if direction == "maximize" else 1e9
-            return score
+            # Report running mean to Optuna when we have prior scores for same params
+            # This mitigates "getting lucky" - TPE sees expected performance, not outlier
+            if prev_scores:
+                all_scores = prev_scores + [raw_score]
+                running_mean = sum(all_scores) / len(all_scores)
+                running_std = (sum((s - running_mean) ** 2 for s in all_scores) / len(all_scores)) ** 0.5
+                print(f"[hpo] Running mean for params: {running_mean:.4f} (std={running_std:.4f}, n={len(all_scores)}, raw={raw_score:.4f})")
+                trial.set_user_attr("raw_score", raw_score)
+                trial.set_user_attr("running_mean", running_mean)
+                trial.set_user_attr("running_std", running_std)
+                trial.set_user_attr("n_runs", len(all_scores))
+                trial.set_user_attr("all_scores", all_scores)
+                return running_mean
+            else:
+                # First run of this config - return raw score
+                trial.set_user_attr("raw_score", raw_score)
+                trial.set_user_attr("n_runs", 1)
+                return raw_score
 
         def _trial_callback(study, trial):
             _maintain_topk(study, out_root, top_k, metric, direction, args.dry, last_trial=trial)
