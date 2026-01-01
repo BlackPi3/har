@@ -56,7 +56,7 @@ def main():
     parser.add_argument("--trial", type=str, default=None, help="Optional explicit trial name to override inference")
     parser.add_argument("--eval-config", type=str, default=None, help="Optional path to eval config YAML")
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--repeat-count", type=int, default=5, help="Number of eval repeats (seeds will increment)")
+    parser.add_argument("--repeat-count", type=int, default=10, help="Number of eval repeats (seeds will increment)")
     parser.add_argument("--no-resume", action="store_true", help="Do not skip already completed repeats")
     parser.add_argument("--direction", type=str, default="maximize", choices=["maximize", "minimize"],
                         help="Optimization direction: maximize for F1, minimize for loss")
@@ -220,25 +220,11 @@ def main():
         f"run.study={args.study_name}",
     ]
 
-    # Merge train + val for final training; keep test as defined
+    # Use original train/val/test splits (Option B: proper early stopping on val)
     merged_cfg = deepcopy(resolved_cfg)
     try:
-        data_cfg = merged_cfg.get("data", {})
-        if isinstance(data_cfg, dict):
-            train_subj = data_cfg.get("train_subjects", []) or []
-            val_subj = data_cfg.get("val_subjects", []) or []
-            test_subj = data_cfg.get("test_subjects", []) or data_cfg.get("test", [])
-            merged_train = []
-            for s in list(train_subj) + list(val_subj):
-                if s not in merged_train:
-                    merged_train.append(s)
-            data_cfg["train_subjects"] = merged_train
-            data_cfg["val_subjects"] = []
-            if test_subj:
-                data_cfg["test_subjects"] = test_subj
         trainer_cfg = merged_cfg.get("trainer", {})
         if isinstance(trainer_cfg, dict):
-            trainer_cfg["disable_val"] = True
             # Use epochs priority: CLI arg > trial config full epochs > resolved config
             if args.epochs is not None:
                 trainer_cfg["epochs"] = int(args.epochs)
