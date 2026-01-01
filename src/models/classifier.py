@@ -22,7 +22,7 @@ class FeatureExtractor(nn.Module):
                       padding=filter_size//2),
             nn.LeakyReLU(inplace=True),
             nn.BatchNorm1d(n_filters),
-            nn.Dropout(p=0.3)
+            nn.Dropout(p=drop_prob)
         )
         
         self.conv2 = nn.Sequential(
@@ -30,7 +30,7 @@ class FeatureExtractor(nn.Module):
                       padding=filter_size//2),
             nn.LeakyReLU(inplace=True),
             nn.BatchNorm1d(n_filters),
-            nn.Dropout(p=0.3)
+            nn.Dropout(p=drop_prob)
         )
         
         self.conv3 = nn.Sequential(
@@ -38,7 +38,7 @@ class FeatureExtractor(nn.Module):
                       padding=filter_size//2),
             nn.LeakyReLU(inplace=True),
             nn.BatchNorm1d(n_filters),
-            nn.Dropout(p=0.3)
+            nn.Dropout(p=drop_prob)
         )
 
         self.maxpool = nn.MaxPool1d(pool_filter_size, pool_filter_size)
