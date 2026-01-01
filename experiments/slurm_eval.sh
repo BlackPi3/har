@@ -16,7 +16,7 @@ CONTAINER_IMAGE=${CONTAINER_IMAGE:-/netscratch/zolfaghari/images/har.sqsh}
 # STUDY_NAME must match the HPO run directory under experiments/hpo/
 STUDY_NAME=${STUDY_NAME:-scenario2_utd}
 ENV_NAME=remote
-REPEAT_COUNT=${REPEAT_COUNT:-5}
+REPEAT_COUNT=${REPEAT_COUNT:-10}
 HPO_ROOT=${HPO_ROOT:-/netscratch/$USER/experiments/hpo/$STUDY_NAME}
 EPOCHS=${EPOCHS:-}
 LOG_ROOT=${LOG_ROOT:-/netscratch/zolfaghari/experiments/log/eval}

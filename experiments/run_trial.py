@@ -34,10 +34,11 @@ except Exception:  # pragma: no cover - optional dependency
     plt = None
 
 _SKIP_ARTIFACTS = str(
-    os.environ.get(
-        "RUN_TRIAL_SKIP_ARTIFACTS",
-        os.environ.get("RUN_TRIAL_SKIP_CHECKPOINTS", ""),
-    )
+    os.environ.get("RUN_TRIAL_SKIP_ARTIFACTS", "")
+).lower() in ("1", "true", "yes")
+
+_SKIP_CHECKPOINTS = str(
+    os.environ.get("RUN_TRIAL_SKIP_CHECKPOINTS", "")
 ).lower() in ("1", "true", "yes")
 
 
@@ -1006,7 +1007,10 @@ def main():
     if _SKIP_ARTIFACTS:
         print("[run_trial] Artifact saving disabled for this run.")
     else:
-        _save_best_state(run_dir, best_state)
+        if _SKIP_CHECKPOINTS:
+            print("[run_trial] Checkpoint saving disabled for this run.")
+        else:
+            _save_best_state(run_dir, best_state)
         _save_plots(run_dir, history, best_epoch)
     _write_config(run_dir, cfg)
 

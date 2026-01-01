@@ -3,21 +3,22 @@
 Run a fresh training/evaluation for the best config of an HPO study.
 
 Heuristics:
-- Picks the best trial by mean repeat score from experiments/hpo/<study>/repeats/repeats.json.
-- Pulls the hyperparameters for that trial from experiments/hpo/<study>/topk.yaml.
+- Picks the best trial by mean repeat score from repeats_report.yaml (already sorted).
+- Pulls the hyperparameters for that trial from repeats_best_params.yaml.
 - Reads the trial name from the saved HPO snapshot (snapshots/hpo.yaml).
-- Retrains via experiments.run_trial with those overrides and writes outputs under experiments/eval/<study>/best_trial_<id>.
-- Supports running multiple eval repeats (different seeds) via conf/eval/<study>.yaml or conf/eval/default.yaml.
+- Retrains via experiments.run_trial with base trial config + best params overrides.
+- Outputs written to experiments/eval/<study>/best_trial_<id>/.
+- Supports running multiple eval repeats (different seeds) for robust test estimates.
 
-Note: This retrains on the original train/val splits (no train+val merge implemented).
+Config construction: conf/trial/<trial_name>.yaml + best_params overrides
 """
 from __future__ import annotations
 import argparse
 import json
+import os
 import shlex
 import subprocess
 import sys
-from copy import deepcopy
 from pathlib import Path
 from statistics import mean, pstdev
 from typing import Any, Dict
@@ -69,66 +70,26 @@ def main():
         hpo_root = Path(args.hpo_root)
     else:
         hpo_root = Path("experiments") / "hpo" / args.study_name
-    repeats_path = hpo_root / "repeats" / "repeats.json"
-    topk_path = hpo_root / "topk.yaml"
+    
+    best_params_path = hpo_root / "repeats_best_params.yaml"
     snapshot_hpo = hpo_root / "snapshots" / "hpo.yaml"
     # Backward compatibility: if snapshots missing, fall back to HPO search space file
     snapshot_trial = hpo_root / "snapshots" / "trial.yaml"
     fallback_hpo = hpo_root / "search_space.yaml"
 
-    if not repeats_path.exists():
-        raise FileNotFoundError(f"Repeats not found: {repeats_path}")
-    if not topk_path.exists():
-        raise FileNotFoundError(f"topk.yaml not found: {topk_path}")
+    if not best_params_path.exists():
+        raise FileNotFoundError(f"repeats_best_params.yaml not found: {best_params_path}")
 
-    with repeats_path.open("r") as f:
-        repeats = json.load(f).get("repeats", [])
-    by_trial: Dict[int, list[float]] = {}
-    for r in repeats:
-        try:
-            tnum = int(r.get("trial_number"))
-            val = float(r.get("value"))
-            by_trial.setdefault(tnum, []).append(val)
-        except Exception:
-            continue
-    if not by_trial:
-        raise RuntimeError("No repeat scores found.")
-    # Select best trial based on direction (maximize for F1, minimize for loss)
-    if args.direction == "maximize":
-        best_trial = max(by_trial.items(), key=lambda kv: sum(kv[1]) / len(kv[1]))[0]
-    else:
-        best_trial = min(by_trial.items(), key=lambda kv: sum(kv[1]) / len(kv[1]))[0]
-
-    with topk_path.open("r") as f:
+    # Load best params (search space overrides only)
+    with best_params_path.open("r") as f:
         if yaml:
-            topk = (yaml.safe_load(f) or {}).get("trials", [])
+            best_params = yaml.safe_load(f) or {}
         else:
-            topk = json.load(f).get("trials", [])
-    params = None
-    for entry in topk:
-        if int(entry.get("trial_number", -1)) == best_trial:
-            params = entry.get("params", {})
-            break
-    if params is None:
-        raise RuntimeError(f"No params found in topk.yaml for trial {best_trial}")
+            best_params = json.load(f)
+    
+    print(f"[eval] Loaded best params from: {best_params_path}")
 
-    # Require a resolved config from repeats/trials for full overrides
-    resolved_cfg = None
-    resolved_paths = [
-        hpo_root / "repeats" / f"trial_{best_trial:04d}_rep_0" / "resolved_config.yaml",
-        hpo_root / "trials" / f"trial_{best_trial:04d}" / "resolved_config.yaml",
-    ]
-    for rp in resolved_paths:
-        if rp.exists() and yaml is not None:
-            try:
-                with rp.open("r") as f:
-                    resolved_cfg = yaml.safe_load(f) or {}
-                    break
-            except Exception:
-                resolved_cfg = None
-    if resolved_cfg is None:
-        raise RuntimeError(f"No resolved_config.yaml found for trial {best_trial} in repeats/ or trials/")
-
+    # Determine trial name from snapshots
     trial_name = None
     if snapshot_hpo.exists() and yaml is not None:
         try:
@@ -157,15 +118,8 @@ def main():
             trial_name = None
     if not trial_name and args.trial:
         trial_name = args.trial
-    if not trial_name and resolved_cfg:
-        try:
-            tval = resolved_cfg.get("trial")
-            if isinstance(tval, str):
-                trial_name = tval
-        except Exception:
-            trial_name = None
     if not trial_name:
-        raise RuntimeError("Could not determine trial name from snapshot or search_space.yaml")
+        raise RuntimeError("Could not determine trial name from snapshot or search_space.yaml. Use --trial to specify.")
 
     # Load the base trial config to get full training epochs (not HPO epochs)
     trial_cfg_path = Path("conf") / "trial" / f"{trial_name}.yaml"
@@ -202,10 +156,8 @@ def main():
             eval_cfg.get("repeat", {}).get("count", eval_cfg.get("eval", {}).get("repeats", repeat_count))
         )
 
-    base_eval_dir = Path(resolved_cfg.get("experiments_dir", "experiments")).expanduser()
-    if not base_eval_dir.is_absolute():
-        base_eval_dir = Path.cwd() / base_eval_dir
-    eval_root = base_eval_dir / "eval" / args.study_name / f"best_trial_{best_trial:04d}"
+    # Determine eval output directory
+    eval_root = Path("experiments") / "eval" / args.study_name
     eval_root.mkdir(parents=True, exist_ok=True)
 
     base_cmd = [
@@ -220,28 +172,23 @@ def main():
         f"run.study={args.study_name}",
     ]
 
-    # Use original train/val/test splits (Option B: proper early stopping on val)
-    merged_cfg = deepcopy(resolved_cfg)
-    try:
-        trainer_cfg = merged_cfg.get("trainer", {})
-        if isinstance(trainer_cfg, dict):
-            # Use epochs priority: CLI arg > trial config full epochs > resolved config
-            if args.epochs is not None:
-                trainer_cfg["epochs"] = int(args.epochs)
-            elif full_epochs is not None:
-                trainer_cfg["epochs"] = int(full_epochs)
-                print(f"[eval] Using full training epochs from trial config: {full_epochs}")
-            merged_cfg["trainer"] = trainer_cfg
-    except Exception:
-        merged_cfg = resolved_cfg
+    # Add epochs override if specified
+    epochs_overrides: list[str] = []
+    if args.epochs is not None:
+        epochs_overrides.append(f"trainer.epochs={args.epochs}")
+    elif full_epochs is not None:
+        epochs_overrides.append(f"trainer.epochs={full_epochs}")
+        print(f"[eval] Using full training epochs from trial config: {full_epochs}")
 
-    exclude = {"run", "cluster", "env", "seed"}
-    extra_overrides = _flatten_overrides("", merged_cfg, exclude)
+    # Convert best_params to command-line overrides (search space params only)
+    param_overrides = _params_to_overrides(best_params)
+    print(f"[eval] Applying {len(param_overrides)} hyperparameter overrides from best trial")
+
     runs: list[dict[str, Any]] = []
 
     for rep_idx in range(repeat_count):
         seed_val = args.seed + rep_idx
-        run_dir = eval_root / f"rep_{rep_idx:02d}"
+        run_dir = eval_root / f"run_{rep_idx + 1:02d}"
         run_dir.mkdir(parents=True, exist_ok=True)
 
         results_path = run_dir / "results.json"
@@ -262,13 +209,17 @@ def main():
                 }
             )
             continue
-        cmd = base_cmd + base_overrides + extra_overrides + [
+        cmd = base_cmd + base_overrides + param_overrides + epochs_overrides + [
             f"seed={seed_val}",
             f"run.dir={str(run_dir)}",
         ]
 
+        # Skip saving checkpoints for eval runs (keep plots, only need metrics)
+        env = os.environ.copy()
+        env["RUN_TRIAL_SKIP_CHECKPOINTS"] = "1"
+
         print("Running eval:", " ".join(shlex.quote(x) for x in cmd))
-        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
         print(proc.stdout)
         if proc.returncode != 0:
             raise RuntimeError(f"Eval run failed with code {proc.returncode}")
@@ -316,8 +267,8 @@ def main():
 
     summary = {
         "study": args.study_name,
-        "trial_number": best_trial,
         "trial_name": trial_name,
+        "best_params": best_params,
         "repeat_count": repeat_count,
         "test_metrics": aggregate,
     }
