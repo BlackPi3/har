@@ -453,13 +453,25 @@ def _maintain_topk(
     if top_k <= 0:
         return
     completed_sorted = _sorted_completed_trials(study, direction)
-    # Deduplicate by params: keep best trial per unique params
+    # Deduplicate by params: prefer trial with highest n_runs (most accurate estimate)
+    # If same n_runs, prefer better value
     unique: Dict[str, Any] = {}
     for t in completed_sorted:
         key = json.dumps(t.params, sort_keys=True)
+        t_n_runs = t.user_attrs.get("n_runs", 1) if hasattr(t, "user_attrs") else 1
         if key not in unique:
             unique[key] = t
+        else:
+            # Prefer trial with more runs (more accurate running mean)
+            existing = unique[key]
+            existing_n_runs = existing.user_attrs.get("n_runs", 1) if hasattr(existing, "user_attrs") else 1
+            if t_n_runs > existing_n_runs:
+                unique[key] = t
     top_trials = list(unique.values())[:top_k] if unique else []
+    # Re-sort after deduplication to ensure correct ranking by value
+    reverse = direction == "maximize"
+    top_trials.sort(key=lambda t: t.value if t.value is not None else (-1e9 if reverse else 1e9), reverse=reverse)
+    top_trials = top_trials[:top_k]
     if not top_trials:
         return
     topk_path = out_root / "topk.yaml"
@@ -771,9 +783,17 @@ def main():
         unique: Dict[str, Any] = {}
         for t in completed_sorted:
             key = json.dumps(t.params, sort_keys=True)
+            t_n_runs = t.user_attrs.get("n_runs", 1) if hasattr(t, "user_attrs") else 1
             if key not in unique:
                 unique[key] = t
-        top_trials = list(unique.values())[:top_k] if top_k > 0 else []
+            else:
+                existing = unique[key]
+                existing_n_runs = existing.user_attrs.get("n_runs", 1) if hasattr(existing, "user_attrs") else 1
+                if t_n_runs > existing_n_runs:
+                    unique[key] = t
+        reverse = direction == "maximize"
+        top_trials = sorted(unique.values(), key=lambda t: t.value if t.value is not None else (-1e9 if reverse else 1e9), reverse=reverse)
+        top_trials = top_trials[:top_k] if top_k > 0 else []
         # Proceed to repeats stage after this block
         repeats_done = False
     else:
@@ -781,7 +801,6 @@ def main():
 
     # YAML path already resolved above; fail-fast happened earlier
 
-    top_trials = []
     if not skip_trials:
         def objective(trial: optuna.trial.Trial) -> float:
             params = build_space_from_params(trial, params_node)
@@ -842,13 +861,23 @@ def main():
         study.optimize(objective, n_trials=args.n_trials, gc_after_trial=True, callbacks=[_trial_callback])
 
     # Whether trials were run or not, refresh top_trials from completed trials
+    # Deduplicate by params, preferring trials with more runs (more accurate running mean)
     completed_sorted = _sorted_completed_trials(study, direction)
     unique: Dict[str, Any] = {}
     for t in completed_sorted:
         key = json.dumps(t.params, sort_keys=True)
+        t_n_runs = t.user_attrs.get("n_runs", 1) if hasattr(t, "user_attrs") else 1
         if key not in unique:
             unique[key] = t
-    top_trials = list(unique.values())[:top_k] if top_k > 0 else []
+        else:
+            existing = unique[key]
+            existing_n_runs = existing.user_attrs.get("n_runs", 1) if hasattr(existing, "user_attrs") else 1
+            if t_n_runs > existing_n_runs:
+                unique[key] = t
+    # Re-sort after deduplication
+    reverse = direction == "maximize"
+    top_trials = sorted(unique.values(), key=lambda t: t.value if t.value is not None else (-1e9 if reverse else 1e9), reverse=reverse)
+    top_trials = top_trials[:top_k] if top_k > 0 else []
     if top_trials and not args.dry:
         keep_numbers = {t.number for t in top_trials}
         _prune_trial_dirs(out_root / "trials", keep_numbers, dry_run=args.dry)
@@ -865,9 +894,26 @@ def main():
             for rep_idx in range(repeat_k):
                 rep_dir = repeats_root / f"trial_{t.number:04d}_rep_{rep_idx}"
                 repeat_seed = rep_idx  # fixed seed set per trial: 0..repeat_k-1
-                # Skip if this repeat already has results
-                if (rep_dir / "results.json").exists():
+                results_file = rep_dir / "results.json"
+                
+                # Check if this repeat already has results
+                if results_file.exists():
+                    # Load existing results for the summary
+                    try:
+                        with results_file.open("r") as f:
+                            existing_results = json.load(f)
+                        existing_score = _score_from_results(existing_results, metric)
+                        repeat_summary.append({
+                            "rank": rank,
+                            "trial_number": t.number,
+                            "repeat_index": rep_idx,
+                            "value": existing_score,
+                            "run_dir": str(rep_dir),
+                        })
+                    except Exception:
+                        pass
                     continue
+                    
                 rep_cmd = base_cmd + repeat_base_overrides + params_overrides + [f"seed={repeat_seed}"]
                 if args.dry:
                     print(
