@@ -940,7 +940,30 @@ def main():
             sec_ns.torch_device = getattr(cfg, "torch_device", torch.device(cfg.device if cfg.device else "cpu"))
             sec_ns.num_workers = getattr(cfg, "num_workers", 0)
             sec_ns.cluster = getattr(cfg, "cluster", False)
+            
+            # Derive secondary data_dir from main config's data_dir if not already set
+            # Main config data_dir is typically: /netscratch/$USER/datasets/<dataset_name>
+            # For secondary, replace the dataset name suffix with the secondary dataset name
+            sec_data_dir = get_data_cfg_value(sec_ns, "data_dir", None)
+            if sec_data_dir is None or not Path(sec_data_dir).is_absolute():
+                main_data_dir = getattr(cfg, "data_dir", None)
+                if main_data_dir:
+                    main_data_path = Path(main_data_dir)
+                    # Assume structure: .../datasets/<dataset_name>
+                    # Replace last component with secondary dataset name
+                    sec_dataset_name = get_data_cfg_value(sec_ns, "dataset_name", "ntu")
+                    sec_data_dir = str(main_data_path.parent / sec_dataset_name)
+                    print(f"[run_trial] Secondary data_dir inferred: {sec_data_dir}")
+            if sec_data_dir:
+                sec_ns.data_dir = sec_data_dir
+            
             sec_train, _, _ = build_ntu_datasets(sec_ns)
+            if sec_train is None or len(sec_train) == 0:
+                raise ValueError(
+                    f"Secondary dataset is empty. Check data_dir={getattr(sec_ns, 'data_dir', 'UNSET')} "
+                    f"and subjects={get_data_cfg_value(sec_ns, 'train_subjects', 'UNSET')}"
+                )
+            print(f"[run_trial] Secondary dataset loaded: {len(sec_train)} samples")
             pin_memory = sec_ns.torch_device.type == "cuda"
             num_workers = sec_ns.num_workers
             if not sec_ns.cluster:

@@ -214,12 +214,8 @@ def main():
             f"run.dir={str(run_dir)}",
         ]
 
-        # Skip saving checkpoints for eval runs (keep plots, only need metrics)
-        env = os.environ.copy()
-        env["RUN_TRIAL_SKIP_CHECKPOINTS"] = "1"
-
         print("Running eval:", " ".join(shlex.quote(x) for x in cmd))
-        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         print(proc.stdout)
         if proc.returncode != 0:
             raise RuntimeError(f"Eval run failed with code {proc.returncode}")

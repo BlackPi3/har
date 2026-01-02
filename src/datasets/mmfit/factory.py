@@ -6,11 +6,7 @@ import torch
 from torch.utils.data import ConcatDataset
 from src.config import get_data_cfg_value
 from .dataset import MMFit
-from .constants import (
-    DEFAULT_TRAIN_SUBJECTS, DEFAULT_VAL_SUBJECTS, DEFAULT_TEST_SUBJECTS,
-    TRAIN_SIM_SUBJECTS, DEFAULT_POSE_FILE, DEFAULT_ACC_FILE, 
-    DEFAULT_SIM_ACC_FILE, DEFAULT_LABELS_FILE, DEFAULT_SENSOR_WINDOW_LENGTH
-)
+from .constants import TRAIN_SIM_SUBJECTS
 
 
 def build_mmfit_datasets(cfg):
@@ -24,20 +20,42 @@ def build_mmfit_datasets(cfg):
     Returns:
         tuple: (train_dataset, val_dataset, test_dataset) as ConcatDataset objects
     """
-    # Extract configuration values with fallbacks
-    data_dir = get_data_cfg_value(cfg, 'data_dir', '../datasets/mm-fit/')
-    train_ids = get_data_cfg_value(cfg, 'train_subjects', DEFAULT_TRAIN_SUBJECTS)
-    val_ids = get_data_cfg_value(cfg, 'val_subjects', DEFAULT_VAL_SUBJECTS)
-    test_ids = get_data_cfg_value(cfg, 'test_subjects', DEFAULT_TEST_SUBJECTS)
+    # Extract configuration values - no fallbacks for critical paths
+    data_dir = get_data_cfg_value(cfg, 'data_dir', None)
+    if data_dir is None:
+        raise ValueError("data_dir is required for MMFit dataset. Set it in conf/data/mmfit.yaml or conf/env/*.yaml")
     
-    pose_file = get_data_cfg_value(cfg, 'pose_file', DEFAULT_POSE_FILE)
-    acc_file = get_data_cfg_value(cfg, 'acc_file', DEFAULT_ACC_FILE)
-    labels_file = get_data_cfg_value(cfg, 'labels_file', DEFAULT_LABELS_FILE)
-    sim_acc_file = get_data_cfg_value(cfg, 'sim_acc_file', DEFAULT_SIM_ACC_FILE)
+    train_ids = get_data_cfg_value(cfg, 'train_subjects', None)
+    val_ids = get_data_cfg_value(cfg, 'val_subjects', None)
+    test_ids = get_data_cfg_value(cfg, 'test_subjects', None)
+    if train_ids is None:
+        raise ValueError("train_subjects is required for MMFit dataset")
+    if val_ids is None:
+        val_ids = []
+    if test_ids is None:
+        test_ids = []
     
-    sensor_window_length = int(get_data_cfg_value(cfg, 'sensor_window_length', DEFAULT_SENSOR_WINDOW_LENGTH))
+    pose_file = get_data_cfg_value(cfg, 'pose_file', None)
+    if pose_file is None:
+        raise ValueError("pose_file is required for MMFit dataset")
+    acc_file = get_data_cfg_value(cfg, 'acc_file', None)
+    if acc_file is None:
+        raise ValueError("acc_file is required for MMFit dataset")
+    labels_file = get_data_cfg_value(cfg, 'labels_file', None)
+    if labels_file is None:
+        raise ValueError("labels_file is required for MMFit dataset")
+    sim_acc_file = get_data_cfg_value(cfg, 'sim_acc_file', None)  # optional
+    
+    sensor_window_length = get_data_cfg_value(cfg, 'sensor_window_length', None)
+    if sensor_window_length is None:
+        raise ValueError("sensor_window_length is required for MMFit dataset")
+    sensor_window_length = int(sensor_window_length)
+    
     stride_seconds = get_data_cfg_value(cfg, 'stride_seconds', None)
-    sampling_rate_hz = int(get_data_cfg_value(cfg, 'sampling_rate_hz', 100))
+    sampling_rate_hz = get_data_cfg_value(cfg, 'sampling_rate_hz', None)
+    if sampling_rate_hz is None:
+        raise ValueError("sampling_rate_hz is required for MMFit dataset")
+    sampling_rate_hz = int(sampling_rate_hz)
     
     use_simulated_data = bool(get_data_cfg_value(cfg, 'use_simulated_data', False))
     
