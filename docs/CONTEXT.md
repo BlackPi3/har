@@ -19,6 +19,15 @@
 - Branch gating: `trainer.losses.activity_real` / `activity_sim` let you train only the real branch or only the simulated branch; turning both off yields a pure regression/feature-alignment run (MSE + optional feature similarity). You can also disable MSE or feature similarity individually via `trainer.losses.mse` and `trainer.losses.feature_similarity`.
 - Freezing components: `trainer.trainable_modules` can freeze `pose2imu`, `fe`, or `ac` (and any duplicated variants), effectively turning the path into evaluation-only for those modules while others keep training.
 
+## Training scenarios under test
+
+- `scenario2` (baseline): train regressor, feature extractor, and classifier jointly on the normal path described above.
+- `scenario22`: same as scenario2 but set `trainer.gamma=0` to drop the regression/MSE term.
+- `scenario23`: scenario2 with separate classifiers for real vs simulated features (`trainer.separate_classifiers=true`).
+- `scenario24`: scenario2 with separate feature extractors for real vs simulated IMU streams (`trainer.separate_feature_extractors=true`) while sharing the classifier.
+- `scenario3`: scenario2 plus a secondary pose-only dataset; shares regressor and feature extractor but uses a dedicated secondary classifier. Goal: test whether more pose data improves generalization.
+- `scenario4`: scenario2 plus an adversarial discriminator that distinguishes real vs simulated accelerometer data to push the regressor/generator to produce better simulated IMU.
+
 ## TODO
 
 - Normalize the remaining config sections (trainer/optim/model) so only the grouped blocks exist in `resolved_config`—currently only `data` has been fully cleaned up.

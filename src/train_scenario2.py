@@ -141,16 +141,42 @@ class Trainer:
     def _cosine(self, a, b):
         return (1 - F.cosine_similarity(a, b, dim=1)).mean()
 
-    def _forward_losses(self, batch, secondary_batch=None):
+    def _forward_losses(self, batch, secondary_batch=None, eval_only=False):
+        """
+        Compute forward pass and losses.
+        
+        Args:
+            batch: (pose, acc, labels) tuple from primary dataset
+            secondary_batch: optional (pose, labels) from secondary pose-only dataset
+            eval_only: if True, only compute real-branch predictions for val/test
+                       (skip simulated branch, MSE, similarity losses)
+        """
         pose, acc, labels = batch
         pose, acc, labels = pose.to(self.device), acc.to(self.device), labels.to(self.device)
+        zero = torch.zeros((), device=self.device, dtype=pose.dtype)
+        
+        # For validation/test: only use real accelerometer through real branch
+        if eval_only:
+            real_feat = self.models["fe"](acc)
+            logits_real = self.models[self.real_classifier_key](real_feat)
+            act_loss_real = self.ce(logits_real, labels)
+            # Return activity loss as total; zeros for training-only losses (MSE, sim)
+            return (
+                act_loss_real,  # total loss = activity loss on real branch
+                0.0,            # mse (not computed in eval)
+                0.0,            # sim_loss (not computed in eval)
+                float(act_loss_real.detach().cpu()),  # act_loss (real only)
+                logits_real,
+                labels,
+            )
+        
+        # Training path: compute all branches
         sim_acc = self.models["pose2imu"](pose)
         mse = torch.nn.functional.mse_loss(sim_acc, acc)
         real_feat = self.models["fe"](acc)
         sim_feat = self.models[self.sim_fe_key](sim_acc)
         logits_real = self.models[self.real_classifier_key](real_feat)
         logits_sim = self.models[self.sim_classifier_key](sim_feat)
-        zero = torch.zeros((), device=self.device, dtype=pose.dtype)
 
         if self.beta > 0 and self.use_feature_similarity_loss:
             sim_loss = self._cosine(sim_feat, real_feat)
@@ -219,6 +245,8 @@ class Trainer:
 
     def _run_epoch(self, split="train"):
         is_train = split == "train"
+        eval_only = not is_train  # val/test: only use real accelerometer branch
+        
         for m in self.models.values():
             m.train() if is_train else m.eval()
 
@@ -236,7 +264,9 @@ class Trainer:
                         sec_batch = next(secondary_iter)
                     except StopIteration:
                         secondary_iter = None
-                total_loss, mse_l, sim_l, act_l, logits, labels = self._forward_losses(batch, sec_batch)
+                total_loss, mse_l, sim_l, act_l, logits, labels = self._forward_losses(
+                    batch, sec_batch, eval_only=eval_only
+                )
                 if is_train:
                     self.optimizer.zero_grad()
                     total_loss.backward()
