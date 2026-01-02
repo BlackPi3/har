@@ -4,7 +4,7 @@
 #SBATCH --gpus=1
 #SBATCH --cpus-per-gpu=8
 #SBATCH --mem=40G
-#SBATCH -t 03:00:00
+#SBATCH -t 12:00:00
 
 # Container + project paths
 PROJECT_ROOT=${PROJECT_ROOT:-/home/zolfaghari/har}
@@ -15,8 +15,8 @@ CONTAINER_IMAGE=${CONTAINER_IMAGE:-/netscratch/zolfaghari/images/har.sqsh}
 ########################################
 # Defaults (override via environment variables as needed)
 HPO_SPACE=${HPO_SPACE:-scenario2_utd} # scenario2_utd | scenario2_mmfit
-STUDY_NAME=${STUDY_NAME:-sc2_utd}  # descriptive study name
-N_TRIALS=${N_TRIALS:-200} # 100-150
+STUDY_NAME=${STUDY_NAME:-sc2_utd_pass2}  # descriptive study name
+N_TRIALS=${N_TRIALS:-200}              # number of HPO trials
 
 SPACE_CONFIG=${SPACE_CONFIG:-conf/hpo/$HPO_SPACE.yaml}
 OUTPUT_ROOT=${OUTPUT_ROOT:-/netscratch/zolfaghari/experiments/hpo/$STUDY_NAME}
