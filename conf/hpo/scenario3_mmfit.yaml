@@ -1,67 +1,71 @@
-# Per-scenario, per-dataset search space for Hydra Optuna Sweeper
-# Activate with: -m hydra/sweeper=optuna hpo=scenario2_mmfit
+# HPO for Scenario3 (secondary pose-only dataset) on MMFit + NTU
+# scenario3 = scenario2 + secondary pose stream from NTU
+# Tests whether more pose data improves generalization
 #
 # Multi-pass HPO Strategy:
-# - Pass 1: Loss weights + Data (most impactful for scenario2)
+# - Pass 1: Loss weights + Data + Secondary params (most impactful)
 # - Pass 2: Regularization (after fixing pass 1 winners)
 # - Pass 3: Capacity (after fixing pass 1+2 winners)
-#
-# Comment/uncomment params sections for each pass.
 
-study_name: scenario2_mmfit
-trial: scenario2_mmfit
+study_name: scenario3_mmfit
+trial: scenario2_mmfit  # base trial config
 
-# Trainer selection for this HPO space
+# Scenario3-specific overrides: enable secondary dataset
 trainer:
   name: scenario2
   epochs: 50
   patience: 50
+  secondary:
+    enabled: true
+    data: ntu100.yaml  # 100Hz to match MMFit sampling rate
+    n_classes: 60
 
-# Optional repeats for top-config evaluation
+top_k: 10
+
 repeat:
   enabled: true
   count: 5
-
-# Number of top configs to keep for re-evaluation/reporting
-top_k: 10
 
 hydra:
   sweeper:
     study_name: ${study_name}
     storage: "sqlite:///experiments/hpo/${study_name}/${study_name}.db"
     params:
-    
+
       # ============================================================
-      # PASS 1: Loss weights + Data (ACTIVE)
+      # PASS 1: Loss weights + Data + Secondary (ACTIVE)
       # ============================================================
       trainer.alpha: choice(0.2, 0.5, 1.0, 2.0)
-      trainer.beta: choice(1, 2, 5, 10, 20)  # Higher range - legacy uses beta=100
+      trainer.beta: choice(1, 2, 5, 10, 20)
       trainer.gamma: choice(0.5, 1.0, 2.0)
       
+      # Primary dataset (MMFit)
       data.sensor_window_length: choice(300, 400, 500)
       data.stride_seconds: choice(0.15, 0.2, 0.25)
       data.batch_size: choice(32, 64, 128)
-
+      
+      # Secondary dataset (NTU) params
+      trainer.secondary.loss_weight: choice(0.25, 0.5, 1.0, 2.0)
+      trainer.secondary.data: choice(ntu100.yaml)  # Match MMFit 100Hz
+      # Note: To search NTU window/stride, need run_trial to support secondary data overrides
+      # For now, use defaults from ntu100.yaml (window=250, stride=0.2)
+      
       # --- Pass 1 DEFAULTS for Pass 2+3 params ---
-      # Regularization defaults
       optim.lr: choice(0.0008)
       optim.weight_decay: choice(0.00002)
       optim.warmup_epochs: choice(5)
-      optim.warmup_start_factor: choice(0.05)
       optim.scheduler.patience: choice(15)
       optim.scheduler.factor: choice(0.1)
       model.encoder_classifier.feature_extractor.drop_prob: choice(0.2)
       model.encoder_classifier.classifier.dropout: choice(0.3)
       trainer.label_smoothing: choice(0.0)
       
-      # Capacity defaults
       model.encoder_classifier.feature_extractor.kernel_size: choice(11)
       model.encoder_classifier.feature_extractor.base_filters: choice([9,15,24])
       model.encoder_classifier.feature_extractor.embedding_dim: choice(100)
       model.encoder_classifier.classifier.hidden_units: choice([100])
       model.regressor.joint_hidden_channels: choice([32,32,32,16])
       model.regressor.temporal_hidden_channels: choice(16)
-      model.regressor.joint_kernel_sizes: choice([5,5,5,1])
 
       # ============================================================
       # PASS 2: Regularization (UNCOMMENT after Pass 1)
@@ -73,9 +77,10 @@ hydra:
       # data.sensor_window_length: choice(WINNER)
       # data.stride_seconds: choice(WINNER)
       # data.batch_size: choice(WINNER)
+      # trainer.secondary.loss_weight: choice(WINNER)
       #
       # # Search regularization:
-      # optim.lr: tag(log, interval(5e-4, 2e-3))
+      # optim.lr: tag(log, interval(3e-4, 2e-3))
       # optim.weight_decay: tag(log, interval(1e-5, 1e-4))
       # optim.warmup_epochs: choice(0, 5, 10)
       # optim.scheduler.patience: choice(10, 15, 20)
@@ -91,7 +96,6 @@ hydra:
       # model.encoder_classifier.classifier.hidden_units: choice([100])
       # model.regressor.joint_hidden_channels: choice([32,32,32,16])
       # model.regressor.temporal_hidden_channels: choice(16)
-      # model.regressor.joint_kernel_sizes: choice([5,5,5,1])
 
       # ============================================================
       # PASS 3: Capacity (UNCOMMENT after Pass 2)
@@ -103,6 +107,7 @@ hydra:
       # data.sensor_window_length: choice(WINNER)
       # data.stride_seconds: choice(WINNER)
       # data.batch_size: choice(WINNER)
+      # trainer.secondary.loss_weight: choice(WINNER)
       # optim.lr: choice(WINNER)
       # optim.weight_decay: choice(WINNER)
       # optim.warmup_epochs: choice(WINNER)
@@ -114,12 +119,11 @@ hydra:
       #
       # # Search capacity:
       # model.encoder_classifier.feature_extractor.kernel_size: choice(7, 9, 11)
-      # model.encoder_classifier.feature_extractor.base_filters: choice([8,12,16], [9,15,24], [12,18,24])
-      # model.encoder_classifier.feature_extractor.embedding_dim: choice(80, 100, 128)
-      # model.encoder_classifier.classifier.hidden_units: choice([64], [100], [64,64], [100,50])
+      # model.encoder_classifier.feature_extractor.base_filters: choice([6,9,12], [9,15,24], [12,18,30])
+      # model.encoder_classifier.feature_extractor.embedding_dim: choice(64, 100, 128)
+      # model.encoder_classifier.classifier.hidden_units: choice([64], [100], [100,64])
       # model.regressor.joint_hidden_channels: choice([24,24,16,12], [32,32,24,16], [32,32,32,16])
-      # model.regressor.temporal_hidden_channels: choice(10, 12, 16)
-      # model.regressor.joint_kernel_sizes: choice([3,3,3,1], [5,5,5,1])
+      # model.regressor.temporal_hidden_channels: choice(16)
 
   sweep:
     dir: "experiments/hpo/${study_name}/trials"

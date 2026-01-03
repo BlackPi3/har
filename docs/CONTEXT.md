@@ -28,6 +28,31 @@
 - `scenario3`: scenario2 plus a secondary pose-only dataset; shares regressor and feature extractor but uses a dedicated secondary classifier. Goal: test whether more pose data improves generalization.
 - `scenario4`: scenario2 plus an adversarial discriminator that distinguishes real vs simulated accelerometer data to push the regressor/generator to produce better simulated IMU.
 
+## HPO Configuration Structure
+
+Base trial configs live in `conf/trial/`:
+- `scenario2_utd.yaml` - UTD dataset baseline
+- `scenario2_mmfit.yaml` - MMFit dataset baseline
+
+HPO configs in `conf/hpo/` reference a base trial and apply scenario-specific overrides:
+- `scenario2_utd.yaml`, `scenario2_mmfit.yaml` - baseline HPO
+- `scenario22_utd.yaml`, `scenario22_mmfit.yaml` - no MSE (gamma=0)
+- `scenario23_utd.yaml`, `scenario23_mmfit.yaml` - separate classifiers
+- `scenario24_utd.yaml`, `scenario24_mmfit.yaml` - separate feature extractors
+- `scenario3_utd.yaml`, `scenario3_mmfit.yaml` - secondary NTU dataset
+
+Each HPO config specifies:
+- `trial:` which base trial config to use
+- `trainer:` scenario-specific overrides (epochs, patience, flags)
+- `hydra.sweeper.params:` search space
+
+## Validation/Test Evaluation
+
+During validation and test splits, only the **real accelerometer branch** is used:
+- `real acc → fe → ac → predictions`
+- Simulated data (pose2imu output) is only used during training
+- This ensures evaluation metrics reflect real-world performance
+
 ## TODO
 
 - Normalize the remaining config sections (trainer/optim/model) so only the grouped blocks exist in `resolved_config`—currently only `data` has been fully cleaned up.
