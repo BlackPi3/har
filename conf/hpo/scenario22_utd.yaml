@@ -33,12 +33,13 @@ hydra:
       # ============================================================
       # PASS 1: Loss weights + Data (ACTIVE)
       # ============================================================
-      trainer.alpha: choice(0.1, 0.2, 0.5, 1.0, 2.0, 5)
-      trainer.beta: choice(1, 2, 5, 10, 20, 50, 100)
+      trainer.alpha: choice(0.1, 0.5, 1, 5)
+      trainer.beta: choice(1, 5, 10, 50, 100)
+      trainer.gamma: choice(1, 5, 10)
       # gamma fixed at 0 for scenario22
       
       data.stride_seconds: choice(0.02, 0.04, 0.06)
-      data.batch_size: choice(16, 24, 32)
+      data.batch_size: choice(8, 16, 32)
       
       # --- Pass 1 DEFAULTS for Pass 2+3 params ---
       optim.lr: choice(0.001)
