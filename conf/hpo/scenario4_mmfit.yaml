@@ -1,0 +1,132 @@
+# HPO for Scenario4 (adversarial domain adaptation) on MMFit
+# scenario4 = scenario2 + feature-level discriminator with GRL
+# Enforces sim_acc features to be indistinguishable from real_acc features
+#
+# Multi-pass HPO Strategy:
+# - Pass 1: Loss weights + Data + Adversarial params (most impactful)
+# - Pass 2: Regularization (after fixing pass 1 winners)
+# - Pass 3: Capacity (after fixing pass 1+2 winners)
+
+study_name: scenario4_mmfit
+trial: scenario2_mmfit  # base trial config
+
+# Scenario4-specific overrides: enable adversarial training
+trainer:
+  name: scenario2
+  epochs: 50
+  patience: 50
+  adversarial:
+    enabled: true
+    use_grl: true
+    schedule_lambda: false  # Try fixed lambda first
+    discriminator:
+      hidden_units: [64]
+      dropout: 0.3
+
+top_k: 10
+
+repeat:
+  enabled: true
+  count: 5
+
+hydra:
+  sweeper:
+    study_name: ${study_name}
+    storage: "sqlite:///experiments/hpo/${study_name}/${study_name}.db"
+    params:
+
+      # ============================================================
+      # PASS 1: Loss weights + Data + Adversarial (ACTIVE)
+      # ============================================================
+      trainer.alpha: choice(0.2, 0.5, 1.0, 2.0)
+      trainer.beta: choice(0, 1, 2, 5)  # May want to reduce/remove beta since adversarial replaces it
+      trainer.gamma: choice(0.5, 1.0, 2.0)
+      
+      # Adversarial-specific params
+      trainer.adversarial.weight: choice(0.05, 0.1, 0.2, 0.5)
+      trainer.adversarial.grl_lambda: choice(0.5, 1.0)
+      
+      data.sensor_window_length: choice(300, 400, 500)
+      data.stride_seconds: choice(0.1, 0.15, 0.2)
+      data.batch_size: choice(16, 32, 48)
+      
+      # --- Pass 1 DEFAULTS for Pass 2+3 params ---
+      optim.lr: choice(0.0008)
+      optim.weight_decay: choice(0.00002)
+      optim.warmup_epochs: choice(5)
+      optim.scheduler.patience: choice(15)
+      optim.scheduler.factor: choice(0.1)
+      model.encoder_classifier.feature_extractor.drop_prob: choice(0.2)
+      model.encoder_classifier.classifier.dropout: choice(0.3)
+      trainer.label_smoothing: choice(0.0)
+      
+      model.encoder_classifier.feature_extractor.kernel_size: choice(11)
+      model.encoder_classifier.feature_extractor.base_filters: choice([9,15,24])
+      model.encoder_classifier.feature_extractor.embedding_dim: choice(100)
+      model.encoder_classifier.classifier.hidden_units: choice([100])
+      model.regressor.joint_hidden_channels: choice([32,32,32,16])
+      model.regressor.temporal_hidden_channels: choice(16)
+
+      # ============================================================
+      # PASS 2: Regularization (UNCOMMENT after Pass 1)
+      # ============================================================
+      # # Fix Pass 1 winners here:
+      # trainer.alpha: choice(WINNER)
+      # trainer.beta: choice(WINNER)
+      # trainer.gamma: choice(WINNER)
+      # trainer.adversarial.weight: choice(WINNER)
+      # trainer.adversarial.grl_lambda: choice(WINNER)
+      # data.sensor_window_length: choice(WINNER)
+      # data.stride_seconds: choice(WINNER)
+      # data.batch_size: choice(WINNER)
+      #
+      # # Search regularization:
+      # optim.lr: tag(log, interval(3e-4, 2e-3))
+      # optim.weight_decay: tag(log, interval(1e-5, 1e-4))
+      # optim.warmup_epochs: choice(0, 5, 10)
+      # optim.scheduler.patience: choice(10, 15, 20)
+      # optim.scheduler.factor: choice(0.05, 0.1, 0.2)
+      # model.encoder_classifier.feature_extractor.drop_prob: choice(0.1, 0.2, 0.3)
+      # model.encoder_classifier.classifier.dropout: choice(0.2, 0.3, 0.4)
+      # trainer.label_smoothing: choice(0.0, 0.05, 0.1)
+      #
+      # # Keep capacity defaults
+      # model.encoder_classifier.feature_extractor.kernel_size: choice(11)
+      # model.encoder_classifier.feature_extractor.base_filters: choice([9,15,24])
+      # model.encoder_classifier.feature_extractor.embedding_dim: choice(100)
+      # model.encoder_classifier.classifier.hidden_units: choice([100])
+      # model.regressor.joint_hidden_channels: choice([32,32,32,16])
+      # model.regressor.temporal_hidden_channels: choice(16)
+
+      # ============================================================
+      # PASS 3: Capacity (UNCOMMENT after Pass 2)
+      # ============================================================
+      # # Fix Pass 1+2 winners here:
+      # trainer.alpha: choice(WINNER)
+      # trainer.beta: choice(WINNER)
+      # trainer.gamma: choice(WINNER)
+      # trainer.adversarial.weight: choice(WINNER)
+      # trainer.adversarial.grl_lambda: choice(WINNER)
+      # data.sensor_window_length: choice(WINNER)
+      # data.stride_seconds: choice(WINNER)
+      # data.batch_size: choice(WINNER)
+      # optim.lr: choice(WINNER)
+      # optim.weight_decay: choice(WINNER)
+      # optim.warmup_epochs: choice(WINNER)
+      # optim.scheduler.patience: choice(WINNER)
+      # optim.scheduler.factor: choice(WINNER)
+      # model.encoder_classifier.feature_extractor.drop_prob: choice(WINNER)
+      # model.encoder_classifier.classifier.dropout: choice(WINNER)
+      # trainer.label_smoothing: choice(WINNER)
+      #
+      # # Search capacity:
+      # model.encoder_classifier.feature_extractor.kernel_size: choice(7, 9, 11)
+      # model.encoder_classifier.feature_extractor.base_filters: choice([6,9,12], [9,15,24], [12,18,30])
+      # model.encoder_classifier.feature_extractor.embedding_dim: choice(64, 100, 128)
+      # model.encoder_classifier.classifier.hidden_units: choice([64], [100], [100,64])
+      # model.regressor.joint_hidden_channels: choice([24,24,16,12], [32,32,24,16], [32,32,32,16])
+      # model.regressor.temporal_hidden_channels: choice(10, 12, 16)
+
+  sweep:
+    dir: "experiments/hpo/${study_name}/trials"
+    subdir: trial_${hydra.job.num}

@@ -559,6 +559,10 @@ def _build_models(cfg) -> Dict[str, torch.nn.Module]:
     secondary_cfg = getattr(trainer_cfg, "secondary", None) if trainer_cfg else None
     secondary_enabled = bool(getattr(secondary_cfg, "enabled", False)) if secondary_cfg else False
     secondary_classes = int(getattr(secondary_cfg, "n_classes", 60)) if secondary_cfg else 60
+    
+    # Adversarial training support (Scenario 4)
+    adv_cfg = getattr(trainer_cfg, "adversarial", None) if trainer_cfg else None
+    adversarial_enabled = bool(getattr(adv_cfg, "enabled", False)) if adv_cfg else False
 
     # Default classifier type based on encoder if not provided
     if clf_type is None:
@@ -596,6 +600,20 @@ def _build_models(cfg) -> Dict[str, torch.nn.Module]:
         models["fe_sim"] = (fe_sim_model or fe_model).to(cfg.device)
     if secondary_enabled:
         models["ac_secondary"] = ActivityClassifier(f_in=inferred_f_in, n_classes=secondary_classes).to(cfg.device)
+    if adversarial_enabled:
+        from src.models.discriminator import FeatureDiscriminator
+        disc_cfg = getattr(adv_cfg, "discriminator", None) if adv_cfg else None
+        disc_hidden = getattr(disc_cfg, "hidden_units", [64]) if disc_cfg else [64]
+        disc_dropout = float(getattr(disc_cfg, "dropout", 0.3)) if disc_cfg else 0.3
+        use_grl = bool(getattr(adv_cfg, "use_grl", True)) if adv_cfg else True
+        grl_lambda = float(getattr(adv_cfg, "grl_lambda", 1.0)) if adv_cfg else 1.0
+        models["discriminator"] = FeatureDiscriminator(
+            f_in=inferred_f_in,
+            hidden_units=list(disc_hidden) if disc_hidden else [64],
+            dropout=disc_dropout,
+            use_grl=use_grl,
+            grl_lambda=grl_lambda,
+        ).to(cfg.device)
     return models
 
 
@@ -614,7 +632,9 @@ def _build_optim(cfg, models):
                 "fe_sim": "feature_extractor",
                 "ac": "activity_classifier",
                 "ac_sim": "activity_classifier",
+                "ac_secondary": "activity_classifier",
                 "pose2imu": "regressor",
+                "discriminator": "discriminator",
             }
             alias = alias_map.get(name)
             if alias:

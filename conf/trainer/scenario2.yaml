@@ -42,3 +42,19 @@ secondary:
   loss_weight: 1.0
   data: ntu50.yaml  # name of a config under conf/data (e.g., ntu50.yaml or ntu100.yaml)
   n_classes: 60
+
+# Adversarial training (Scenario 4): feature-level discriminator with GRL.
+# Enforces that simulated features are indistinguishable from real features.
+adversarial:
+  enabled: false
+  weight: 0.1           # weight of adversarial loss in total loss
+  use_grl: true         # use Gradient Reversal Layer (recommended for domain adaptation)
+  grl_lambda: 1.0       # GRL strength (fixed or initial value if scheduled)
+  schedule_lambda: false  # if true, ramp lambda from 0→1 over training (DANN-style)
+  schedule_gamma: 10.0  # steepness of lambda schedule (only used if schedule_lambda=true)
+  # For future extension: alternating D/G updates instead of GRL
+  alternating: false    # NOT YET IMPLEMENTED - use GRL for now
+  n_critic: 1           # D updates per G update (only for alternating mode)
+  discriminator:
+    hidden_units: [64]  # MLP hidden layer sizes
+    dropout: 0.3
