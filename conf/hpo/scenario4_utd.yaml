@@ -43,7 +43,7 @@ hydra:
       trainer.gamma: choice(0.5, 1.0, 2.0)
       
       # Adversarial-specific params
-      trainer.adversarial.weight: choice(0.05, 0.1, 0.2, 0.5)
+      trainer.adversarial.weight: choice(0, 0.1, 0.2, 0.5)
       trainer.adversarial.grl_lambda: choice(0.5, 1.0)
       
       data.stride_seconds: choice(0.02, 0.03, 0.04)

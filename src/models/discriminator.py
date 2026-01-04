@@ -167,33 +167,3 @@ def compute_grl_lambda_schedule(epoch: int, total_epochs: int, gamma: float = 10
     import math
     p = epoch / max(total_epochs - 1, 1)
     return 2.0 / (1.0 + math.exp(-gamma * p)) - 1.0
-
-
-# Legacy signal-level discriminator (kept for backwards compatibility)
-class Discriminator(nn.Module):
-    """Legacy signal-level discriminator. Use FeatureDiscriminator for Scenario 4."""
-    
-    def __init__(self, input_size):
-        super(Discriminator, self).__init__()
-        self.model = nn.Sequential(
-            nn.Conv1d(in_channels=3, out_channels=64, kernel_size=5,
-                      stride=1, padding=2),
-            nn.LeakyReLU(0.2),
-            nn.Conv1d(in_channels=64, out_channels=64,
-                      kernel_size=5, stride=1, padding=2),
-            nn.LeakyReLU(0.2),
-            nn.Conv1d(in_channels=64, out_channels=1, kernel_size=5,
-                      stride=1, padding=2),
-        )
-        self._initialize_weights()
-
-    def _initialize_weights(self):
-        for m in self.modules():
-            if isinstance(m, nn.Linear):
-                nn.init.kaiming_normal_(m.weight)
-                nn.init.constant_(m.bias, 0)
-
-    def forward(self, x):
-        x = self.model(x)
-        x = x.squeeze()
-        return x
