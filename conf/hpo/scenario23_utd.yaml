@@ -37,7 +37,7 @@ hydra:
       trainer.gamma: choice(0.5, 1.0, 2.0)
       
       data.stride_seconds: choice(0.02, 0.04, 0.06)
-      data.batch_size: choice(16, 32, 48)
+      data.batch_size: choice(16, 24, 32)
       
       # --- Pass 1 DEFAULTS for Pass 2+3 params ---
       optim.lr: choice(0.001)

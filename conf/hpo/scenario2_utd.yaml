@@ -38,8 +38,8 @@ hydra:
       # trainer.beta: choice(1, 2, 5, 10, 20, 50, 100)
       # trainer.gamma: choice(1.0, 2.0, 5, 10)
       
-      # data.stride_seconds: choice(0.04, 0.06, 0.08, 0.1)
-      # data.batch_size: choice(32, 48)
+      # data.stride_seconds: choice(0.02, 0.04, 0.06)
+      # data.batch_size: choice(16, 24, 32)
       # # Note: UTD sensor_window_length is fixed at 100 (50Hz * 2sec clips)
 
       # # --- Pass 1 DEFAULTS for Pass 2+3 params ---
