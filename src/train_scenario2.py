@@ -160,12 +160,13 @@ class Trainer:
             real_feat = self.models["fe"](acc)
             logits_real = self.models[self.real_classifier_key](real_feat)
             act_loss_real = self.ce(logits_real, labels)
-            # Return activity loss as total; zeros for training-only losses (MSE, sim)
+            # Return activity loss as total; zeros for training-only losses (MSE, sim, secondary)
             return (
                 act_loss_real,  # total loss = activity loss on real branch
                 0.0,            # mse (not computed in eval)
                 0.0,            # sim_loss (not computed in eval)
                 float(act_loss_real.detach().cpu()),  # act_loss (real only)
+                0.0,            # sec_act_loss (not computed in eval)
                 logits_real,
                 labels,
             )
@@ -190,7 +191,8 @@ class Trainer:
             if self.use_activity_loss_sim:
                 act_loss = act_loss + self.ce(logits_sim, labels)
 
-        # Secondary pose-only batch (e.g., NTU)
+        # Secondary pose-only batch (e.g., NTU) - computed separately
+        sec_act_loss = zero
         if secondary_batch is not None:
             sec_pose, sec_labels = secondary_batch
             sec_pose = sec_pose.to(self.device)
@@ -199,7 +201,6 @@ class Trainer:
             sec_sim_feat = self.models[self.sim_fe_key](sec_sim_acc)
             sec_logits = self.models[self.secondary_classifier_key](sec_sim_feat)
             sec_act_loss = self.ce(sec_logits, sec_labels)
-            act_loss = act_loss + self.secondary_loss_weight * sec_act_loss
 
         total = torch.zeros((), device=self.device, dtype=pose.dtype)
         if self.use_mse_loss:
@@ -208,12 +209,16 @@ class Trainer:
             total = total + self.beta * sim_loss
         if self.alpha > 0 and self.use_activity_loss:
             total = total + self.alpha * act_loss
+        # Secondary loss added directly with its own weight (not nested under alpha)
+        if secondary_batch is not None:
+            total = total + self.secondary_loss_weight * sec_act_loss
 
         return (
             total,
             float(mse.detach().cpu()),
             float(sim_loss.detach().cpu()),
             float(act_loss.detach().cpu()),
+            float(sec_act_loss.detach().cpu()) if secondary_batch is not None else 0.0,
             logits_real,
             labels,
         )
@@ -254,7 +259,7 @@ class Trainer:
         if self.use_secondary_pose and split == "train":
             secondary_iter = iter(self.secondary_loader) if self.secondary_loader is not None else None
 
-        total, mse_acc, sim_acc, act_acc = 0.0, 0.0, 0.0, 0.0
+        total, mse_acc, sim_acc, act_acc, sec_acc = 0.0, 0.0, 0.0, 0.0, 0.0
         preds, trues = [], []
         with torch.set_grad_enabled(is_train):
             for batch in self.dl[split]:
@@ -264,7 +269,7 @@ class Trainer:
                         sec_batch = next(secondary_iter)
                     except StopIteration:
                         secondary_iter = None
-                total_loss, mse_l, sim_l, act_l, logits, labels = self._forward_losses(
+                total_loss, mse_l, sim_l, act_l, sec_l, logits, labels = self._forward_losses(
                     batch, sec_batch, eval_only=eval_only
                 )
                 if is_train:
@@ -281,6 +286,7 @@ class Trainer:
                 mse_acc += mse_l
                 sim_acc += sim_l
                 act_acc += act_l
+                sec_acc += sec_l
                 p = torch.argmax(logits, dim=1).cpu().numpy()
                 preds.extend(p)
                 trues.extend(labels.cpu().numpy())
@@ -290,6 +296,7 @@ class Trainer:
         mse_avg = mse_acc / denom
         sim_avg = sim_acc / denom
         act_avg = act_acc / denom
+        sec_avg = sec_acc / denom
 
         if trues:
             trues_arr = np.asarray(trues)
@@ -300,7 +307,7 @@ class Trainer:
             acc = 0.0
             f1 = 0.0
 
-        return avg_loss, f1, mse_avg, sim_avg, act_avg, acc
+        return avg_loss, f1, mse_avg, sim_avg, act_avg, sec_avg, acc
 
     def fit(self, epochs):
         if self.objective_metric not in (
@@ -316,11 +323,13 @@ class Trainer:
             "val_sim_loss",
             "train_act_loss",
             "val_act_loss",
+            "train_sec_loss",
         ):
             raise KeyError(
                 f"Objective metric '{self.objective_metric}' is not tracked by the Trainer. "
                 "Choose one of: train_loss, val_loss, train_f1, val_f1, train_acc, val_acc, "
-                "train_mse, val_mse, train_sim_loss, val_sim_loss, train_act_loss, val_act_loss."
+                "train_mse, val_mse, train_sim_loss, val_sim_loss, train_act_loss, val_act_loss, "
+                "train_sec_loss."
             )
 
         best_default = np.inf if self.objective_mode == "min" else -np.inf
@@ -338,6 +347,7 @@ class Trainer:
             "val_sim_loss": [],
             "train_act_loss": [],
             "val_act_loss": [],
+            "train_sec_loss": [],
         }
         
         print(f"Starting training for {epochs} epochs...")
@@ -345,11 +355,11 @@ class Trainer:
 
         for epoch in range(epochs):
             self._apply_lr_warmup(epoch)
-            tr_loss, tr_f1, tr_mse, tr_sim, tr_act, tr_acc = self._run_epoch("train")
+            tr_loss, tr_f1, tr_mse, tr_sim, tr_act, tr_sec, tr_acc = self._run_epoch("train")
             if self.skip_val:
-                val_loss, val_f1, val_mse, val_sim, val_act, val_acc = tr_loss, tr_f1, tr_mse, tr_sim, tr_act, tr_acc
+                val_loss, val_f1, val_mse, val_sim, val_act, _, val_acc = tr_loss, tr_f1, tr_mse, tr_sim, tr_act, 0.0, tr_acc
             else:
-                val_loss, val_f1, val_mse, val_sim, val_act, val_acc = self._run_epoch("val")
+                val_loss, val_f1, val_mse, val_sim, val_act, _, val_acc = self._run_epoch("val")
             current_lr = self.optimizer.param_groups[0]["lr"]
             
             history["train_loss"].append(tr_loss)
@@ -364,6 +374,7 @@ class Trainer:
             history["val_sim_loss"].append(val_sim)
             history["train_act_loss"].append(tr_act)
             history["val_act_loss"].append(val_act)
+            history["train_sec_loss"].append(tr_sec)
             
             # Print epoch progress
             print(f"Epoch {epoch+1:3d}/{epochs} | "
