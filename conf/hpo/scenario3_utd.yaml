@@ -35,9 +35,9 @@ hydra:
       # ============================================================
       # PASS 1: Loss weights + Data + Secondary (ACTIVE)
       # ============================================================
-      trainer.alpha: choice(0.2, 0.5, 1.0, 2.0)
-      trainer.beta: choice(1, 2, 5, 10, 20)
-      trainer.gamma: choice(0.5, 1.0, 2.0)
+      trainer.alpha: choice(0.1, 0.2, 0.5, 1.0, 2.0, 5)
+      trainer.beta: choice(1, 2, 5, 10, 20, 50, 100)
+      trainer.gamma: choice(1.0, 2.0, 5, 10)
       
       # Primary dataset (UTD)
       data.stride_seconds: choice(0.02, 0.04, 0.06)
