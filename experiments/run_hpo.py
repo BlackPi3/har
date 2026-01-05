@@ -67,6 +67,81 @@ def to_sqlite_url(storage: str) -> str:
     return f"sqlite:////{p}"
 
 
+def _cleanup_failed_trials(study: optuna.Study, storage_url: str, out_root: Path, penalty_value: float = -1e9) -> int:
+    """
+    Remove failed trials (FAIL state or penalty value) from the study database
+    and clean up their trial directories on disk.
+    
+    This is useful when resuming HPO after code bugs caused trials to crash.
+    Returns the number of trials cleaned up.
+    """
+    import sqlite3
+    
+    # Extract the database file path from sqlite URL
+    # Format: sqlite:////absolute/path/to/study.db
+    if not storage_url.startswith("sqlite:"):
+        print(f"[hpo] Cleanup only supported for SQLite storage, skipping.")
+        return 0
+    
+    db_path = storage_url.replace("sqlite:////", "/").replace("sqlite:///", "")
+    if not Path(db_path).exists():
+        return 0
+    
+    # Find trials to delete: FAIL state (4) or penalty value
+    failed_trials = [
+        t for t in study.trials
+        if t.state == optuna.trial.TrialState.FAIL
+        or (t.value is not None and abs(t.value - penalty_value) < 1e-6)
+    ]
+    
+    if not failed_trials:
+        return 0
+    
+    trial_ids = [t._trial_id for t in failed_trials]
+    trial_numbers = [t.number for t in failed_trials]
+    print(f"[hpo] Cleaning up {len(trial_ids)} failed/penalty trials: numbers={trial_numbers}")
+    
+    # Clean up trial directories on disk
+    trials_dir = out_root / "trials"
+    if trials_dir.exists():
+        for tnum in trial_numbers:
+            trial_dir = trials_dir / f"trial_{tnum:04d}"
+            if trial_dir.exists():
+                try:
+                    shutil.rmtree(trial_dir)
+                    print(f"[hpo] Removed trial directory: {trial_dir}")
+                except Exception as e:
+                    print(f"[hpo] Warning: Could not remove {trial_dir}: {e}")
+    
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        # Get study_id
+        cursor.execute("SELECT study_id FROM studies WHERE study_name = ?", (study.study_name,))
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            return 0
+        study_id = row[0]
+        
+        # Delete related entries first (foreign key order)
+        for table in ["trial_values", "trial_intermediate_values", "trial_params", 
+                      "trial_user_attributes", "trial_system_attributes"]:
+            cursor.execute(f"DELETE FROM {table} WHERE trial_id IN ({','.join('?' * len(trial_ids))})", trial_ids)
+        
+        # Delete trials themselves
+        cursor.execute(f"DELETE FROM trials WHERE trial_id IN ({','.join('?' * len(trial_ids))})", trial_ids)
+        
+        conn.commit()
+        conn.close()
+        print(f"[hpo] Successfully removed {len(trial_ids)} failed trials from database.")
+        return len(trial_ids)
+    except Exception as e:
+        print(f"[hpo] Warning: Failed to cleanup trials: {e}")
+        return 0
+
+
 def default_output_root(study: str) -> Path:
     return Path("experiments") / "hpo" / study
 
@@ -743,6 +818,12 @@ def main():
     pruner = MedianPruner() if args.prune else None
     study = optuna.create_study(direction=direction, study_name=study_name,
                                 storage=storage_url, load_if_exists=True, sampler=sampler, pruner=pruner)
+
+    # Clean up failed trials when resuming Stage 1 (trials phase, not repeats phase)
+    is_resuming = len(study.trials) > 0
+    is_stage1 = not repeats_path.exists()
+    if is_resuming and is_stage1:
+        _cleanup_failed_trials(study, storage_url, out_root)
 
     # If repeats already exist, we'll skip new trials and just finish repeats.
     skip_trials = repeats_path.exists()
