@@ -1,0 +1,48 @@
+# Scenario 24: Separate feature extractors (UTD)
+# Extends scenario2_utd with separate_feature_extractors=true
+# Real IMU → fe, Simulated IMU → fe_sim (classifier shared)
+defaults:
+  - _self_
+
+trial_name: scenario24_utd
+
+data:
+  name: utd
+
+  sensor_window_length: 100
+  stride_seconds: 0.1
+  batch_size: 32
+
+optim:
+  name: adam
+
+  lr: 0.001
+  weight_decay: 0.00002
+
+  warmup_epochs: 10
+  warmup_start_factor: 0.02
+
+  scheduler:
+    patience: 15
+    factor: 0.05
+
+trainer:
+  name: scenario2
+
+  alpha: 0.2
+  beta: 2
+  gamma: 1
+
+  epochs: 100
+  patience: 35
+  gradient_clip: 1.0
+
+  # Scenario 24 specific: separate feature extractors for real vs sim
+  separate_feature_extractors: true
+
+model:
+  regressor:
+    name: regressor
+  encoder_classifier:
+    name: mmfit
+    n_classes: 21

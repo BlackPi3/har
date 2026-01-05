@@ -1,0 +1,51 @@
+# Scenario 3: Secondary pose-only dataset (MMFit + NTU)
+# Extends scenario2_mmfit with secondary pose stream from NTU
+defaults:
+  - _self_
+
+trial_name: scenario3_mmfit
+
+data:
+  name: mmfit
+
+  sensor_window_length: 500
+  stride_seconds: 0.2
+  batch_size: 64
+
+optim:
+  name: adam
+
+  lr: 0.0005
+  weight_decay: 0.00002
+
+  warmup_epochs: 5
+  warmup_start_factor: 0.05
+
+  scheduler:
+    patience: 10
+    factor: 0.05
+
+trainer:
+  name: scenario2
+
+  alpha: 0.2
+  beta: 5
+  gamma: 1
+
+  epochs: 200
+  patience: 25
+  gradient_clip: 1.0
+
+  # Scenario 3 specific: enable secondary dataset
+  secondary:
+    enabled: true
+    data: ntu100.yaml  # 100Hz to match MMFit sampling rate
+    n_classes: 60
+    loss_weight: 1.0
+
+model:
+  regressor:
+    name: regressor
+  encoder_classifier:
+    name: mmfit
+    n_classes: 11

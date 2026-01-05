@@ -8,20 +8,12 @@
 # - Pass 3: Capacity (after fixing pass 1+2 winners)
 
 study_name: scenario4_mmfit
-trial: scenario2_mmfit  # base trial config
+trial: scenario4_mmfit  # includes adversarial.enabled=true
 
-# Scenario4-specific overrides: enable adversarial training
+# HPO-specific overrides (shorter epochs for faster search)
 trainer:
-  name: scenario2
   epochs: 50
   patience: 50
-  adversarial:
-    enabled: true
-    use_grl: true
-    schedule_lambda: false  # Try fixed lambda first
-    discriminator:
-      hidden_units: [64]
-      dropout: 0.3
 
 top_k: 10
 

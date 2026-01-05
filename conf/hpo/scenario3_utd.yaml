@@ -8,17 +8,12 @@
 # - Pass 3: Capacity (after fixing pass 1+2 winners)
 
 study_name: scenario3_utd
-trial: scenario2_utd  # base trial config
+trial: scenario3_utd  # includes secondary.enabled=true
 
-# Scenario3-specific overrides: enable secondary dataset
+# HPO-specific overrides (shorter epochs for faster search)
 trainer:
-  name: scenario2
   epochs: 30
   patience: 30
-  secondary:
-    enabled: true
-    data: ntu50.yaml  # 50Hz to match UTD sampling rate
-    n_classes: 60
 
 top_k: 10
 

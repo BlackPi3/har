@@ -8,14 +8,12 @@
 # - Pass 3: Capacity (after fixing pass 1+2 winners)
 
 study_name: scenario23_utd
-trial: scenario2_utd  # base trial config
+trial: scenario23_utd  # includes separate_classifiers=true
 
-# Scenario23-specific overrides: separate classifiers
+# HPO-specific overrides (shorter epochs for faster search)
 trainer:
-  name: scenario2
   epochs: 30
   patience: 30
-  separate_classifiers: true
 
 top_k: 10
 

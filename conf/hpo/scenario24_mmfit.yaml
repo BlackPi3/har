@@ -8,14 +8,12 @@
 # - Pass 3: Capacity (after fixing pass 1+2 winners)
 
 study_name: scenario24_mmfit
-trial: scenario2_mmfit  # base trial config
+trial: scenario24_mmfit  # includes separate_feature_extractors=true
 
-# Scenario24-specific overrides: separate feature extractors
+# HPO-specific overrides (shorter epochs for faster search)
 trainer:
-  name: scenario2
   epochs: 50
   patience: 50
-  separate_feature_extractors: true
 
 top_k: 10
 

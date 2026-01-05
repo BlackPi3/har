@@ -7,16 +7,12 @@
 # - Pass 3: Capacity (after fixing pass 1+2 winners)
 
 study_name: scenario22_mmfit
-trial: scenario2_mmfit  # base trial config
+trial: scenario22_mmfit  # includes gamma=0 and losses.mse=false
 
-# Scenario22-specific overrides: disable MSE loss
+# HPO-specific overrides (shorter epochs for faster search)
 trainer:
-  name: scenario2
   epochs: 50
   patience: 50
-  gamma: 0  # No regression loss
-  losses:
-    mse: false  # Explicitly disable MSE
 
 top_k: 10
 

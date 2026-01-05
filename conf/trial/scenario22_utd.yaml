@@ -1,0 +1,48 @@
+# Scenario 22: No MSE/regression (UTD)
+# Extends scenario2_utd with gamma=0 (drop regression term)
+defaults:
+  - _self_
+
+trial_name: scenario22_utd
+
+data:
+  name: utd
+
+  sensor_window_length: 100
+  stride_seconds: 0.1
+  batch_size: 32
+
+optim:
+  name: adam
+
+  lr: 0.001
+  weight_decay: 0.00002
+
+  warmup_epochs: 10
+  warmup_start_factor: 0.02
+
+  scheduler:
+    patience: 15
+    factor: 0.05
+
+trainer:
+  name: scenario2
+
+  alpha: 0.2
+  beta: 2
+  gamma: 0  # Scenario 22: no regression loss
+
+  epochs: 100
+  patience: 35
+  gradient_clip: 1.0
+
+  # Scenario 22 specific: disable MSE loss
+  losses:
+    mse: false
+
+model:
+  regressor:
+    name: regressor
+  encoder_classifier:
+    name: mmfit
+    n_classes: 21

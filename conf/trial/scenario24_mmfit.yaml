@@ -1,0 +1,48 @@
+# Scenario 24: Separate feature extractors (MMFit)
+# Extends scenario2_mmfit with separate_feature_extractors=true
+# Real IMU → fe, Simulated IMU → fe_sim (classifier shared)
+defaults:
+  - _self_
+
+trial_name: scenario24_mmfit
+
+data:
+  name: mmfit
+
+  sensor_window_length: 500
+  stride_seconds: 0.2
+  batch_size: 64
+
+optim:
+  name: adam
+
+  lr: 0.0005
+  weight_decay: 0.00002
+
+  warmup_epochs: 5
+  warmup_start_factor: 0.05
+
+  scheduler:
+    patience: 10
+    factor: 0.05
+
+trainer:
+  name: scenario2
+
+  alpha: 0.2
+  beta: 5
+  gamma: 1
+
+  epochs: 200
+  patience: 25
+  gradient_clip: 1.0
+
+  # Scenario 24 specific: separate feature extractors for real vs sim
+  separate_feature_extractors: true
+
+model:
+  regressor:
+    name: regressor
+  encoder_classifier:
+    name: mmfit
+    n_classes: 11

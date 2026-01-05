@@ -8,17 +8,12 @@
 # - Pass 3: Capacity (after fixing pass 1+2 winners)
 
 study_name: scenario3_mmfit
-trial: scenario2_mmfit  # base trial config
+trial: scenario3_mmfit  # includes secondary.enabled=true
 
-# Scenario3-specific overrides: enable secondary dataset
+# HPO-specific overrides (shorter epochs for faster search)
 trainer:
-  name: scenario2
   epochs: 50
   patience: 50
-  secondary:
-    enabled: true
-    data: ntu100.yaml  # 100Hz to match MMFit sampling rate
-    n_classes: 60
 
 top_k: 10
 
