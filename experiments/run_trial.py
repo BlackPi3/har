@@ -977,6 +977,13 @@ def main():
             if sec_data_dir:
                 sec_ns.data_dir = sec_data_dir
             
+            # Sync batch_size to primary for consistent gradient updates
+            # This makes loss_weight intuitive: weight=1.0 means equal contribution
+            primary_batch = get_data_cfg_value(cfg, "batch_size", None)
+            if primary_batch is not None:
+                sec_ns.batch_size = int(primary_batch)
+                print(f"[run_trial] Secondary batch_size set to match primary: {primary_batch}")
+            
             sec_train, _, _ = build_ntu_datasets(sec_ns)
             if sec_train is None or len(sec_train) == 0:
                 raise ValueError(
