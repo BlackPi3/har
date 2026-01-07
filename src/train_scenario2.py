@@ -191,6 +191,8 @@ class Trainer:
                 float(act_loss_real.detach().cpu()),  # act_loss (real only)
                 0.0,            # sec_act_loss (not computed in eval)
                 0.0,            # adv_loss (not computed in eval)
+                0.0,            # d_acc (not computed in eval)
+                0.0,            # feat_dist (not computed in eval)
                 logits_real,
                 labels,
             )
