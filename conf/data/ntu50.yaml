@@ -11,6 +11,6 @@ test_subjects: [36, 37, 38, 39, 40]
 # Sampling + window policy (50 Hz, 2-second window)
 sampling_rate_hz: 50
 sensor_window_length: 100
-stride_seconds: 0.1
-batch_size: 32
+stride_seconds: 0.04
+batch_size: 8
 selected_joints: [8, 9, 10]  # right shoulder, elbow, wrist (0-based)

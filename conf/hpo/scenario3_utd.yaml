@@ -36,7 +36,7 @@ hydra:
       
       # Primary Dataset (UTD)
       data.stride_seconds: choice(0.02, 0.04, 0.06)
-      data.batch_size: choice(8, 16, 32)
+      data.batch_size: choice(8)
       
       # Secondary dataset (NTU) params
       trainer.secondary.loss_weight: choice(0.25, 0.5, 1.0, 2.0)
@@ -65,13 +65,13 @@ hydra:
       # PASS 2: Regularization (UNCOMMENT after Pass 1)
       # ============================================================
       # # Fix Pass 1 winners here:
-      # trainer.alpha: choice(WINNER)
-      # trainer.beta: choice(WINNER)
-      # trainer.gamma: choice(WINNER)
-      # data.stride_seconds: choice(WINNER)
-      # data.batch_size: choice(WINNER)
-      # trainer.secondary.loss_weight: choice(WINNER)
-      #
+      # trainer.alpha: choice(0.1)
+      # trainer.beta: choice(5)
+      # trainer.gamma: choice(1, 10)
+      # data.stride_seconds: choice(0.04)
+      # data.batch_size: choice(8)
+      # trainer.secondary.loss_weight: choice(0.25)
+      
       # # Search regularization:
       # optim.lr: tag(log, interval(5e-4, 2e-3))
       # optim.weight_decay: tag(log, interval(1e-5, 1e-4))
@@ -81,7 +81,7 @@ hydra:
       # model.encoder_classifier.feature_extractor.drop_prob: choice(0.1, 0.2, 0.3)
       # model.encoder_classifier.classifier.dropout: choice(0.2, 0.3, 0.4)
       # trainer.label_smoothing: choice(0.0, 0.05, 0.1)
-      #
+      
       # # Keep capacity defaults
       # model.encoder_classifier.feature_extractor.kernel_size: choice(9)
       # model.encoder_classifier.feature_extractor.base_filters: choice([9,15,24])
