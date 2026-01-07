@@ -6,7 +6,7 @@ defaults:
 trial_name: scenario4_utd
 
 # Artifact control
-save_artifacts: false      # Save history to JSON + generate plots
+save_artifacts: true      # Save history to JSON + generate plots
 save_checkpoints: false    # Save model weights
 
 data:

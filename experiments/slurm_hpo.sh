@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
-#SBATCH -J sc2_utd_p3
-#SBATCH -p A100-40GB
+#SBATCH -J sc4_utd_p1
+#SBATCH -p L40S
 #SBATCH --gpus=1
 #SBATCH --cpus-per-gpu=8
 #SBATCH --mem=40G
 #SBATCH -t 03-00:00:00
 
-# Container + project paths
-PROJECT_ROOT=${PROJECT_ROOT:-/home/zolfaghari/har}
-CONTAINER_IMAGE=${CONTAINER_IMAGE:-/netscratch/zolfaghari/images/har.sqsh}
-
 ########################################
 # HPO configuration (study via conf/hpo)
 ########################################
 # Defaults (override via environment variables as needed)
-HPO_SPACE=${HPO_SPACE:-scenario2_utd} # scenario23_utd | scenario23_mmfit
-STUDY_NAME=${STUDY_NAME:-sc2_utd_p3}  # descriptive study name
+HPO_SPACE=${HPO_SPACE:-scenario4_utd} # scenario23_utd | scenario23_mmfit
+STUDY_NAME=${STUDY_NAME:-sc4_utd_p1[2]}  # descriptive study name
 N_TRIALS=${N_TRIALS:-150}              # number of HPO trials
+
+# Container + project paths
+PROJECT_ROOT=${PROJECT_ROOT:-/home/zolfaghari/har}
+CONTAINER_IMAGE=${CONTAINER_IMAGE:-/netscratch/zolfaghari/images/har.sqsh}
 
 SPACE_CONFIG=${SPACE_CONFIG:-conf/hpo/$HPO_SPACE.yaml}
 OUTPUT_ROOT=${OUTPUT_ROOT:-/netscratch/zolfaghari/experiments/hpo/$STUDY_NAME}
@@ -34,8 +34,6 @@ LOG_OUT="${LOG_STEM}.out"
 LOG_ERR="${LOG_STEM}.err"
 echo "Stdout: $LOG_OUT"
 echo "Stderr: $LOG_ERR"
-
-
 
 # Optuna + Hydra diagnostics
 export HYDRA_FULL_ERROR=1
