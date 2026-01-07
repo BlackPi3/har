@@ -1,14 +1,18 @@
 # Project Brief
 
-- This is a research project on improving Human Activity Recognition (HAR) performance across multiple datasets (currently MM-Fit and UTD, with room to add more).
+- This is a research project on improving Human Activity Recognition (HAR) performance across multiple datasets (currently MM-Fit, UTD and NTU)
 - Data lives under `datasets/`. Hydra-style configs live under `conf/` and describe datasets, trials, trainers, and HPO spaces.
 - Main entrypoints:
   - Single experiment: `python -m experiments.run_trial ...`
   - Hyperparam search: `python -m experiments.run_hpo ...`
-  - Config knobs get passed to `run_trial` and `run_hpo` scripts to control behavior (dataset selection, model/trainer settings, etc.).
-- `src/` contains the backbone Python code: PyTorch datasets/dataloaders, preprocessing pipelines, and training logic (`train_scenario2.py`).
-- Cluster launchers (`experiments/slurm_trial.sh`, `experiments/slurm_hpo.sh`) wrap the same entrypoints for SLURM environments.
+  - Evaluation on test set: `python -m experiments.run_eval ...`
+  - Config knobs get passed to `run_trial`, `run_hpo`, `run_eval` scripts to control behavior (dataset selection, model/trainer settings, etc.).
+- `src/` contains the backbone Python code: PyTorch datasets/dataloaders, preprocessing pipelines, training logic (`train_scenario2.py`), models (`classifier.py`, `discriminator.py`, `regressor`)
+- Cluster launchers (`experiments/slurm_trial.sh`, `experiments/slurm_hpo.sh`, `experiments/slurm_eval.sh`) wrap the same entrypoints for SLURM environments.
 - For local runs/tests, activate the `har` conda env first (`conda activate har`).
+- There are multiple training pipelines that go under the names: `scneario2`, `scenario22`, `scenario23`, `scenario24`, `scenario3` and `scenario4`. All these pipeline's have the same goal of improving macro F1 and accuracy metrics on unseen data in HAR tasks. the general idea in all these pipellines is that we train our models using read and simulated accelerometer data. the simulated accelerometer data come from pose sequence. 
+- for each scenairo we have a dedicated config under `conf/trial/` and `conf/hpo/`. 
+- we do our hyperparameters optimization (HPO) in 3 passes (`conf/hpo/`). each pass optimizes a set of parameters.
 
 ## Scenario2 training paths
 

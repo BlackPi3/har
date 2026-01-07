@@ -5,10 +5,17 @@ The discriminator classifies features as "real" (from real accelerometer)
 or "simulated" (from pose-to-IMU regressor).
 
 Includes Gradient Reversal Layer (GRL) for domain-adversarial training.
+
+Improvements for stable training:
+- Label smoothing: Prevents D from becoming overconfident
+- Feature normalization: L2 normalize features for consistent magnitudes
+- Spectral normalization: Constrains D's Lipschitz constant
+- Hinge loss option: Alternative to BCE for stability
 """
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.autograd import Function
 
 
@@ -70,6 +77,9 @@ class FeatureDiscriminator(nn.Module):
         dropout: Dropout probability
         use_grl: Whether to apply gradient reversal internally
         grl_lambda: Initial GRL lambda value
+        normalize_features: L2 normalize input features for stable training
+        use_spectral_norm: Apply spectral normalization to constrain D
+        label_smoothing: Smooth labels (e.g., 0.1 → real=0.9, sim=0.1)
     """
     
     def __init__(
@@ -79,6 +89,9 @@ class FeatureDiscriminator(nn.Module):
         dropout: float = 0.3,
         use_grl: bool = True,
         grl_lambda: float = 1.0,
+        normalize_features: bool = True,
+        use_spectral_norm: bool = False,
+        label_smoothing: float = 0.1,
     ):
         super().__init__()
         
@@ -88,14 +101,19 @@ class FeatureDiscriminator(nn.Module):
         self.use_grl = use_grl
         self.grl = GradientReversalLayer(grl_lambda) if use_grl else None
         self._grl_lambda = grl_lambda
+        self.normalize_features = normalize_features
+        self.label_smoothing = label_smoothing
         
         # Build MLP: f_in -> hidden -> ... -> 1
         layers = []
         prev_dim = f_in
         
         for h_dim in hidden_units:
+            linear = nn.Linear(prev_dim, h_dim)
+            if use_spectral_norm:
+                linear = nn.utils.spectral_norm(linear)
             layers.extend([
-                nn.Linear(prev_dim, h_dim),
+                linear,
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.Dropout(dropout),
             ])
@@ -132,6 +150,10 @@ class FeatureDiscriminator(nn.Module):
         """
         x = features
         
+        # L2 normalize features for stable training
+        if self.normalize_features:
+            x = F.normalize(x, p=2, dim=1)
+        
         # Apply GRL if configured
         should_apply = apply_grl if apply_grl is not None else self.use_grl
         if should_apply and self.grl is not None:
@@ -142,7 +164,25 @@ class FeatureDiscriminator(nn.Module):
     
     def forward_no_grl(self, features: torch.Tensor):
         """Forward pass without GRL (for discriminator loss computation)."""
-        return self.net(features)
+        x = features
+        if self.normalize_features:
+            x = F.normalize(x, p=2, dim=1)
+        return self.net(x)
+    
+    def get_smooth_labels(self, batch_size: int, real: bool, device: torch.device):
+        """
+        Get smoothed labels for discriminator training.
+        
+        With label_smoothing=0.1:
+            real: 0.9 instead of 1.0
+            sim:  0.1 instead of 0.0
+            
+        This prevents D from becoming overconfident and maintains gradient signal.
+        """
+        if real:
+            return torch.full((batch_size, 1), 1.0 - self.label_smoothing, device=device)
+        else:
+            return torch.full((batch_size, 1), self.label_smoothing, device=device)
 
 
 def compute_grl_lambda_schedule(epoch: int, total_epochs: int, gamma: float = 10.0) -> float:

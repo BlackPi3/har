@@ -228,11 +228,19 @@ class Trainer:
 
         # Adversarial loss (Scenario 4): discriminator classifies real vs simulated features
         adv_loss = zero
+        d_acc = 0.0
+        feat_dist = 0.0
         if self.use_adversarial:
             D = self.models["discriminator"]
             batch_size = real_feat.size(0)
-            real_labels = torch.ones(batch_size, 1, device=self.device)
-            sim_labels = torch.zeros(batch_size, 1, device=self.device)
+            
+            # Use smoothed labels from discriminator (prevents overconfident D)
+            if hasattr(D, 'get_smooth_labels'):
+                real_labels = D.get_smooth_labels(batch_size, real=True, device=self.device)
+                sim_labels = D.get_smooth_labels(batch_size, real=False, device=self.device)
+            else:
+                real_labels = torch.ones(batch_size, 1, device=self.device)
+                sim_labels = torch.zeros(batch_size, 1, device=self.device)
             
             # Get current GRL lambda (may be scheduled)
             current_lambda = self._current_grl_lambda if hasattr(self, '_current_grl_lambda') else self.adv_grl_lambda
@@ -245,6 +253,18 @@ class Trainer:
             
             # Discriminator loss: correctly classify real vs sim
             adv_loss = self.bce(d_real_logits, real_labels) + self.bce(d_sim_logits, sim_labels)
+            
+            # --- Adversarial diagnostics ---
+            with torch.no_grad():
+                # D accuracy: how well can D distinguish real from sim?
+                # Healthy training: starts high (~100%), drops toward 50% as FE improves
+                d_pred_real = (torch.sigmoid(d_real_logits) > 0.5).float()
+                d_pred_sim = (torch.sigmoid(d_sim_logits) < 0.5).float()
+                d_acc = float((d_pred_real.mean() + d_pred_sim.mean()) / 2)
+                
+                # Feature distance: L2 distance between real and sim feature means
+                # Should decrease as sim features become more "real-like"
+                feat_dist = float(torch.norm(real_feat.mean(0) - sim_feat.mean(0), p=2).cpu())
             
             # TODO: For secondary dataset, add sim features from secondary to adversarial
             # This would enforce NTU sim_acc to also look "real" by UTD standards
@@ -273,6 +293,8 @@ class Trainer:
             float(act_loss.detach().cpu()),
             float(sec_act_loss.detach().cpu()) if secondary_batch is not None else 0.0,
             float(adv_loss.detach().cpu()) if self.use_adversarial else 0.0,
+            d_acc,
+            feat_dist,
             logits_real,
             labels,
         )
@@ -314,6 +336,7 @@ class Trainer:
             secondary_iter = iter(self.secondary_loader) if self.secondary_loader is not None else None
 
         total, mse_acc, sim_acc, act_acc, sec_acc, adv_acc = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+        d_acc_acc, feat_dist_acc = 0.0, 0.0  # Adversarial diagnostics
         preds, trues = [], []
         with torch.set_grad_enabled(is_train):
             for batch in self.dl[split]:
@@ -323,7 +346,7 @@ class Trainer:
                         sec_batch = next(secondary_iter)
                     except StopIteration:
                         secondary_iter = None
-                total_loss, mse_l, sim_l, act_l, sec_l, adv_l, logits, labels = self._forward_losses(
+                total_loss, mse_l, sim_l, act_l, sec_l, adv_l, d_acc_l, feat_dist_l, logits, labels = self._forward_losses(
                     batch, sec_batch, eval_only=eval_only
                 )
                 if is_train:
@@ -342,6 +365,8 @@ class Trainer:
                 act_acc += act_l
                 sec_acc += sec_l
                 adv_acc += adv_l
+                d_acc_acc += d_acc_l
+                feat_dist_acc += feat_dist_l
                 p = torch.argmax(logits, dim=1).cpu().numpy()
                 preds.extend(p)
                 trues.extend(labels.cpu().numpy())
@@ -353,6 +378,8 @@ class Trainer:
         act_avg = act_acc / denom
         sec_avg = sec_acc / denom
         adv_avg = adv_acc / denom
+        d_acc_avg = d_acc_acc / denom
+        feat_dist_avg = feat_dist_acc / denom
 
         if trues:
             trues_arr = np.asarray(trues)
@@ -363,7 +390,7 @@ class Trainer:
             acc = 0.0
             f1 = 0.0
 
-        return avg_loss, f1, mse_avg, sim_avg, act_avg, sec_avg, adv_avg, acc
+        return avg_loss, f1, mse_avg, sim_avg, act_avg, sec_avg, adv_avg, d_acc_avg, feat_dist_avg, acc
 
     def fit(self, epochs):
         if self.objective_metric not in (
@@ -381,12 +408,14 @@ class Trainer:
             "val_act_loss",
             "train_sec_loss",
             "train_adv_loss",
+            "train_d_acc",
+            "train_feat_dist",
         ):
             raise KeyError(
                 f"Objective metric '{self.objective_metric}' is not tracked by the Trainer. "
                 "Choose one of: train_loss, val_loss, train_f1, val_f1, train_acc, val_acc, "
                 "train_mse, val_mse, train_sim_loss, val_sim_loss, train_act_loss, val_act_loss, "
-                "train_sec_loss, train_adv_loss."
+                "train_sec_loss, train_adv_loss, train_d_acc, train_feat_dist."
             )
 
         # Store total epochs for GRL lambda scheduling
@@ -410,6 +439,9 @@ class Trainer:
             "val_act_loss": [],
             "train_sec_loss": [],
             "train_adv_loss": [],
+            "train_d_acc": [],
+            "train_feat_dist": [],
+            "train_grl_lambda": [],
         }
         
         print(f"Starting training for {epochs} epochs...")
@@ -427,11 +459,11 @@ class Trainer:
             elif self.use_adversarial:
                 self._current_grl_lambda = self.adv_grl_lambda
             
-            tr_loss, tr_f1, tr_mse, tr_sim, tr_act, tr_sec, tr_adv, tr_acc = self._run_epoch("train")
+            tr_loss, tr_f1, tr_mse, tr_sim, tr_act, tr_sec, tr_adv, tr_d_acc, tr_feat_dist, tr_acc = self._run_epoch("train")
             if self.skip_val:
-                val_loss, val_f1, val_mse, val_sim, val_act, _, _, val_acc = tr_loss, tr_f1, tr_mse, tr_sim, tr_act, 0.0, 0.0, tr_acc
+                val_loss, val_f1, val_mse, val_sim, val_act, _, _, _, _, val_acc = tr_loss, tr_f1, tr_mse, tr_sim, tr_act, 0.0, 0.0, 0.0, 0.0, tr_acc
             else:
-                val_loss, val_f1, val_mse, val_sim, val_act, _, _, val_acc = self._run_epoch("val")
+                val_loss, val_f1, val_mse, val_sim, val_act, _, _, _, _, val_acc = self._run_epoch("val")
             current_lr = self.optimizer.param_groups[0]["lr"]
             
             history["train_loss"].append(tr_loss)
@@ -448,12 +480,20 @@ class Trainer:
             history["val_act_loss"].append(val_act)
             history["train_sec_loss"].append(tr_sec)
             history["train_adv_loss"].append(tr_adv)
+            history["train_d_acc"].append(tr_d_acc)
+            history["train_feat_dist"].append(tr_feat_dist)
+            # Track GRL lambda for adversarial training
+            grl_lam = getattr(self, '_current_grl_lambda', self.adv_grl_lambda) if self.use_adversarial else 0.0
+            history["train_grl_lambda"].append(grl_lam)
             
-            # Print epoch progress
-            print(f"Epoch {epoch+1:3d}/{epochs} | "
+            # Print epoch progress (with adversarial diagnostics if enabled)
+            base_msg = (f"Epoch {epoch+1:3d}/{epochs} | "
                   f"Train Loss: {tr_loss:.4f} | Val Loss: {val_loss:.4f} | "
                   f"Train F1: {tr_f1:.4f} | Val F1: {val_f1:.4f} | "
                   f"LR: {current_lr:.3e}")
+            if self.use_adversarial:
+                base_msg += f" | λ: {grl_lam:.2f} | D_acc: {tr_d_acc:.3f} | Feat_dist: {tr_feat_dist:.2f}"
+            print(base_msg)
 
             if self.scheduler is not None and self._lr_warmup_finished:
                 metric_name = self.scheduler_metric

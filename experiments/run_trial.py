@@ -33,13 +33,34 @@ try:
 except Exception:  # pragma: no cover - optional dependency
     plt = None
 
-_SKIP_ARTIFACTS = str(
+# Environment variable fallbacks (config takes precedence)
+_ENV_SKIP_ARTIFACTS = str(
     os.environ.get("RUN_TRIAL_SKIP_ARTIFACTS", "")
 ).lower() in ("1", "true", "yes")
 
-_SKIP_CHECKPOINTS = str(
+_ENV_SKIP_CHECKPOINTS = str(
     os.environ.get("RUN_TRIAL_SKIP_CHECKPOINTS", "")
 ).lower() in ("1", "true", "yes")
+
+
+def _should_save_artifacts(cfg: SimpleNamespace) -> bool:
+    """Check if artifacts should be saved. Config takes precedence over env var."""
+    # Config: trial.save_artifacts (default True)
+    cfg_value = getattr(getattr(cfg, "trial", None), "save_artifacts", None)
+    if cfg_value is not None:
+        return bool(cfg_value)
+    # Fallback to env var (inverted: env says skip, we return save)
+    return not _ENV_SKIP_ARTIFACTS
+
+
+def _should_save_checkpoints(cfg: SimpleNamespace) -> bool:
+    """Check if checkpoints should be saved. Config takes precedence over env var."""
+    # Config: trial.save_checkpoints (default True)
+    cfg_value = getattr(getattr(cfg, "trial", None), "save_checkpoints", None)
+    if cfg_value is not None:
+        return bool(cfg_value)
+    # Fallback to env var
+    return not _ENV_SKIP_CHECKPOINTS
 
 
 def _dict_to_ns(d: Dict[str, Any]) -> SimpleNamespace:
@@ -607,12 +628,19 @@ def _build_models(cfg) -> Dict[str, torch.nn.Module]:
         disc_dropout = float(getattr(disc_cfg, "dropout", 0.3)) if disc_cfg else 0.3
         use_grl = bool(getattr(adv_cfg, "use_grl", True)) if adv_cfg else True
         grl_lambda = float(getattr(adv_cfg, "grl_lambda", 1.0)) if adv_cfg else 1.0
+        # New stability options
+        normalize_features = bool(getattr(disc_cfg, "normalize_features", True)) if disc_cfg else True
+        use_spectral_norm = bool(getattr(disc_cfg, "use_spectral_norm", False)) if disc_cfg else False
+        label_smoothing = float(getattr(disc_cfg, "label_smoothing", 0.1)) if disc_cfg else 0.1
         models["discriminator"] = FeatureDiscriminator(
             f_in=inferred_f_in,
             hidden_units=list(disc_hidden) if disc_hidden else [64],
             dropout=disc_dropout,
             use_grl=use_grl,
             grl_lambda=grl_lambda,
+            normalize_features=normalize_features,
+            use_spectral_norm=use_spectral_norm,
+            label_smoothing=label_smoothing,
         ).to(cfg.device)
     return models
 
@@ -894,6 +922,32 @@ def _save_plots(run_dir: Path, history: Dict[str, List[Any]], best_epoch: int | 
         log_scale=True,
         use_dual_axis=True,
     )
+    
+    # Adversarial training diagnostics (Scenario 4)
+    if history.get("train_d_acc"):
+        _plot_pair(
+            history.get("train_d_acc"),
+            None,
+            ("D Accuracy", ""),
+            "Discriminator Accuracy",
+            "d_acc.png",
+        )
+    if history.get("train_feat_dist"):
+        _plot_pair(
+            history.get("train_feat_dist"),
+            None,
+            ("Feature Distance", ""),
+            "Real vs Sim Feature Distance (L2)",
+            "feat_dist.png",
+        )
+    if history.get("train_grl_lambda"):
+        _plot_pair(
+            history.get("train_grl_lambda"),
+            None,
+            ("GRL Lambda", ""),
+            "Gradient Reversal Lambda Schedule",
+            "grl_lambda.png",
+        )
 
 
 def _write_config(run_dir: Path, cfg: SimpleNamespace) -> None:
@@ -1029,7 +1083,9 @@ def main():
     best_state = getattr(trainer, "best_state", None) if trainer else None
     best_epoch = getattr(trainer, "best_epoch", None) if trainer else None
 
-    include_history = not _SKIP_ARTIFACTS
+    save_artifacts = _should_save_artifacts(cfg)
+    save_checkpoints = _should_save_checkpoints(cfg)
+    include_history = save_artifacts
     objective_meta = None
     if trainer and getattr(trainer, "objective_metric", None):
         metric_name = getattr(trainer, "objective_metric", None)
@@ -1054,10 +1110,10 @@ def main():
         test_metrics=test_metrics,
         skip_val=bool(getattr(trainer, "skip_val", False)) if trainer else False,
     )
-    if _SKIP_ARTIFACTS:
+    if not save_artifacts:
         print("[run_trial] Artifact saving disabled for this run.")
     else:
-        if _SKIP_CHECKPOINTS:
+        if not save_checkpoints:
             print("[run_trial] Checkpoint saving disabled for this run.")
         else:
             _save_best_state(run_dir, best_state)
