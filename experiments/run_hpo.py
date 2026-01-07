@@ -298,7 +298,7 @@ def build_space_from_params(trial: optuna.trial.Trial, params_node: Dict[str, An
     return suggested
 
 
-def run_trial(cmd_base: list[str], run_dir: Path, skip_artifacts: bool = False,
+def run_trial(cmd_base: list[str], run_dir: Path,
               study_name: str | None = None, group: str = "hpo") -> Dict[str, Any]:
     run_dir.mkdir(parents=True, exist_ok=True)
     overrides = [
@@ -309,11 +309,7 @@ def run_trial(cmd_base: list[str], run_dir: Path, skip_artifacts: bool = False,
         overrides.append(f"run.study={study_name}")
     full_cmd = cmd_base + overrides
     print("Launching:", " ".join(shlex.quote(p) for p in full_cmd))
-    env = os.environ.copy()
-    if skip_artifacts:
-        env["RUN_TRIAL_SKIP_ARTIFACTS"] = "1"
-        env.setdefault("RUN_TRIAL_SKIP_CHECKPOINTS", "1")
-    proc = subprocess.run(full_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
+    proc = subprocess.run(full_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     print(proc.stdout)
     results_path = run_dir / "results.json"
     if not results_path.exists():
@@ -599,6 +595,7 @@ def _extract_yaml_meta(yaml_path: Path, data: Dict[str, Any] | None = None) -> D
         "top_k": 1,
         "repeat_enabled": False,
         "repeat_k": 1,
+        "save_artifacts": False,
     }
     if yaml is None and data is None:
         return meta
@@ -657,6 +654,12 @@ def _extract_yaml_meta(yaml_path: Path, data: Dict[str, Any] | None = None) -> D
                     meta["repeat_k"] = k_val
             except Exception:
                 pass
+        try:
+            save_artifacts = data.get("save_artifacts", None)
+            if save_artifacts is not None:
+                meta["save_artifacts"] = bool(save_artifacts)
+        except Exception:
+            pass
     except Exception:
         pass
     return meta
@@ -719,6 +722,7 @@ def main():
     parser.add_argument("--prune", action="store_true", help="Enable MedianPruner")
     parser.add_argument("--space-config", type=str, default=None, help="Hydra sweeper YAML defining the search space (conf/hpo/*.yaml)")
     parser.add_argument("--dry", action="store_true", help="Print commands without running")
+    parser.add_argument("--save-artifacts", action="store_true", help="Save artifacts (plots, history) for each trial")
     # Explicit run-time configuration (avoid free-form overrides for simplicity)
     parser.add_argument("--env", type=str, default="remote", help="Hydra env choice (e.g., local, remote)")
     parser.add_argument("--epochs", type=int, default=None, help="Trainer epochs override; if omitted, use config default")
@@ -787,6 +791,8 @@ def main():
     top_k = max(1, int(meta.get("top_k") or 1))
     repeat_enabled = True
     repeat_k = max(1, int(meta.get("repeat_k") or 1))
+    # CLI flag overrides YAML config if explicitly set
+    save_artifacts = args.save_artifacts or meta.get("save_artifacts", False)
 
     # Adopt study name from YAML if provided, unless user explicitly passed one
     default_study = parser.get_default("study_name")
@@ -843,6 +849,8 @@ def main():
         base_overrides.append(f"trial={trial_override}")
     if args.epochs is not None:
         base_overrides.append(f"trainer.epochs={args.epochs}")
+    # Pass save_artifacts as Hydra override (controls plots and checkpoints)
+    base_overrides.append(f"save_artifacts={'true' if save_artifacts else 'false'}")
 
     # Default epochs from trial config (used for repeat stage to revert to canonical value)
     default_trial_epochs = _load_trial_default_epochs(trial_override)
@@ -909,7 +917,7 @@ def main():
                 print(f"DRY RUN (seed {new_seed}):", " ".join(shlex.quote(x) for x in cmd))
                 return 0.0
 
-            results = run_trial(cmd, trial_dir, skip_artifacts=True, study_name=study_name)
+            results = run_trial(cmd, trial_dir, study_name=study_name)
             if not results:
                 return -1e9 if direction == "maximize" else 1e9
             
@@ -1002,7 +1010,7 @@ def main():
                         " ".join(shlex.quote(x) for x in rep_cmd),
                     )
                     continue
-                rep_results = run_trial(rep_cmd, rep_dir, skip_artifacts=True, study_name=study_name, group="repeat")
+                rep_results = run_trial(rep_cmd, rep_dir, study_name=study_name, group="repeat")
                 rep_score = _score_from_results(rep_results, metric) if rep_results else None
                 repeat_summary.append(
                     {

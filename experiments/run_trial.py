@@ -33,34 +33,31 @@ try:
 except Exception:  # pragma: no cover - optional dependency
     plt = None
 
-# Environment variable fallbacks (config takes precedence)
-_ENV_SKIP_ARTIFACTS = str(
-    os.environ.get("RUN_TRIAL_SKIP_ARTIFACTS", "")
-).lower() in ("1", "true", "yes")
-
-_ENV_SKIP_CHECKPOINTS = str(
-    os.environ.get("RUN_TRIAL_SKIP_CHECKPOINTS", "")
-).lower() in ("1", "true", "yes")
+def _to_bool(value) -> bool:
+    """Convert value to bool, handling string 'true'/'false' from Hydra overrides."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.lower() in ("true", "1", "yes")
+    return bool(value)
 
 
 def _should_save_artifacts(cfg: SimpleNamespace) -> bool:
-    """Check if artifacts should be saved. Config takes precedence over env var."""
-    # Config: trial.save_artifacts (default True)
-    cfg_value = getattr(getattr(cfg, "trial", None), "save_artifacts", None)
+    """Check if artifacts (plots, history) should be saved."""
+    # Check top-level save_artifacts (default False)
+    cfg_value = getattr(cfg, "save_artifacts", None)
     if cfg_value is not None:
-        return bool(cfg_value)
-    # Fallback to env var (inverted: env says skip, we return save)
-    return not _ENV_SKIP_ARTIFACTS
+        return _to_bool(cfg_value)
+    return False
 
 
 def _should_save_checkpoints(cfg: SimpleNamespace) -> bool:
-    """Check if checkpoints should be saved. Config takes precedence over env var."""
-    # Config: trial.save_checkpoints (default True)
-    cfg_value = getattr(getattr(cfg, "trial", None), "save_checkpoints", None)
+    """Check if checkpoints (model weights) should be saved."""
+    # Check top-level save_checkpoints (default False)
+    cfg_value = getattr(cfg, "save_checkpoints", None)
     if cfg_value is not None:
-        return bool(cfg_value)
-    # Fallback to env var
-    return not _ENV_SKIP_CHECKPOINTS
+        return _to_bool(cfg_value)
+    return False
 
 
 def _dict_to_ns(d: Dict[str, Any]) -> SimpleNamespace:

@@ -16,6 +16,7 @@ trainer:
   patience: 30
 
 top_k: 10
+save_artifacts: true  # Save plots/history for each trial
 
 repeat:
   enabled: true
