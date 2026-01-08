@@ -13,8 +13,8 @@ data:
   name: utd
 
   sensor_window_length: 100
-  stride_seconds: 0.1
-  batch_size: 32
+  stride_seconds: 0.02
+  batch_size: 8
 
 optim:
   name: adam
@@ -48,11 +48,11 @@ trainer:
     grl_lambda: 1.0
     schedule_lambda: true  # Enable DANN-style scheduling
     discriminator:
-      hidden_units: [64]
-      dropout: 0.3
-      normalize_features: true   # L2 normalize for stable training
+      hidden_units: [128, 64]
+      dropout: 0.2
+      normalize_features: false   # L2 normalize for stable training
       use_spectral_norm: false   # Optional: constrain D capacity
-      label_smoothing: 0.1       # Prevent overconfident D
+      label_smoothing: 0.05       # Prevent overconfident D
 
 model:
   regressor:

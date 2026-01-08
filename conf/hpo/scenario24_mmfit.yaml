@@ -19,7 +19,7 @@ top_k: 10
 
 repeat:
   enabled: true
-  count: 5
+  count: 3
 
 hydra:
   sweeper:

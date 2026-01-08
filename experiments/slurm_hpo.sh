@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#SBATCH -J sc4_utd_p1
+#SBATCH -J sc4_utd_t2
 #SBATCH -p L40S
 #SBATCH --gpus=1
 #SBATCH --cpus-per-gpu=8
@@ -11,8 +11,8 @@
 ########################################
 # Defaults (override via environment variables as needed)
 HPO_SPACE=${HPO_SPACE:-scenario4_utd} # scenario23_utd | scenario23_mmfit
-STUDY_NAME=${STUDY_NAME:-sc4_utd_p1[2]}  # descriptive study name
-N_TRIALS=${N_TRIALS:-150}              # number of HPO trials
+STUDY_NAME=${STUDY_NAME:-sc4_utd_t2}  # descriptive study name
+N_TRIALS=${N_TRIALS:-5}              # number of HPO trials
 
 # Container + project paths
 PROJECT_ROOT=${PROJECT_ROOT:-/home/zolfaghari/har}

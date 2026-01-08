@@ -19,7 +19,7 @@ top_k: 10
 save_artifacts: true  # Save plots/history for each trial
 
 repeat:
-  enabled: true
+  enabled: false
   count: 5
 
 hydra:
@@ -31,16 +31,16 @@ hydra:
       # ============================================================
       # PASS 1: Loss weights + Data + Adversarial (ACTIVE)
       # ============================================================
-      trainer.alpha: choice(0.2, 0.5, 1.0, 2.0)
-      trainer.beta: choice(0, 1, 2, 5)  # May want to reduce/remove beta since adversarial replaces it
-      trainer.gamma: choice(0.5, 1.0, 2.0)
+      trainer.alpha: choice(1.0) #(0.2, 0.5, 1.0, 2.0)
+      trainer.beta: choice(0) #, 1, 2, 5)  # May want to reduce/remove beta since adversarial replaces it
+      trainer.gamma: choice(1) #(0.5, 1.0, 2.0)
       
       # Adversarial-specific params
-      trainer.adversarial.weight: choice(0, 0.1, 0.2, 0.5)
-      trainer.adversarial.grl_lambda: choice(0.5, 1.0)
+      trainer.adversarial.weight: choice(0.3) #(0, 0.1, 0.2, 0.5)
+      trainer.adversarial.grl_lambda: choice(0.5) #, 1.0)
       
-      data.stride_seconds: choice(0.02, 0.03, 0.04)
-      data.batch_size: choice(8, 16, 24)
+      data.stride_seconds: choice(0.04) #0.02, 0.03, 0.04)
+      data.batch_size: choice(16) #(8, 16, 24)
       
       # --- Pass 1 DEFAULTS for Pass 2+3 params ---
       optim.lr: choice(0.001)
