@@ -48,6 +48,7 @@ trainer:
     grl_lambda: 1.0
     schedule_lambda: true  # Enable DANN-style scheduling
     discriminator:
+      input_type: features
       hidden_units: [128, 64]
       dropout: 0.3
       normalize_features: false   # L2 normalize for stable training
