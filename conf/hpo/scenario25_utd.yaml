@@ -1,0 +1,87 @@
+# HPO for Scenario25 (beta=0 baseline) on UTD
+# scenario25 = scenario2 with beta=0 (no feature similarity loss)
+# Purpose: Test contribution of cosine similarity loss
+#
+# Multi-pass HPO Strategy:
+# - Pass 1: Loss weights + Data (most impactful)
+# - Pass 2: Regularization (after fixing pass 1 winners)
+# - Pass 3: Capacity (after fixing pass 1+2 winners)
+
+study_name: scenario25_utd
+trial: scenario25_utd
+
+# HPO-specific overrides (shorter epochs for faster search)
+trainer:
+  epochs: 30
+  patience: 30
+
+top_k: 10
+
+repeat:
+  enabled: true
+  count: 5
+
+hydra:
+  sweeper:
+    study_name: ${study_name}
+    storage: "sqlite:///experiments/hpo/${study_name}/${study_name}.db"
+    params:
+
+      # ============================================================
+      # PASS 1: Loss weights + Data (ACTIVE)
+      # ============================================================
+      trainer.alpha: choice(0.2, 0.5, 1.0, 2.0)
+      trainer.beta: choice(0)              # Fixed at 0 - this is the point of scenario25
+      trainer.gamma: choice(0.5, 1.0, 2.0)
+
+      data.stride_seconds: choice(0.02, 0.04, 0.06)
+      data.batch_size: choice(8, 16, 32)
+
+      # --- Pass 1 DEFAULTS for Pass 2+3 params ---
+      optim.lr: choice(0.001)
+      optim.weight_decay: choice(0.00002)
+      optim.warmup_epochs: choice(10)
+      optim.scheduler.patience: choice(15)
+      optim.scheduler.factor: choice(0.1)
+      model.encoder_classifier.feature_extractor.drop_prob: choice(0.2)
+      model.encoder_classifier.classifier.dropout: choice(0.3)
+      trainer.label_smoothing: choice(0.0)
+
+      model.encoder_classifier.feature_extractor.kernel_size: choice(9)
+      model.encoder_classifier.feature_extractor.base_filters: choice([9,15,24])
+      model.encoder_classifier.feature_extractor.embedding_dim: choice(100)
+      model.encoder_classifier.classifier.hidden_units: choice([100])
+      model.regressor.joint_hidden_channels: choice([32,32,32,16])
+      model.regressor.temporal_hidden_channels: choice(16)
+
+      # ============================================================
+      # PASS 2: Regularization (UNCOMMENT after Pass 1)
+      # ============================================================
+      # trainer.alpha: choice(WINNER)
+      # trainer.beta: choice(0)
+      # trainer.gamma: choice(WINNER)
+      # data.stride_seconds: choice(WINNER)
+      # data.batch_size: choice(WINNER)
+      #
+      # optim.lr: tag(log, interval(5e-4, 2e-3))
+      # optim.weight_decay: tag(log, interval(1e-5, 1e-4))
+      # optim.warmup_epochs: choice(0, 5, 10)
+      # optim.scheduler.patience: choice(10, 15, 20)
+      # optim.scheduler.factor: choice(0.05, 0.1, 0.2)
+      # model.encoder_classifier.feature_extractor.drop_prob: choice(0.1, 0.2, 0.3)
+      # model.encoder_classifier.classifier.dropout: choice(0.2, 0.3, 0.4)
+      # trainer.label_smoothing: choice(0.0, 0.05, 0.1)
+
+      # ============================================================
+      # PASS 3: Capacity (UNCOMMENT after Pass 2)
+      # ============================================================
+      # model.encoder_classifier.feature_extractor.kernel_size: choice(5, 7, 9)
+      # model.encoder_classifier.feature_extractor.base_filters: choice([6,9,12], [8,12,16], [9,15,24])
+      # model.encoder_classifier.feature_extractor.embedding_dim: choice(64, 80, 100)
+      # model.encoder_classifier.classifier.hidden_units: choice([64], [100], [64,64])
+      # model.regressor.joint_hidden_channels: choice([24,24,16,12], [32,32,24,16], [32,32,32,16])
+      # model.regressor.temporal_hidden_channels: choice(10, 12, 16)
+
+  sweep:
+    dir: "experiments/hpo/${study_name}/trials"
+    subdir: trial_${hydra.job.num}
