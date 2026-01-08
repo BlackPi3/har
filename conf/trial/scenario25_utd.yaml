@@ -1,0 +1,53 @@
+# Scenario 25: No feature similarity loss (UTD)
+# Extends scenario2_utd with beta=0 (drop cosine similarity term)
+# Purpose: Test what beta contributes to training
+defaults:
+  - _self_
+
+trial_name: scenario25_utd
+
+# Artifact control
+save_artifacts: false      # Save history to JSON + generate plots
+save_checkpoints: false    # Save model weights
+
+data:
+  name: utd
+
+  sensor_window_length: 100
+  stride_seconds: 0.1
+  batch_size: 32
+
+optim:
+  name: adam
+
+  lr: 0.001
+  weight_decay: 0.00002
+
+  warmup_epochs: 10
+  warmup_start_factor: 0.02
+
+  scheduler:
+    patience: 15
+    factor: 0.05
+
+trainer:
+  name: scenario2
+
+  alpha: 0.2
+  beta: 0   # Scenario 25: no feature similarity loss
+  gamma: 1
+
+  epochs: 100
+  patience: 35
+  gradient_clip: 1.0
+
+  # Scenario 25 specific: disable feature similarity loss
+  losses:
+    feature_similarity: false
+
+model:
+  regressor:
+    name: regressor
+  encoder_classifier:
+    name: mmfit
+    n_classes: 21
