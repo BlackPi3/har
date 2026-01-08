@@ -789,7 +789,7 @@ def main():
     trainer_overrides = meta.get("trainer_overrides") or []
     data_overrides = meta.get("data_overrides") or []
     top_k = max(1, int(meta.get("top_k") or 1))
-    repeat_enabled = True
+    repeat_enabled = meta.get("repeat_enabled", False)
     repeat_k = max(1, int(meta.get("repeat_k") or 1))
     # CLI flag overrides YAML config if explicitly set
     save_artifacts = args.save_artifacts or meta.get("save_artifacts", False)

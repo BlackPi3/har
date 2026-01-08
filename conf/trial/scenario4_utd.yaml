@@ -49,7 +49,7 @@ trainer:
     schedule_lambda: true  # Enable DANN-style scheduling
     discriminator:
       hidden_units: [128, 64]
-      dropout: 0.2
+      dropout: 0.3
       normalize_features: false   # L2 normalize for stable training
       use_spectral_norm: false   # Optional: constrain D capacity
       label_smoothing: 0.05       # Prevent overconfident D
