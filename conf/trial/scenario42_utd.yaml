@@ -1,0 +1,72 @@
+# Scenario 42: Signal-level adversarial domain adaptation (UTD)
+# Like scenario 4, but discriminator operates on raw accelerometer data
+# instead of encoder features.
+#
+# Key difference from Scenario 4:
+# - Scenario 4:  D(features) - discriminator on encoder output
+# - Scenario 42: D(accelerometer) - discriminator on raw signal
+#
+# This directly trains the regressor (pose2imu) to produce realistic
+# accelerometer signals, rather than relying on the encoder to align features.
+defaults:
+  - _self_
+
+trial_name: scenario42_utd
+
+# Artifact control
+save_artifacts: false      # Save history to JSON + generate plots
+save_checkpoints: false    # Save model weights
+
+data:
+  name: utd
+
+  sensor_window_length: 100
+  n_channels: 3            # Accelerometer channels (x, y, z)
+  stride_seconds: 0.02
+  batch_size: 8
+
+optim:
+  name: adam
+
+  lr: 0.001
+  weight_decay: 0.00002
+
+  warmup_epochs: 10
+  warmup_start_factor: 0.02
+
+  scheduler:
+    patience: 15
+    factor: 0.05
+
+trainer:
+  name: scenario2
+
+  alpha: 1.0           # Activity classification weight
+  beta: 0              # No cosine sim - adversarial on signal replaces it
+  gamma: 1.0           # MSE loss weight
+
+  epochs: 100
+  patience: 35
+  gradient_clip: 1.0
+
+  # Scenario 42 specific: adversarial on raw accelerometer
+  adversarial:
+    enabled: true
+    weight: 0.5              # Adversarial weight
+    use_grl: true
+    grl_lambda: 1.0
+    schedule_lambda: false   # Adversarial active from epoch 1
+    schedule_gamma: 10.0
+    discriminator:
+      input_type: signal     # KEY: D operates on raw acc, not features
+      hidden_channels: [32, 64]  # 1D CNN channels for signal processing
+      dropout: 0.3
+      use_spectral_norm: false
+      label_smoothing: 0.05
+
+model:
+  regressor:
+    name: regressor
+  encoder_classifier:
+    name: mmfit
+    n_classes: 21

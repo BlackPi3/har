@@ -138,7 +138,7 @@ class Trainer:
         if self.skip_val and isinstance(self.scheduler_metric, str) and self.scheduler_metric.startswith("val_"):
             self.scheduler_metric = f"train_{self.scheduler_metric[4:]}"
 
-        # Adversarial training support (Scenario 4)
+        # Adversarial training support (Scenario 4/42)
         adv_cfg = getattr(self.trainer_cfg, "adversarial", None) if self.trainer_cfg else None
         self.use_adversarial = bool(getattr(adv_cfg, "enabled", False)) if adv_cfg else False
         self.adv_weight = float(getattr(adv_cfg, "weight", 0.1)) if adv_cfg else 0.1
@@ -149,7 +149,11 @@ class Trainer:
         # For alternating optimization (future extension)
         self.adv_alternating = bool(getattr(adv_cfg, "alternating", False)) if adv_cfg else False
         self.adv_n_critic = int(getattr(adv_cfg, "n_critic", 1)) if adv_cfg else 1
-        
+        # Scenario 42: signal-level discrimination (D on raw acc instead of features)
+        disc_cfg = getattr(adv_cfg, "discriminator", None) if adv_cfg else None
+        disc_input_type = str(getattr(disc_cfg, "input_type", "features")).lower() if disc_cfg else "features"
+        self.adv_signal_input = (disc_input_type == "signal")
+
         if self.use_adversarial:
             if "discriminator" not in self.models:
                 raise ValueError(
@@ -228,14 +232,14 @@ class Trainer:
             sec_logits = self.models[self.secondary_classifier_key](sec_sim_feat)
             sec_act_loss = self.ce(sec_logits, sec_labels)
 
-        # Adversarial loss (Scenario 4): discriminator classifies real vs simulated features
+        # Adversarial loss (Scenario 4/42): discriminator classifies real vs simulated
         adv_loss = zero
         d_acc = 0.0
         feat_dist = 0.0
         if self.use_adversarial:
             D = self.models["discriminator"]
             batch_size = real_feat.size(0)
-            
+
             # Use smoothed labels from discriminator (prevents overconfident D)
             if hasattr(D, 'get_smooth_labels'):
                 real_labels = D.get_smooth_labels(batch_size, real=True, device=self.device)
@@ -243,36 +247,47 @@ class Trainer:
             else:
                 real_labels = torch.ones(batch_size, 1, device=self.device)
                 sim_labels = torch.zeros(batch_size, 1, device=self.device)
-            
+
             # Get current GRL lambda (may be scheduled)
             current_lambda = self._current_grl_lambda if hasattr(self, '_current_grl_lambda') else self.adv_grl_lambda
-            
-            # With GRL: single forward pass, gradients reversed for G/FE
-            # D receives features through GRL → D loss backprops normally to D,
-            # but gradients to FE/G are reversed (adversarial signal)
-            d_real_logits = D(real_feat, apply_grl=True, grl_lambda=current_lambda)
-            d_sim_logits = D(sim_feat, apply_grl=True, grl_lambda=current_lambda)
-            
+
+            # Choose discriminator input based on mode
+            if self.adv_signal_input:
+                # Scenario 42: D operates on raw accelerometer signals
+                # This directly trains the regressor to produce realistic sim_acc
+                d_input_real = acc      # real accelerometer
+                d_input_sim = sim_acc   # simulated accelerometer from regressor
+            else:
+                # Scenario 4: D operates on encoder features
+                d_input_real = real_feat
+                d_input_sim = sim_feat
+
+            # With GRL: single forward pass, gradients reversed for G/FE/Regressor
+            # D receives input through GRL → D loss backprops normally to D,
+            # but gradients to upstream (FE/Regressor) are reversed (adversarial signal)
+            d_real_logits = D(d_input_real, apply_grl=True, grl_lambda=current_lambda)
+            d_sim_logits = D(d_input_sim, apply_grl=True, grl_lambda=current_lambda)
+
             # Discriminator loss: correctly classify real vs sim
             adv_loss = self.bce(d_real_logits, real_labels) + self.bce(d_sim_logits, sim_labels)
-            
+
             # --- Adversarial diagnostics ---
             with torch.no_grad():
                 # D accuracy: how well can D distinguish real from sim?
-                # Healthy training: starts high (~100%), drops toward 50% as FE improves
+                # Healthy training: starts high (~100%), drops toward 50% as generator improves
                 d_pred_real = (torch.sigmoid(d_real_logits) > 0.5).float()
                 d_pred_sim = (torch.sigmoid(d_sim_logits) < 0.5).float()
                 d_acc = float((d_pred_real.mean() + d_pred_sim.mean()) / 2)
-                
-                # Feature distance: L2 distance between real and sim feature means
-                # Should decrease as sim features become more "real-like"
-                feat_dist = float(torch.norm(real_feat.mean(0) - sim_feat.mean(0), p=2).cpu())
-            
-            # TODO: For secondary dataset, add sim features from secondary to adversarial
-            # This would enforce NTU sim_acc to also look "real" by UTD standards
-            # if secondary_batch is not None and self.use_adversarial:
-            #     d_sec_sim_logits = D(sec_sim_feat, apply_grl=True, grl_lambda=current_lambda)
-            #     adv_loss = adv_loss + self.bce(d_sec_sim_logits, sim_labels)
+
+                # Distance metric depends on input type
+                if self.adv_signal_input:
+                    # Signal distance: L2 distance between real and sim acc means (flattened)
+                    real_flat = acc.view(batch_size, -1)
+                    sim_flat = sim_acc.view(batch_size, -1)
+                    feat_dist = float(torch.norm(real_flat.mean(0) - sim_flat.mean(0), p=2).cpu())
+                else:
+                    # Feature distance: L2 distance between real and sim feature means
+                    feat_dist = float(torch.norm(real_feat.mean(0) - sim_feat.mean(0), p=2).cpu())
 
         total = torch.zeros((), device=self.device, dtype=pose.dtype)
         if self.use_mse_loss:

@@ -619,26 +619,49 @@ def _build_models(cfg) -> Dict[str, torch.nn.Module]:
     if secondary_enabled:
         models["ac_secondary"] = ActivityClassifier(f_in=inferred_f_in, n_classes=secondary_classes).to(cfg.device)
     if adversarial_enabled:
-        from src.models.discriminator import FeatureDiscriminator
         disc_cfg = getattr(adv_cfg, "discriminator", None) if adv_cfg else None
-        disc_hidden = getattr(disc_cfg, "hidden_units", [64]) if disc_cfg else [64]
         disc_dropout = float(getattr(disc_cfg, "dropout", 0.3)) if disc_cfg else 0.3
         use_grl = bool(getattr(adv_cfg, "use_grl", True)) if adv_cfg else True
         grl_lambda = float(getattr(adv_cfg, "grl_lambda", 1.0)) if adv_cfg else 1.0
-        # New stability options
-        normalize_features = bool(getattr(disc_cfg, "normalize_features", True)) if disc_cfg else True
         use_spectral_norm = bool(getattr(disc_cfg, "use_spectral_norm", False)) if disc_cfg else False
         label_smoothing = float(getattr(disc_cfg, "label_smoothing", 0.1)) if disc_cfg else 0.1
-        models["discriminator"] = FeatureDiscriminator(
-            f_in=inferred_f_in,
-            hidden_units=list(disc_hidden) if disc_hidden else [64],
-            dropout=disc_dropout,
-            use_grl=use_grl,
-            grl_lambda=grl_lambda,
-            normalize_features=normalize_features,
-            use_spectral_norm=use_spectral_norm,
-            label_smoothing=label_smoothing,
-        ).to(cfg.device)
+
+        # Check discriminator input type: "features" (default, Scenario 4) or "signal" (Scenario 42)
+        disc_input_type = str(getattr(disc_cfg, "input_type", "features")).lower() if disc_cfg else "features"
+
+        if disc_input_type == "signal":
+            # Signal-level discriminator (Scenario 42): operates on raw accelerometer
+            from src.models.discriminator import SignalDiscriminator
+            disc_hidden_channels = getattr(disc_cfg, "hidden_channels", [32, 64]) if disc_cfg else [32, 64]
+            # Get accelerometer dimensions from data config
+            data_cfg = getattr(cfg, "data", None)
+            n_channels = int(getattr(data_cfg, "n_channels", 3)) if data_cfg else 3
+            window_size = int(getattr(data_cfg, "sensor_window_length", 100)) if data_cfg else 100
+            models["discriminator"] = SignalDiscriminator(
+                n_channels=n_channels,
+                window_size=window_size,
+                hidden_channels=list(disc_hidden_channels) if disc_hidden_channels else [32, 64],
+                dropout=disc_dropout,
+                use_grl=use_grl,
+                grl_lambda=grl_lambda,
+                use_spectral_norm=use_spectral_norm,
+                label_smoothing=label_smoothing,
+            ).to(cfg.device)
+        else:
+            # Feature-level discriminator (Scenario 4): operates on encoder features
+            from src.models.discriminator import FeatureDiscriminator
+            disc_hidden = getattr(disc_cfg, "hidden_units", [64]) if disc_cfg else [64]
+            normalize_features = bool(getattr(disc_cfg, "normalize_features", True)) if disc_cfg else True
+            models["discriminator"] = FeatureDiscriminator(
+                f_in=inferred_f_in,
+                hidden_units=list(disc_hidden) if disc_hidden else [64],
+                dropout=disc_dropout,
+                use_grl=use_grl,
+                grl_lambda=grl_lambda,
+                normalize_features=normalize_features,
+                use_spectral_norm=use_spectral_norm,
+                label_smoothing=label_smoothing,
+            ).to(cfg.device)
     return models
 
 

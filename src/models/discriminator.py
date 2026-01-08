@@ -1,8 +1,11 @@
 """
-Discriminator module for adversarial domain adaptation (Scenario 4).
+Discriminator module for adversarial domain adaptation (Scenario 4/42).
 
-The discriminator classifies features as "real" (from real accelerometer)
-or "simulated" (from pose-to-IMU regressor).
+The discriminator classifies data as "real" or "simulated".
+
+Two modes:
+- Feature-level (Scenario 4): D operates on encoder features
+- Signal-level (Scenario 42): D operates on raw accelerometer data
 
 Includes Gradient Reversal Layer (GRL) for domain-adversarial training.
 
@@ -10,7 +13,6 @@ Improvements for stable training:
 - Label smoothing: Prevents D from becoming overconfident
 - Feature normalization: L2 normalize features for consistent magnitudes
 - Spectral normalization: Constrains D's Lipschitz constant
-- Hinge loss option: Alternative to BCE for stability
 """
 
 import torch
@@ -179,6 +181,128 @@ class FeatureDiscriminator(nn.Module):
             
         This prevents D from becoming overconfident and maintains gradient signal.
         """
+        if real:
+            return torch.full((batch_size, 1), 1.0 - self.label_smoothing, device=device)
+        else:
+            return torch.full((batch_size, 1), self.label_smoothing, device=device)
+
+
+class SignalDiscriminator(nn.Module):
+    """
+    Signal-level discriminator for raw accelerometer data (Scenario 42).
+
+    Uses 1D convolutions to process temporal signal, then classifies as
+    real (from sensor) or simulated (from pose2imu regressor).
+
+    This directly trains the regressor to produce realistic accelerometer signals,
+    rather than relying on the encoder to align features.
+
+    Args:
+        n_channels: Number of input channels (default 3 for accelerometer)
+        window_size: Temporal window length
+        hidden_channels: List of conv layer channel sizes
+        dropout: Dropout probability
+        use_grl: Whether to apply gradient reversal internally
+        grl_lambda: Initial GRL lambda value
+        use_spectral_norm: Apply spectral normalization to constrain D
+        label_smoothing: Smooth labels (e.g., 0.1 → real=0.9, sim=0.1)
+    """
+
+    def __init__(
+        self,
+        n_channels: int = 3,
+        window_size: int = 100,
+        hidden_channels: list = None,
+        dropout: float = 0.3,
+        use_grl: bool = True,
+        grl_lambda: float = 1.0,
+        use_spectral_norm: bool = False,
+        label_smoothing: float = 0.1,
+    ):
+        super().__init__()
+
+        if hidden_channels is None:
+            hidden_channels = [32, 64]
+
+        self.use_grl = use_grl
+        self.grl = GradientReversalLayer(grl_lambda) if use_grl else None
+        self._grl_lambda = grl_lambda
+        self.label_smoothing = label_smoothing
+        self.n_channels = n_channels
+        self.window_size = window_size
+
+        # Build 1D CNN: (B, n_channels, window_size) -> (B, hidden, reduced_size)
+        conv_layers = []
+        prev_ch = n_channels
+
+        for h_ch in hidden_channels:
+            conv = nn.Conv1d(prev_ch, h_ch, kernel_size=5, stride=2, padding=2)
+            if use_spectral_norm:
+                conv = nn.utils.spectral_norm(conv)
+            conv_layers.extend([
+                conv,
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Dropout(dropout),
+            ])
+            prev_ch = h_ch
+
+        self.conv_net = nn.Sequential(*conv_layers)
+
+        # Compute flattened size after convolutions
+        test_input = torch.zeros(1, n_channels, window_size)
+        with torch.no_grad():
+            test_output = self.conv_net(test_input)
+            flat_size = test_output.view(1, -1).size(1)
+
+        # Final classifier
+        self.fc = nn.Sequential(
+            nn.Linear(flat_size, 64),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Dropout(dropout),
+            nn.Linear(64, 1),
+        )
+
+        self._initialize_weights()
+
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, (nn.Linear, nn.Conv1d)):
+                nn.init.kaiming_normal_(m.weight, mode='fan_in', nonlinearity='leaky_relu')
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+
+    def set_grl_lambda(self, lambda_: float):
+        """Update GRL lambda (useful for scheduling)."""
+        self._grl_lambda = lambda_
+        if self.grl is not None:
+            self.grl.lambda_ = lambda_
+
+    def forward(self, signal: torch.Tensor, apply_grl: bool = None, grl_lambda: float = None):
+        """
+        Args:
+            signal: (B, n_channels, window_size) accelerometer tensor
+            apply_grl: Override whether to apply GRL (None = use self.use_grl)
+            grl_lambda: Override GRL lambda value
+
+        Returns:
+            logits: (B, 1) raw logits (use BCE with logits loss)
+        """
+        x = signal
+
+        # Apply GRL if configured (before conv for gradient reversal to regressor)
+        should_apply = apply_grl if apply_grl is not None else self.use_grl
+        if should_apply and self.grl is not None:
+            lambda_val = grl_lambda if grl_lambda is not None else self._grl_lambda
+            x = self.grl(x, lambda_val)
+
+        # Conv feature extraction
+        x = self.conv_net(x)
+        x = x.view(x.size(0), -1)
+
+        return self.fc(x)
+
+    def get_smooth_labels(self, batch_size: int, real: bool, device: torch.device):
+        """Get smoothed labels for discriminator training."""
         if real:
             return torch.full((batch_size, 1), 1.0 - self.label_smoothing, device=device)
         else:
