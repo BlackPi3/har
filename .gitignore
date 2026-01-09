@@ -23,6 +23,7 @@ htmlcov/
 # Data directories (large datasets)
 /datasets/
 /legacy/
+/SciSpace/
 
 # Experiment outputs
 outputs/

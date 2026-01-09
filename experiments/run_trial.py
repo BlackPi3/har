@@ -1081,13 +1081,18 @@ def main():
         optimizer, scheduler = _build_optim(cfg, models)
         epochs = getattr(cfg.trainer, "epochs", 1)
         device = cfg.device
+
+        # Single unified trainer handles all scenarios (scenario2, scenario4, scenario42, scenario5)
         trainer = Trainer(models=models, dataloaders=dls, optimizer=optimizer, scheduler=scheduler, cfg=cfg, device=device)
         history = trainer.fit(epochs)
         run_group = getattr(getattr(cfg, "run", None), "group", None)
         # Evaluate on test split (best model is restored inside fit) only for eval runs
         if run_group == "eval" and dls.get("test") is not None:
             with torch.no_grad():
-                test_loss, test_f1, test_mse, test_sim, test_act, test_acc = trainer._run_epoch("test")
+                test_results = trainer._run_epoch("test")
+                # Unified format: (loss, f1, mse, sim, act, sec, adv, d_acc, feat_dist, mmd, con, sil, acc)
+                test_loss, test_f1, test_mse, test_sim, test_act = test_results[0], test_results[1], test_results[2], test_results[3], test_results[4]
+                test_acc = test_results[12]  # acc is now at index 12
             test_metrics = {
                 "test_loss": test_loss,
                 "test_f1": test_f1,

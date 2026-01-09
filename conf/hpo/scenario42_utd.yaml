@@ -32,7 +32,7 @@ hydra:
       # PASS 1: Loss weights + Adversarial (ACTIVE)
       # ============================================================
       trainer.alpha: choice(0.1, 0.5, 1, 2.0)
-      trainer.beta: choice(0.5, 1, 2, 5, 10, 50)              # Disabled - adversarial replaces cosine sim
+      trainer.beta: choice(0.5, 1, 2, 5, 10, 50)              # Cosine sim on features (complementary to signal-level D)
       trainer.gamma: choice(0.5, 1, 2, 5)
 
       # Adversarial params - KEY for scenario 42

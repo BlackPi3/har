@@ -1,0 +1,52 @@
+## Trainer configuration for scenario5 (MMD + Contrastive domain adaptation)
+## Replaces adversarial training with stable MMD + Contrastive losses.
+## Reference: Wilson et al. (2021) CALDA framework
+defaults:
+  - _self_
+
+# Number of epochs/patience used by experiments.run_trial Trainer wrapper
+epochs: 100
+patience: 25  # early-stopping tolerance (epochs without val improvement)
+gradient_clip: 1.0  # set to a positive value (e.g., 1.0) to enable grad clipping
+
+# Loss weights
+alpha: 1.0  # activity loss weight
+beta: 1.0   # feature similarity (cosine) weight
+gamma: 1.0  # regression (MSE) weight
+label_smoothing: 0.0  # label smoothing epsilon for activity loss
+
+separate_classifiers: false  # when true, use separate classifier for sim stream
+separate_feature_extractors: false  # when true, use a separate feature extractor for sim stream
+
+objective:
+  metric: val_f1   # Any key from Trainer history (e.g., val_f1, val_mse, val_loss)
+  mode: max        # max to maximize, min to minimize
+
+# Select which sub-modules receive optimizer updates.
+trainable_modules:
+  pose2imu: true
+  fe: true
+  ac: true
+
+# Fine-grained loss toggles
+losses:
+  mse: true
+  feature_similarity: true
+  activity: true       # Master switch for activity losses
+  activity_real: true  # Cross-entropy on real accelerometer branch
+  activity_sim: true   # Cross-entropy on simulated accelerometer branch
+
+# MMD loss for domain alignment (scenario5-specific)
+# Stable, non-adversarial method for aligning real and sim feature distributions
+mmd:
+  enabled: true
+  weight: 0.5           # delta: weight of MMD loss in total loss
+  kernel_mul: 2.0       # bandwidth multiplier for Gaussian kernel
+  kernel_num: 5         # number of kernels with different bandwidths
+
+# Contrastive loss for class structure preservation (scenario5-specific)
+# Prevents feature collapse by keeping same-class samples close, different-class apart
+contrastive:
+  enabled: true
+  weight: 0.3           # epsilon: weight of contrastive loss in total loss
+  temperature: 0.5      # temperature scaling for softmax (lower = sharper)

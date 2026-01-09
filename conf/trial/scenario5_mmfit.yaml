@@ -1,0 +1,59 @@
+defaults:
+  - _self_
+
+trial_name: scenario5_mmfit
+
+# Artifact control
+save_artifacts: true       # Save history to JSON + generate plots (useful for monitoring)
+save_checkpoints: false    # Save model weights
+
+data:
+  name: mmfit
+
+  sensor_window_length: 500
+  stride_seconds: 0.2
+  batch_size: 32           # Smaller batch for contrastive to see more classes
+
+optim:
+  name: adam
+
+  lr: 0.0005
+  weight_decay: 0.00002
+
+  warmup_epochs: 5
+  warmup_start_factor: 0.05
+
+  scheduler:
+    patience: 10
+    factor: 0.1
+
+trainer:
+  name: scenario5           # Use MMD + Contrastive trainer
+
+  # Standard loss weights
+  alpha: 0.2                # activity loss weight
+  beta: 5.0                 # cosine similarity weight (keep for additional alignment)
+  gamma: 1.0                # MSE weight
+
+  # MMD + Contrastive specific
+  mmd:
+    enabled: true
+    weight: 0.5             # delta: MMD loss weight
+    kernel_mul: 2.0
+    kernel_num: 5
+
+  contrastive:
+    enabled: true
+    weight: 0.3             # epsilon: contrastive loss weight
+    temperature: 0.5
+
+  epochs: 200
+  patience: 30
+  gradient_clip: 1.0
+
+model:
+  regressor:
+    name: regressor
+  encoder_classifier:
+    name: mmfit
+    n_classes: 11

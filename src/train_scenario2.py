@@ -3,11 +3,9 @@ import math
 import numpy as np
 import torch
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
-from types import SimpleNamespace
 
 try:  # Keep optional import; fallback if sklearn not installed
-    from sklearn.metrics import f1_score  # type: ignore
+    from sklearn.metrics import f1_score, silhouette_score  # type: ignore
 except Exception:  # pragma: no cover - fallback path
     def f1_score(trues, preds, average="macro"):
         import numpy as _np
@@ -24,7 +22,27 @@ except Exception:  # pragma: no cover - fallback path
             f1s.append(2 * precision * recall / (precision + recall + 1e-8))
         return float(_np.mean(f1s))
 
-# ...existing code...
+    def silhouette_score(features, labels):
+        return 0.0  # Fallback if sklearn not available
+
+# MMD + Contrastive losses for Scenario 5
+from src.models.losses import MMDLoss, ContrastiveLoss
+
+def _to_bool(value):
+    """
+    Convert a value to boolean, handling string representations.
+
+    Hydra may pass boolean config values as strings (e.g., "False", "true").
+    Python's bool("False") returns True (non-empty string), which is wrong.
+    This helper correctly parses string booleans.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.lower() in ("true", "1", "yes")
+    return bool(value)
+
+
 class Trainer:
     def __init__(self, models: dict, dataloaders: dict, optimizer, scheduler, cfg, device):
         self.models = models
@@ -140,14 +158,14 @@ class Trainer:
 
         # Adversarial training support (Scenario 4/42)
         adv_cfg = getattr(self.trainer_cfg, "adversarial", None) if self.trainer_cfg else None
-        self.use_adversarial = bool(getattr(adv_cfg, "enabled", False)) if adv_cfg else False
+        self.use_adversarial = _to_bool(getattr(adv_cfg, "enabled", False)) if adv_cfg else False
         self.adv_weight = float(getattr(adv_cfg, "weight", 0.1)) if adv_cfg else 0.1
-        self.adv_use_grl = bool(getattr(adv_cfg, "use_grl", True)) if adv_cfg else True
+        self.adv_use_grl = _to_bool(getattr(adv_cfg, "use_grl", True)) if adv_cfg else True
         self.adv_grl_lambda = float(getattr(adv_cfg, "grl_lambda", 1.0)) if adv_cfg else 1.0
-        self.adv_schedule_lambda = bool(getattr(adv_cfg, "schedule_lambda", False)) if adv_cfg else False
+        self.adv_schedule_lambda = _to_bool(getattr(adv_cfg, "schedule_lambda", False)) if adv_cfg else False
         self.adv_schedule_gamma = float(getattr(adv_cfg, "schedule_gamma", 10.0)) if adv_cfg else 10.0
         # For alternating optimization (future extension)
-        self.adv_alternating = bool(getattr(adv_cfg, "alternating", False)) if adv_cfg else False
+        self.adv_alternating = _to_bool(getattr(adv_cfg, "alternating", False)) if adv_cfg else False
         self.adv_n_critic = int(getattr(adv_cfg, "n_critic", 1)) if adv_cfg else 1
         # Scenario 42: signal-level discrimination (D on raw acc instead of features)
         disc_cfg = getattr(adv_cfg, "discriminator", None) if adv_cfg else None
@@ -165,8 +183,37 @@ class Trainer:
             # Track total epochs for lambda scheduling (set in fit())
             self._total_epochs = None
 
+        # MMD + Contrastive training support (Scenario 5)
+        mmd_cfg = getattr(self.trainer_cfg, "mmd", None) if self.trainer_cfg else None
+        self.use_mmd = _to_bool(getattr(mmd_cfg, "enabled", False)) if mmd_cfg else False
+        self.mmd_weight = float(getattr(mmd_cfg, "weight", 0.5)) if mmd_cfg else 0.5
+        mmd_kernel_mul = float(getattr(mmd_cfg, "kernel_mul", 2.0)) if mmd_cfg else 2.0
+        mmd_kernel_num = int(getattr(mmd_cfg, "kernel_num", 5)) if mmd_cfg else 5
+
+        con_cfg = getattr(self.trainer_cfg, "contrastive", None) if self.trainer_cfg else None
+        self.use_contrastive = _to_bool(getattr(con_cfg, "enabled", False)) if con_cfg else False
+        self.contrastive_weight = float(getattr(con_cfg, "weight", 0.3)) if con_cfg else 0.3
+        contrastive_temp = float(getattr(con_cfg, "temperature", 0.5)) if con_cfg else 0.5
+
+        # Initialize loss functions if enabled
+        if self.use_mmd:
+            self.mmd_loss_fn = MMDLoss(kernel_mul=mmd_kernel_mul, kernel_num=mmd_kernel_num)
+        if self.use_contrastive:
+            self.contrastive_loss_fn = ContrastiveLoss(temperature=contrastive_temp)
+
     def _cosine(self, a, b):
         return (1 - F.cosine_similarity(a, b, dim=1)).mean()
+
+    def _compute_silhouette(self, real_feat, sim_feat, real_labels, sim_labels):
+        """Compute silhouette score for feature quality monitoring (Scenario 5)."""
+        try:
+            all_feat = torch.cat([real_feat, sim_feat], dim=0).detach().cpu().numpy()
+            all_labels = torch.cat([real_labels, sim_labels], dim=0).detach().cpu().numpy()
+            if len(np.unique(all_labels)) > 1 and len(all_feat) > len(np.unique(all_labels)):
+                return float(silhouette_score(all_feat, all_labels))
+        except Exception:
+            pass
+        return 0.0
 
     def _forward_losses(self, batch, secondary_batch=None, eval_only=False):
         """
@@ -187,7 +234,7 @@ class Trainer:
             real_feat = self.models["fe"](acc)
             logits_real = self.models[self.real_classifier_key](real_feat)
             act_loss_real = self.ce(logits_real, labels)
-            # Return activity loss as total; zeros for training-only losses (MSE, sim, secondary, adv)
+            # Return activity loss as total; zeros for training-only losses
             return (
                 act_loss_real,  # total loss = activity loss on real branch
                 0.0,            # mse (not computed in eval)
@@ -197,6 +244,9 @@ class Trainer:
                 0.0,            # adv_loss (not computed in eval)
                 0.0,            # d_acc (not computed in eval)
                 0.0,            # feat_dist (not computed in eval)
+                0.0,            # mmd_loss (not computed in eval)
+                0.0,            # contrastive_loss (not computed in eval)
+                0.0,            # silhouette (not computed in eval)
                 logits_real,
                 labels,
             )
@@ -289,6 +339,27 @@ class Trainer:
                     # Feature distance: L2 distance between real and sim feature means
                     feat_dist = float(torch.norm(real_feat.mean(0) - sim_feat.mean(0), p=2).cpu())
 
+        # MMD loss (Scenario 5): domain alignment without adversarial
+        mmd_loss = zero
+        if self.use_mmd:
+            mmd_loss = self.mmd_loss_fn(real_feat, sim_feat)
+
+        # Contrastive loss (Scenario 5): class structure preservation
+        contrastive_loss = zero
+        if self.use_contrastive:
+            all_features = torch.cat([real_feat, sim_feat], dim=0)
+            all_labels = torch.cat([labels, labels], dim=0)  # same activity labels
+            contrastive_loss = self.contrastive_loss_fn(all_features, all_labels)
+
+        # Silhouette score (Scenario 5 diagnostic)
+        sil_score = 0.0
+        if self.use_mmd or self.use_contrastive:
+            with torch.no_grad():
+                sil_score = self._compute_silhouette(real_feat, sim_feat, labels, labels)
+                # Also compute feat_dist if not already computed by adversarial
+                if not self.use_adversarial:
+                    feat_dist = float(torch.norm(real_feat.mean(0) - sim_feat.mean(0), p=2).cpu())
+
         total = torch.zeros((), device=self.device, dtype=pose.dtype)
         if self.use_mse_loss:
             total = total + self.gamma * mse
@@ -302,6 +373,11 @@ class Trainer:
         # Adversarial loss with its own weight
         if self.use_adversarial:
             total = total + self.adv_weight * adv_loss
+        # MMD + Contrastive losses (Scenario 5)
+        if self.use_mmd:
+            total = total + self.mmd_weight * mmd_loss
+        if self.use_contrastive:
+            total = total + self.contrastive_weight * contrastive_loss
 
         return (
             total,
@@ -312,6 +388,9 @@ class Trainer:
             float(adv_loss.detach().cpu()) if self.use_adversarial else 0.0,
             d_acc,
             feat_dist,
+            float(mmd_loss.detach().cpu()) if isinstance(mmd_loss, torch.Tensor) else 0.0,
+            float(contrastive_loss.detach().cpu()) if isinstance(contrastive_loss, torch.Tensor) else 0.0,
+            sil_score,
             logits_real,
             labels,
         )
@@ -344,7 +423,7 @@ class Trainer:
     def _run_epoch(self, split="train"):
         is_train = split == "train"
         eval_only = not is_train  # val/test: only use real accelerometer branch
-        
+
         for m in self.models.values():
             m.train() if is_train else m.eval()
 
@@ -354,6 +433,7 @@ class Trainer:
 
         total, mse_acc, sim_acc, act_acc, sec_acc, adv_acc = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
         d_acc_acc, feat_dist_acc = 0.0, 0.0  # Adversarial diagnostics
+        mmd_acc, con_acc, sil_acc = 0.0, 0.0, 0.0  # MMD + Contrastive diagnostics
         preds, trues = [], []
         with torch.set_grad_enabled(is_train):
             for batch in self.dl[split]:
@@ -363,7 +443,8 @@ class Trainer:
                         sec_batch = next(secondary_iter)
                     except StopIteration:
                         secondary_iter = None
-                total_loss, mse_l, sim_l, act_l, sec_l, adv_l, d_acc_l, feat_dist_l, logits, labels = self._forward_losses(
+                (total_loss, mse_l, sim_l, act_l, sec_l, adv_l, d_acc_l, feat_dist_l,
+                 mmd_l, con_l, sil_l, logits, labels) = self._forward_losses(
                     batch, sec_batch, eval_only=eval_only
                 )
                 if is_train:
@@ -384,6 +465,9 @@ class Trainer:
                 adv_acc += adv_l
                 d_acc_acc += d_acc_l
                 feat_dist_acc += feat_dist_l
+                mmd_acc += mmd_l
+                con_acc += con_l
+                sil_acc += sil_l
                 p = torch.argmax(logits, dim=1).cpu().numpy()
                 preds.extend(p)
                 trues.extend(labels.cpu().numpy())
@@ -397,6 +481,9 @@ class Trainer:
         adv_avg = adv_acc / denom
         d_acc_avg = d_acc_acc / denom
         feat_dist_avg = feat_dist_acc / denom
+        mmd_avg = mmd_acc / denom
+        con_avg = con_acc / denom
+        sil_avg = sil_acc / denom
 
         if trues:
             trues_arr = np.asarray(trues)
@@ -407,32 +494,20 @@ class Trainer:
             acc = 0.0
             f1 = 0.0
 
-        return avg_loss, f1, mse_avg, sim_avg, act_avg, sec_avg, adv_avg, d_acc_avg, feat_dist_avg, acc
+        return avg_loss, f1, mse_avg, sim_avg, act_avg, sec_avg, adv_avg, d_acc_avg, feat_dist_avg, mmd_avg, con_avg, sil_avg, acc
 
     def fit(self, epochs):
-        if self.objective_metric not in (
-            "train_loss",
-            "val_loss",
-            "train_f1",
-            "val_f1",
-            "train_acc",
-            "val_acc",
-            "train_mse",
-            "val_mse",
-            "train_sim_loss",
-            "val_sim_loss",
-            "train_act_loss",
-            "val_act_loss",
-            "train_sec_loss",
-            "train_adv_loss",
-            "train_d_acc",
-            "train_feat_dist",
-        ):
+        valid_metrics = (
+            "train_loss", "val_loss", "train_f1", "val_f1", "train_acc", "val_acc",
+            "train_mse", "val_mse", "train_sim_loss", "val_sim_loss",
+            "train_act_loss", "val_act_loss", "train_sec_loss",
+            "train_adv_loss", "train_d_acc", "train_feat_dist", "train_signal_dist",
+            "train_mmd_loss", "train_contrastive_loss", "train_silhouette",
+        )
+        if self.objective_metric not in valid_metrics:
             raise KeyError(
                 f"Objective metric '{self.objective_metric}' is not tracked by the Trainer. "
-                "Choose one of: train_loss, val_loss, train_f1, val_f1, train_acc, val_acc, "
-                "train_mse, val_mse, train_sim_loss, val_sim_loss, train_act_loss, val_act_loss, "
-                "train_sec_loss, train_adv_loss, train_d_acc, train_feat_dist."
+                f"Choose one of: {', '.join(valid_metrics)}"
             )
 
         # Store total epochs for GRL lambda scheduling
@@ -442,31 +517,32 @@ class Trainer:
         best_default = np.inf if self.objective_mode == "min" else -np.inf
         best = {"value": best_default, "state": None, "epoch": None}
         history = {
-            "train_loss": [],
-            "val_loss": [],
-            "train_f1": [],
-            "val_f1": [],
-            "train_acc": [],
-            "val_acc": [],
-            "train_mse": [],
-            "val_mse": [],
-            "train_sim_loss": [],
-            "val_sim_loss": [],
-            "train_act_loss": [],
-            "val_act_loss": [],
+            "train_loss": [], "val_loss": [],
+            "train_f1": [], "val_f1": [],
+            "train_acc": [], "val_acc": [],
+            "train_mse": [], "val_mse": [],
+            "train_sim_loss": [], "val_sim_loss": [],
+            "train_act_loss": [], "val_act_loss": [],
             "train_sec_loss": [],
-            "train_adv_loss": [],
-            "train_d_acc": [],
-            "train_feat_dist": [],
+            "train_adv_loss": [], "train_d_acc": [],
+            "train_feat_dist": [], "train_signal_dist": [],
             "train_grl_lambda": [],
+            "train_mmd_loss": [], "train_contrastive_loss": [], "train_silhouette": [],
         }
-        
-        print(f"Starting training for {epochs} epochs...")
-        print("-" * 70)
+
+        # Print training mode
+        if self.use_mmd or self.use_contrastive:
+            print(f"Starting Scenario 5 training (MMD + Contrastive) for {epochs} epochs...")
+            print(f"Loss weights: α={self.alpha}, β={self.beta}, γ={self.gamma}, δ(mmd)={self.mmd_weight}, ε(con)={self.contrastive_weight}")
+        elif self.use_adversarial:
+            print(f"Starting adversarial training for {epochs} epochs...")
+        else:
+            print(f"Starting training for {epochs} epochs...")
+        print("-" * 80)
 
         for epoch in range(epochs):
             self._apply_lr_warmup(epoch)
-            
+
             # Update GRL lambda if scheduled (Scenario 4)
             if self.use_adversarial and self.adv_schedule_lambda:
                 from src.models.discriminator import compute_grl_lambda_schedule
@@ -475,14 +551,17 @@ class Trainer:
                 )
             elif self.use_adversarial:
                 self._current_grl_lambda = self.adv_grl_lambda
-            
-            tr_loss, tr_f1, tr_mse, tr_sim, tr_act, tr_sec, tr_adv, tr_d_acc, tr_feat_dist, tr_acc = self._run_epoch("train")
+
+            (tr_loss, tr_f1, tr_mse, tr_sim, tr_act, tr_sec, tr_adv, tr_d_acc,
+             tr_feat_dist, tr_mmd, tr_con, tr_sil, tr_acc) = self._run_epoch("train")
             if self.skip_val:
-                val_loss, val_f1, val_mse, val_sim, val_act, _, _, _, _, val_acc = tr_loss, tr_f1, tr_mse, tr_sim, tr_act, 0.0, 0.0, 0.0, 0.0, tr_acc
+                (val_loss, val_f1, val_mse, val_sim, val_act, _, _, _, _, _, _, _,
+                 val_acc) = (tr_loss, tr_f1, tr_mse, tr_sim, tr_act, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, tr_acc)
             else:
-                val_loss, val_f1, val_mse, val_sim, val_act, _, _, _, _, val_acc = self._run_epoch("val")
+                (val_loss, val_f1, val_mse, val_sim, val_act, _, _, _, _, _, _, _,
+                 val_acc) = self._run_epoch("val")
             current_lr = self.optimizer.param_groups[0]["lr"]
-            
+
             history["train_loss"].append(tr_loss)
             history["val_loss"].append(val_loss)
             history["train_f1"].append(tr_f1)
@@ -499,17 +578,31 @@ class Trainer:
             history["train_adv_loss"].append(tr_adv)
             history["train_d_acc"].append(tr_d_acc)
             history["train_feat_dist"].append(tr_feat_dist)
+            history["train_signal_dist"].append(tr_feat_dist if self.adv_signal_input else 0.0)
+            history["train_mmd_loss"].append(tr_mmd)
+            history["train_contrastive_loss"].append(tr_con)
+            history["train_silhouette"].append(tr_sil)
             # Track GRL lambda for adversarial training
             grl_lam = getattr(self, '_current_grl_lambda', self.adv_grl_lambda) if self.use_adversarial else 0.0
             history["train_grl_lambda"].append(grl_lam)
             
-            # Print epoch progress (with adversarial diagnostics if enabled)
-            base_msg = (f"Epoch {epoch+1:3d}/{epochs} | "
-                  f"Train Loss: {tr_loss:.4f} | Val Loss: {val_loss:.4f} | "
-                  f"Train F1: {tr_f1:.4f} | Val F1: {val_f1:.4f} | "
-                  f"LR: {current_lr:.3e}")
-            if self.use_adversarial:
-                base_msg += f" | λ: {grl_lam:.2f} | D_acc: {tr_d_acc:.3f} | Feat_dist: {tr_feat_dist:.2f}"
+            # Print epoch progress (with scenario-specific diagnostics)
+            if self.use_mmd or self.use_contrastive:
+                # Scenario 5: MMD + Contrastive diagnostics
+                sil_status = "✓" if tr_sil > 0.3 else "⚠️" if tr_sil > 0.1 else "❌"
+                base_msg = (f"Epoch {epoch+1:3d}/{epochs} | "
+                      f"Loss: {tr_loss:.4f} | Val F1: {val_f1:.4f} | "
+                      f"MMD: {tr_mmd:.4f} | Con: {tr_con:.4f} | "
+                      f"Feat_dist: {tr_feat_dist:.2f} | Sil: {tr_sil:.3f} {sil_status} | "
+                      f"LR: {current_lr:.3e}")
+            else:
+                base_msg = (f"Epoch {epoch+1:3d}/{epochs} | "
+                      f"Train Loss: {tr_loss:.4f} | Val Loss: {val_loss:.4f} | "
+                      f"Train F1: {tr_f1:.4f} | Val F1: {val_f1:.4f} | "
+                      f"LR: {current_lr:.3e}")
+                if self.use_adversarial:
+                    dist_label = "Signal_dist" if self.adv_signal_input else "Feat_dist"
+                    base_msg += f" | λ: {grl_lam:.2f} | D_acc: {tr_d_acc:.3f} | {dist_label}: {tr_feat_dist:.2f}"
             print(base_msg)
 
             if self.scheduler is not None and self._lr_warmup_finished:
@@ -538,7 +631,11 @@ class Trainer:
                 print(f"Early stopping triggered after {epoch+1} epochs (patience: {self.patience})")
                 break
 
-        print("-" * 70)
+            # Collapse warning for Scenario 5
+            if (self.use_mmd or self.use_contrastive) and tr_sil < 0.1 and epoch > 10:
+                print(f"    ⚠️ WARNING: Low silhouette score ({tr_sil:.3f}) - possible feature collapse!")
+
+        print("-" * 80)
         if math.isfinite(best["value"]):
             print(f"Training completed. Best {self.objective_metric}: {best['value']:.4f}")
         else:
@@ -552,4 +649,3 @@ class Trainer:
         self.best_epoch = best["epoch"]
         self.best_score = best["value"]
         return history
-# ...existing code...
