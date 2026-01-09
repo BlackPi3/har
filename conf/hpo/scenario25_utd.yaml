@@ -18,7 +18,7 @@ trainer:
 top_k: 10
 
 repeat:
-  enabled: true
+  enabled: false
   count: 5
 
 hydra:
@@ -34,8 +34,8 @@ hydra:
       # beta fixed at 0 - this is the point of scenario25
       trainer.gamma: choice(0.5, 1.0, 2.0, 5, 10, 20, 50)
 
-      data.stride_seconds: choice(0.02)
-      data.batch_size: choice(8)
+      data.stride_seconds: choice(0.04) # TODO widen later
+      data.batch_size: choice(16) # TODO widen later
 
       # --- Pass 1 DEFAULTS for Pass 2+3 params ---
       optim.lr: choice(0.001)
