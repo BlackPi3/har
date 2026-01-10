@@ -54,6 +54,7 @@ def main():
     parser.add_argument("--study-name", required=True, help="Study/run name under experiments/hpo/<study>")
     parser.add_argument("--env", required=True, help="Hydra env override (e.g., remote, local)")
     parser.add_argument("--hpo-root", type=str, default=None, help="Path to HPO study root (contains repeats/topk)")
+    parser.add_argument("--output-root", type=str, default=None, help="Path to store eval results (default: experiments/eval/<study>)")
     parser.add_argument("--trial", type=str, default=None, help="Optional explicit trial name to override inference")
     parser.add_argument("--eval-config", type=str, default=None, help="Optional path to eval config YAML")
     parser.add_argument("--seed", type=int, default=0)
@@ -157,8 +158,12 @@ def main():
         )
 
     # Determine eval output directory
-    eval_root = Path("experiments") / "eval" / args.study_name
+    if args.output_root:
+        eval_root = Path(args.output_root)
+    else:
+        eval_root = Path("experiments") / "eval" / args.study_name
     eval_root.mkdir(parents=True, exist_ok=True)
+    print(f"[eval] Output directory: {eval_root}")
 
     base_cmd = [
         args.python,
@@ -199,6 +204,7 @@ def main():
                 metrics = existing.get("final_metrics", {})
             except Exception:
                 metrics = {}
+            print(f"[eval] Repeat {rep_idx + 1}/{repeat_count} already exists, skipping (use --no-resume to force)")
             runs.append(
                 {
                     "rep": rep_idx,
@@ -214,9 +220,17 @@ def main():
             f"run.dir={str(run_dir)}",
         ]
 
-        print("Running eval:", " ".join(shlex.quote(x) for x in cmd))
-        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        print(proc.stdout)
+        print(f"\n[eval] === Repeat {rep_idx + 1}/{repeat_count} (seed={seed_val}) ===")
+        print(f"[eval] Output dir: {run_dir}")
+        print("[eval] Running:", " ".join(shlex.quote(x) for x in cmd))
+        sys.stdout.flush()
+
+        # Stream output in real-time instead of buffering
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+        for line in proc.stdout:
+            print(line, end="", flush=True)
+        proc.wait()
+
         if proc.returncode != 0:
             raise RuntimeError(f"Eval run failed with code {proc.returncode}")
 
@@ -268,8 +282,21 @@ def main():
         "repeat_count": repeat_count,
         "test_metrics": aggregate,
     }
-    with (eval_root / "eval_summary.json").open("w") as sf:
+    summary_path = eval_root / "eval_summary.json"
+    with summary_path.open("w") as sf:
         json.dump(summary, sf, indent=2)
+
+    # Print final summary
+    print("\n" + "=" * 60)
+    print(f"[eval] EVALUATION COMPLETE")
+    print(f"[eval] Study: {args.study_name}")
+    print(f"[eval] Repeats: {repeat_count}")
+    print(f"[eval] Results saved to: {eval_root}/")
+    print(f"[eval] Summary: {summary_path}")
+    print("-" * 60)
+    for key, stats in sorted(aggregate.items()):
+        print(f"[eval] {key}: {stats['mean']:.4f} ± {stats['std']:.4f} (n={stats['count']})")
+    print("=" * 60)
 
 
 if __name__ == "__main__":
