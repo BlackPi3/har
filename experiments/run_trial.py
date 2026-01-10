@@ -800,7 +800,9 @@ def _write_results(
                 except Exception:
                     pass
         out["objective"] = meta
-    (run_dir / "results.json").write_text(json.dumps(out, indent=2))
+    results_path = run_dir / "results.json"
+    results_path.write_text(json.dumps(out, indent=2))
+    print(f"[run_trial] Results saved to: {results_path}")
 
 
 def _save_best_state(run_dir: Path, best_state: Dict[str, Any] | None) -> None:
@@ -1088,6 +1090,7 @@ def main():
         run_group = getattr(getattr(cfg, "run", None), "group", None)
         # Evaluate on test split (best model is restored inside fit) only for eval runs
         if run_group == "eval" and dls.get("test") is not None:
+            print("[run_trial] Running test evaluation with best model...")
             with torch.no_grad():
                 test_results = trainer._run_epoch("test")
                 # Unified format: (loss, f1, mse, sim, act, sec, adv, d_acc, feat_dist, mmd, con, sil, acc)
@@ -1101,6 +1104,11 @@ def main():
                 "test_act_loss": test_act,
                 "test_acc": test_acc,
             }
+            print(f"[run_trial] Test results: F1={test_f1:.4f}, Acc={test_acc:.4f}, Loss={test_loss:.4f}")
+        elif run_group == "eval":
+            print(f"[run_trial] WARNING: run.group=eval but no test dataloader found!")
+        else:
+            print(f"[run_trial] Skipping test evaluation (run.group={run_group}, not 'eval')")
     except Exception as e:
         print(f"[run_trial] ERROR: {e}")
         history = {"val_f1": [], "val_loss": []}
