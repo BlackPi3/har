@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-#SBATCH -J sc42_utd_p1[2]
-#SBATCH -p L40S
+#SBATCH -J sc3_utd_p3
+#SBATCH -p RTXA6000
 #SBATCH --gpus=1
 #SBATCH --cpus-per-gpu=8
 #SBATCH --mem=40G
@@ -10,9 +10,9 @@
 # HPO configuration (study via conf/hpo)
 ########################################
 # Defaults (override via environment variables as needed)
-HPO_SPACE=${HPO_SPACE:-scenario42_utd} # scenario23_utd | scenario23_mmfit
-STUDY_NAME=${STUDY_NAME:-sc42_utd_p1[2]}  # descriptive study name
-N_TRIALS=${N_TRIALS:-25}              # number of HPO trials
+HPO_SPACE=${HPO_SPACE:-scenario3_utd} # scenario23_utd | scenario23_mmfit
+STUDY_NAME=${STUDY_NAME:-sc3_utd_p3}  # descriptive study name
+N_TRIALS=${N_TRIALS:-150}              # number of HPO trials
 
 # Container + project paths
 PROJECT_ROOT=${PROJECT_ROOT:-/home/zolfaghari/har}

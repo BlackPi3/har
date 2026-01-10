@@ -6,10 +6,6 @@
 #SBATCH --mem=32G
 #SBATCH -t 04:00:00
 
-# Container + project paths
-PROJECT_ROOT=${PROJECT_ROOT:-/home/zolfaghari/har}
-CONTAINER_IMAGE=${CONTAINER_IMAGE:-/netscratch/zolfaghari/images/har.sqsh}
-
 ########################################
 # Eval configuration (override via env)
 ########################################
@@ -17,8 +13,13 @@ CONTAINER_IMAGE=${CONTAINER_IMAGE:-/netscratch/zolfaghari/images/har.sqsh}
 # HPO_NAME: name of the HPO study to evaluate (may differ from STUDY_NAME)
 STUDY_NAME=${STUDY_NAME:-scenario2_utd}
 HPO_NAME=${HPO_NAME:-$STUDY_NAME}
-ENV_NAME=remote
 REPEAT_COUNT=${REPEAT_COUNT:-10}
+
+# Container + project paths
+PROJECT_ROOT=${PROJECT_ROOT:-/home/zolfaghari/har}
+CONTAINER_IMAGE=${CONTAINER_IMAGE:-/netscratch/zolfaghari/images/har.sqsh}
+
+ENV_NAME=remote
 HPO_ROOT=${HPO_ROOT:-/netscratch/$USER/experiments/hpo/$HPO_NAME}
 OUTPUT_ROOT=${OUTPUT_ROOT:-/netscratch/$USER/experiments/eval/$STUDY_NAME}
 EPOCHS=${EPOCHS:-}

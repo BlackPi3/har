@@ -32,7 +32,7 @@ hydra:
       # PASS 1: Loss weights + MMD/Contrastive params (ACTIVE)
       # ============================================================
       trainer.alpha: choice(0.5, 1.0, 2.0)
-      trainer.beta: choice(0, 2, 5)  # May reduce since MMD handles alignment
+      trainer.beta: choice(0, 1, 2, 5)  # May reduce since MMD handles alignment
       trainer.gamma: choice(0.5, 1.0, 2.0)
 
       # MMD-specific params
@@ -44,7 +44,7 @@ hydra:
       trainer.contrastive.weight: choice(0.1, 0.3, 0.5)
       trainer.contrastive.temperature: choice(0.3, 0.5, 0.7)
 
-      data.stride_seconds: choice(0.02, 0.03, 0.04)
+      data.stride_seconds: choice(0.02, 0.04)
       data.batch_size: choice(16, 24, 32)  # Larger batches help contrastive
 
       # --- Pass 1 DEFAULTS for Pass 2+3 params ---
