@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #SBATCH -J har-eval
-#SBATCH -p RTXA6000
+#SBATCH -p L40S
 #SBATCH --gpus=1
 #SBATCH --cpus-per-gpu=8
-#SBATCH --mem=32G
+#SBATCH --mem=40G
 #SBATCH -t 03-00:00:00
 
 ########################################
