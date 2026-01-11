@@ -15,7 +15,6 @@ Config construction: conf/trial/<trial_name>.yaml + best_params overrides
 from __future__ import annotations
 import argparse
 import json
-import os
 import shlex
 import subprocess
 import sys
@@ -60,8 +59,6 @@ def main():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--repeat-count", type=int, default=10, help="Number of eval repeats (seeds will increment)")
     parser.add_argument("--no-resume", action="store_true", help="Do not skip already completed repeats")
-    parser.add_argument("--direction", type=str, default="maximize", choices=["maximize", "minimize"],
-                        help="Optimization direction: maximize for F1, minimize for loss")
     parser.add_argument("--epochs", type=int, default=None, help="Override trainer.epochs for eval runs")
     parser.add_argument("--python", type=str, default=sys.executable)
     parser.add_argument("--module", type=str, default="experiments.run_trial")
