@@ -19,8 +19,7 @@ PROJECT_ROOT=${PROJECT_ROOT:-/home/zolfaghari/har}
 CONTAINER_IMAGE=${CONTAINER_IMAGE:-/netscratch/zolfaghari/images/har.sqsh}
 
 ENV_NAME=remote
-HPO_NAME=${HPO_NAME:-$STUDY_NAME}
-HPO_ROOT=${HPO_ROOT:-/netscratch/$USER/experiments/hpo/$HPO_NAME}
+HPO_ROOT=${HPO_ROOT:-/netscratch/$USER/experiments/hpo/$STUDY_NAME}
 OUTPUT_ROOT=${OUTPUT_ROOT:-/netscratch/$USER/experiments/eval/$STUDY_NAME}
 EPOCHS=${EPOCHS:-}
 LOG_ROOT=${LOG_ROOT:-/netscratch/$USER/experiments/log/eval}
