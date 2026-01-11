@@ -6,59 +6,51 @@ This thesis investigates using simulated accelerometer signals derived from skel
 
 ---
 
-## Chapter 3: Methodology
+## Chapter 3: Methodology ✓ DRAFT COMPLETE
 
-### 3.1 Problem Formulation
-- Formal definition of the pose-to-IMU regression task
-- Input: skeleton joint positions (3D coordinates over time)
-- Output: simulated 3-axis accelerometer signal
-- Goal: train HAR classifier that generalizes to real IMU data
+> **Status**: First draft written in `thesis/3-method.tex`
+> **Figures**: TODO placeholders inserted; need to create with SciSpace
 
-### 3.2 System Architecture
-- Two-stream design: real_acc path and sim_acc path
-- Shared vs separate feature extractors (scenario 2 vs 24)
-- Shared vs separate classifiers (scenario 2 vs 23)
-- Diagram showing data flow through the system
+### 3.1 Problem Formulation ✓
+- Task definition: pose-to-IMU regression + activity classification
+- Formal notation: $\mathcal{D} = \{(\mathbf{p}_i, \mathbf{a}_i, y_i)\}$
+- Joint training objective motivation
+- Evaluation protocol (real-only at inference)
 
-### 3.3 Loss Function Design
-- **Classification loss (α)**: Cross-entropy on real_acc features
-- **Consistency loss (β)**: Cross-entropy on sim_acc features (same labels)
+### 3.2 System Architecture ✓
+- Two-stream design: real path and simulated path
+- Three components: Regressor $R$, Feature Extractor $F$, Classifier $C$
+- Component interactions and gradient flow
+- Weight sharing in baseline configuration
+
+### 3.3 Loss Function Design ✓
+- **Classification loss (α)**: CE on both real and sim paths (same coefficient)
+- **Feature similarity loss (β)**: Cosine similarity between z_real and z_sim
 - **Regression loss (γ)**: MSE between sim_acc and real_acc signals
-- **Secondary loss**: Classification on pose-only data (NTU)
-- **Adversarial loss**: Discriminator distinguishing real vs sim features
-- Multi-objective optimization: `L_total = α·L_cls + β·L_consistency + γ·L_mse + ...`
+- Total objective: `L_total = α·L_cls + β·L_similarity + γ·L_regression`
 
-### 3.4 Training Scenarios
-| Scenario | Description | Key Idea |
-|----------|-------------|----------|
-| 2 | Baseline with shared FE+classifier | Joint training on real+sim |
-| 22 | No MSE loss (γ=0) | Ablation: is regression necessary? |
-| 23 | Separate classifiers | Does sim need its own classifier head? |
-| 24 | Separate feature extractors | Does sim need its own FE? |
-| 3 | Secondary pose-only dataset | More pose diversity from NTU |
-| 4 | Adversarial domain adaptation | Force sim features to match real distribution |
+### 3.4 Training Scenarios ✓
+| Thesis Name | Code | Description |
+|-------------|------|-------------|
+| Baseline | scenario2 | Shared F and C; all losses enabled |
+| Ablation: Effect of MSE Loss | scenario22 | γ=0 (no regression loss) |
+| Ablation: Effect of Similarity Loss | scenario25 | β=0 (no feature similarity) |
+| Shared Representation, Separate Classifiers | scenario23 | Separate C and C_sim |
+| Separate Representations, Shared Classifier | scenario24 | Separate F and F_sim |
+| Auxiliary Pose Data | scenario3 | Secondary NTU dataset |
+| Feature-level Discriminator | scenario4 | Adversarial on features with GRL |
+| Signal-level Discriminator | scenario42 | Adversarial on raw accelerometer |
 
-### 3.5 Adversarial Learning (Scenario 4)
-- **Motivation**: Bridge domain gap between real and simulated features
-- **Architecture**: Feature-level discriminator (MLP on FE output)
-- **Gradient Reversal Layer (GRL)**: Enables end-to-end training
-  - Forward: identity
-  - Backward: negate gradients (adversarial signal to FE)
-- **Training dynamics**:
-  - Discriminator learns to distinguish real vs sim features
-  - FE learns to fool discriminator (domain-invariant features)
-  - Classifier learns on domain-invariant features
-- **Comparison with alternatives**:
-  - GRL vs alternating optimization (min-max game)
-  - Feature-level vs signal-level discrimination
-  - DANN-style vs GAN-style formulation
-- **Lambda scheduling**: Fixed vs progressive (DANN schedule)
+### 3.5 Adversarial Learning (Feature & Signal Discriminators) ✓
+- Gradient Reversal Layer (GRL) for end-to-end training
+- Feature-level: D operates on z_real vs z_sim (affects F)
+- Signal-level: D operates on a vs ã (affects R)
+- Adversarial loss weighted by λ_adv
 
-### 3.6 Secondary Dataset Integration (Scenario 3)
-- Motivation: Limited pose diversity in primary dataset
-- NTU-RGB+D as auxiliary pose source (60 action classes, 40 subjects)
-- Training flow: NTU pose → regressor → sim_acc → FE → secondary classifier
-- Loss weighting: `loss_weight` controls NTU's gradient contribution
+### 3.6 Auxiliary Pose Data ✓
+- NTU RGB+D as secondary pose-only source
+- Dedicated classifier C_aux for secondary data
+- Loss weighted by λ_aux
 
 ---
 
