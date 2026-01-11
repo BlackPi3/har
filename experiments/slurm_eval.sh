@@ -4,7 +4,7 @@
 #SBATCH --gpus=1
 #SBATCH --cpus-per-gpu=8
 #SBATCH --mem=32G
-#SBATCH -t 04:00:00
+#SBATCH -t 03-00:00:00
 
 ########################################
 # Eval configuration (override via env)
@@ -12,7 +12,6 @@
 # STUDY_NAME: name for this eval run (used for output directory)
 # HPO_NAME: name of the HPO study to evaluate (may differ from STUDY_NAME)
 STUDY_NAME=${STUDY_NAME:-scenario2_utd}
-HPO_NAME=${HPO_NAME:-$STUDY_NAME}
 REPEAT_COUNT=${REPEAT_COUNT:-10}
 
 # Container + project paths
@@ -20,6 +19,7 @@ PROJECT_ROOT=${PROJECT_ROOT:-/home/zolfaghari/har}
 CONTAINER_IMAGE=${CONTAINER_IMAGE:-/netscratch/zolfaghari/images/har.sqsh}
 
 ENV_NAME=remote
+HPO_NAME=${HPO_NAME:-$STUDY_NAME}
 HPO_ROOT=${HPO_ROOT:-/netscratch/$USER/experiments/hpo/$HPO_NAME}
 OUTPUT_ROOT=${OUTPUT_ROOT:-/netscratch/$USER/experiments/eval/$STUDY_NAME}
 EPOCHS=${EPOCHS:-}
