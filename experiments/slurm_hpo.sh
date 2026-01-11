@@ -35,7 +35,8 @@ LOG_ERR="${LOG_STEM}.err"
 echo "Stdout: $LOG_OUT"
 echo "Stderr: $LOG_ERR"
 
-# Optuna + Hydra diagnostics
+# Unbuffered Python output for real-time logging
+export PYTHONUNBUFFERED=1
 export HYDRA_FULL_ERROR=1
 
 srun \
@@ -44,7 +45,8 @@ srun \
   --container-mounts="$PROJECT_ROOT":"$PROJECT_ROOT",/netscratch/$USER:/netscratch/$USER,/ds:/ds:ro \
   bash -lc "
     set -euo pipefail
-    python -m experiments.run_hpo \
+    export PYTHONUNBUFFERED=1
+    python -u -m experiments.run_hpo \
       --n-trials $N_TRIALS \
       --study-name $STUDY_NAME \
       --storage '$STORAGE' \
