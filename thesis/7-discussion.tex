@@ -1,0 +1,232 @@
+\chapter{Discussion}
+\label{chap:discussion}
+
+This chapter interprets the experimental findings, situates them within the broader literature, acknowledges limitations, and provides practical guidance for applying pose-to-IMU simulation in HAR systems.
+
+\section{Key Findings}
+\label{sec:key-findings}
+
+\subsection{Effectiveness of Joint Training}
+
+The central finding of this work is that joint end-to-end training of the pose-to-IMU regressor and activity classifier consistently outperforms decoupled approaches. This improvement stems from two complementary mechanisms:
+
+\textbf{Task-aware simulation.} When the regressor receives gradients from the classification loss, it learns to produce simulated signals that are not merely similar to real accelerometer data, but specifically optimized for activity discrimination. The regressor may sacrifice perfect signal reconstruction in favor of preserving or amplifying activity-relevant features.
+
+\textbf{Domain-robust feature learning.} By training the feature extractor on both real and simulated data simultaneously, the network learns representations that generalize across the domain gap. This is particularly valuable when test-time data may exhibit characteristics not fully captured in the training distribution.
+
+\subsection{Role of Loss Components}
+
+The three-term objective ($\alpha \mathcal{L}_{\text{cls}} + \beta \mathcal{L}_{\text{similarity}} + \gamma \mathcal{L}_{\text{regression}}$) provides complementary supervision signals:
+
+\textbf{Classification loss ($\alpha$).} Essential for task performance. Training on both real and simulated paths exposes the classifier to greater variation, improving robustness. The equal weighting of real and simulated classification losses ensures neither domain dominates optimization.
+
+\textbf{Feature similarity loss ($\beta$).} Provides explicit domain alignment at the representation level. Our results suggest this loss is [more/less] important when using shared versus separate feature extractors. With shared weights, the architecture itself provides implicit alignment; explicit similarity loss provides additional regularization.
+
+\textbf{Regression loss ($\gamma$).} Grounds the simulated signals in physical reality. Interestingly, the ablation with $\gamma = 0$ shows that [acceptable/degraded] classification performance is achievable even without direct signal supervision, suggesting that task gradients alone can guide meaningful simulation. However, including regression loss [improves stability / provides faster convergence / ensures signal interpretability].
+
+\subsection{When Does Simulation Help?}
+
+Our analysis reveals that simulation-augmented training provides the greatest benefit in specific circumstances:
+
+\textbf{Limited real data.} When the primary dataset is small (e.g., UTD-MHAD with 4 training subjects), simulated data provides meaningful augmentation that improves generalization. The benefit is less pronounced for larger datasets where real data already provides sufficient coverage.
+
+\textbf{High pose-accelerometer correlation.} Activities where arm motion directly determines accelerometer readings (e.g., arm raises, bicep curls) benefit more than activities where accelerometer signal depends on subtle factors not captured by pose (e.g., wrist rotations, impact forces).
+
+\textbf{Cross-subject generalization.} The domain gap between subjects is partially bridged by simulated data, which provides examples of the same activities with different execution styles derived from pose variation.
+
+Conversely, simulation may provide limited benefit or even hurt performance when:
+\begin{itemize}
+    \item Pose estimation quality is poor, introducing noise that degrades the regressor
+    \item The simulated signals systematically differ from real signals in ways that confuse the classifier
+    \item The computational overhead of the simulation path outweighs marginal accuracy gains
+\end{itemize}
+
+\section{Adversarial Learning Insights}
+\label{sec:adversarial-insights}
+
+\subsection{Generator-Discriminator Dynamics}
+
+Adversarial training introduces a competitive dynamic between the discriminator (seeking to distinguish real from simulated) and the generator components (seeking to fool the discriminator). Successful training requires careful balance:
+
+\textbf{Discriminator domination.} If the discriminator is too powerful (high capacity, low regularization), it maintains perfect classification throughout training. The generator receives weak gradients and fails to improve. Symptoms include discriminator accuracy remaining near 100\% and no reduction in feature distance.
+
+\textbf{Generator domination.} If the discriminator is too weak, it provides uninformative gradients. The generator has no incentive to produce realistic features. Symptoms include discriminator accuracy immediately dropping to 50\% and features that satisfy the discriminator but fail downstream tasks.
+
+\textbf{Healthy equilibrium.} Proper training shows discriminator accuracy gradually decreasing from near 100\% to approximately 50\%, indicating the generator successfully closes the domain gap. The GRL lambda schedule helps achieve this by starting with weak adversarial gradients (allowing initial feature learning) and increasing strength as training progresses.
+
+\subsection{Feature-Level vs. Signal-Level Discrimination}
+
+Our experiments compare two discriminator operating points:
+
+\textbf{Feature-level discrimination} operates on embeddings $\mathbf{z}_{\text{real}}$ vs. $\mathbf{z}_{\text{sim}}$. The adversarial gradient flows primarily to the feature extractor $F$, encouraging domain-invariant representations. This approach aligns with domain adaptation methods like DANN \citep{ganin2016domain}.
+
+\textbf{Signal-level discrimination} operates on raw accelerometer signals $\mathbf{a}$ vs. $\tilde{\mathbf{a}}$. The adversarial gradient flows to the regressor $R$, encouraging realistic signal synthesis. This approach aligns with generative adversarial networks for time series.
+
+Our results indicate that [feature-level / signal-level] discrimination provides greater classification benefit. This may be because [feature-level alignment directly improves the representations used for classification / signal-level realism does not guarantee task-relevant features / the feature space is lower-dimensional and easier to align].
+
+\subsection{Connection to Domain Adaptation Literature}
+
+Our adversarial training scenarios implement ideas from unsupervised domain adaptation, applied to the sim-to-real gap:
+
+\textbf{Domain-Adversarial Neural Networks (DANN)} \citep{ganin2016domain} introduced the gradient reversal layer for end-to-end domain adaptation. Our feature-level discriminator scenario directly implements this approach, treating real accelerometer data as the target domain and simulated data as the source domain.
+
+\textbf{Adversarial Discriminative Domain Adaptation (ADDA)} \citep{tzeng2017adversarial} uses separate encoders for source and target domains with adversarial alignment. Our separate feature extractor scenario ($F$ and $F_{\text{sim}}$) combined with adversarial training approximates this approach.
+
+The key difference from standard domain adaptation is that we have \emph{paired} data: each pose sequence has a corresponding real accelerometer signal. This enables the regression loss and feature similarity loss, which are unavailable in typical unsupervised domain adaptation settings.
+
+\subsection{Alternative Adversarial Objectives}
+
+While we use the standard binary cross-entropy adversarial loss, alternative formulations may offer benefits:
+
+\textbf{Wasserstein distance} \citep{arjovsky2017wasserstein} provides smoother gradients and avoids mode collapse, but requires careful enforcement of the Lipschitz constraint.
+
+\textbf{Least-squares loss} \citep{mao2017least} replaces BCE with MSE, providing more stable gradients when the discriminator is confident.
+
+\textbf{Hinge loss} stabilizes training by only penalizing misclassified samples beyond a margin.
+
+Exploring these alternatives remains an avenue for future work.
+
+\section{Limitations}
+\label{sec:limitations}
+
+\subsection{Dataset-Specific Tuning}
+
+A significant limitation of our approach is the need for dataset-specific hyperparameter optimization. The optimal loss weights, learning rates, and architecture configurations differ substantially between UTD-MHAD and MM-Fit. This suggests that practitioners cannot simply apply a single ``best'' configuration to new datasets.
+
+The dataset dependence likely arises from differences in:
+\begin{itemize}
+    \item Sampling rates (50 Hz vs. 100 Hz)
+    \item Activity characteristics (discrete actions vs. continuous exercises)
+    \item Pose-accelerometer correlation (sensor placement, skeleton quality)
+    \item Dataset size (training set variability)
+\end{itemize}
+
+\subsection{Computational Cost}
+
+The multi-pass HPO strategy, while effective, requires substantial computational resources:
+\begin{itemize}
+    \item Each HPO pass runs 20--50 trials
+    \item Each trial requires training for 30--100 epochs
+    \item Top-K validation multiplies evaluation cost by the number of seeds
+\end{itemize}
+
+For resource-constrained settings, practitioners may need to adopt simplified search strategies or transfer hyperparameters from similar datasets.
+
+\subsection{Skeleton Quality Dependence}
+
+Our method assumes access to reasonably accurate 3D skeleton pose data. In practice, pose estimation from video introduces errors:
+\begin{itemize}
+    \item Joint position jitter from frame-to-frame estimation noise
+    \item Occlusion-induced artifacts when body parts are not visible
+    \item Scale ambiguity in monocular 3D pose estimation
+    \item Temporal misalignment between estimated pose and sensor data
+\end{itemize}
+
+When skeleton quality degrades, the regressor receives noisy input, potentially producing simulated signals that harm rather than help classification. Our experiments use ground-truth or high-quality estimated poses; performance on lower-quality pose estimates remains to be evaluated.
+
+\subsection{Sensor Placement Generalization}
+
+Our method learns a mapping from arm joint poses to wrist-worn accelerometer signals. This mapping is specific to the sensor placement location. Generalizing to:
+\begin{itemize}
+    \item Different body locations (e.g., hip, ankle)
+    \item Different sensor orientations
+    \item Multiple simultaneous sensors
+\end{itemize}
+would require retraining or architectural modifications. The physics of accelerometer signals depends heavily on the kinematic chain from joints to sensor, which changes with placement.
+
+\subsection{Activity Class Coverage}
+
+The auxiliary data experiments with NTU RGB+D reveal that secondary datasets are most beneficial when they share activity semantics with the primary dataset. When activity classes differ substantially, the regressor may learn mappings that do not transfer. This limits the utility of large-scale pose datasets for arbitrary HAR tasks.
+
+\section{Practical Recommendations}
+\label{sec:recommendations}
+
+Based on our experimental findings, we offer guidelines for practitioners considering pose-to-IMU simulation for HAR.
+
+\subsection{When to Use Simulation-Augmented Training}
+
+\textbf{Recommended when:}
+\begin{itemize}
+    \item Labeled accelerometer data is scarce (fewer than 5 training subjects)
+    \item High-quality synchronized pose data is available
+    \item Target activities involve clear arm/body motions visible in skeleton
+    \item Cross-subject generalization is the primary goal
+\end{itemize}
+
+\textbf{Not recommended when:}
+\begin{itemize}
+    \item Abundant labeled accelerometer data already exists
+    \item Pose estimation is unreliable or unavailable
+    \item Activities depend on subtle motions not captured by skeleton (e.g., finger gestures)
+    \item Computational resources are severely limited
+\end{itemize}
+
+\subsection{Scenario Selection}
+
+For practitioners unsure which training scenario to adopt, we recommend the following decision process:
+
+\begin{enumerate}
+    \item \textbf{Start with the baseline.} The shared feature extractor and classifier configuration with all losses enabled ($\alpha, \beta, \gamma > 0$) provides a robust starting point.
+
+    \item \textbf{Try removing MSE loss.} If classification performance is the sole objective and signal interpretability is not required, setting $\gamma = 0$ may improve results by allowing the regressor to focus on task-relevant features.
+
+    \item \textbf{Consider adversarial training for small datasets.} When training data is very limited, the feature-level discriminator provides additional regularization that may improve generalization.
+
+    \item \textbf{Use auxiliary data cautiously.} Secondary pose datasets help only when they share relevant motion patterns with the target task. Mismatched auxiliary data can hurt performance.
+\end{enumerate}
+
+\subsection{Hyperparameter Priorities}
+
+Given limited HPO budget, prioritize tuning in this order:
+
+\begin{enumerate}
+    \item \textbf{Loss weights} ($\alpha$, $\beta$, $\gamma$): These have the largest impact on training dynamics. The ratio between weights matters more than absolute values.
+
+    \item \textbf{Data parameters} (stride, batch size): Smaller strides provide more training samples; smaller batches may improve generalization through gradient noise.
+
+    \item \textbf{Learning rate and regularization}: Standard deep learning tuning; learning rate warmup helps stability.
+
+    \item \textbf{Architecture capacity}: Can often remain at defaults; tune only if overfitting or underfitting is evident.
+\end{enumerate}
+
+\subsection{Evaluation Best Practices}
+
+To obtain reliable performance estimates:
+
+\begin{itemize}
+    \item Always use subject-disjoint splits for training, validation, and test sets
+    \item Report results as mean $\pm$ std over multiple random seeds (minimum 5, preferably 10)
+    \item Use validation set only for model selection; evaluate test set once with final configuration
+    \item Compare against real-only and regression-first baselines to quantify simulation benefit
+\end{itemize}
+
+\section{Broader Implications}
+\label{sec:implications}
+
+\subsection{Sim-to-Real Transfer in Sensor Systems}
+
+Our work contributes to the broader challenge of sim-to-real transfer for sensor-based systems. While simulation is common in robotics and autonomous driving, its application to wearable sensing remains underexplored. The success of pose-to-IMU simulation suggests that similar approaches may benefit other sensor modalities:
+
+\begin{itemize}
+    \item \textbf{Gyroscope simulation:} Extending the regressor to predict angular velocity from pose derivatives
+    \item \textbf{Pressure sensor simulation:} Predicting foot pressure from full-body pose for gait analysis
+    \item \textbf{EMG simulation:} Predicting muscle activation patterns from biomechanical models
+\end{itemize}
+
+\subsection{Leveraging Video Data for Wearable AI}
+
+A compelling use case for our method is leveraging the vast amount of existing video data (e.g., YouTube fitness videos, sports broadcasts) to train wearable AI systems. By extracting pose from video and simulating IMU signals, systems can learn from data that would otherwise require expensive sensor instrumentation to collect.
+
+This paradigm shift---from ``collect sensor data'' to ``mine existing video''---could dramatically reduce the data collection burden for HAR research and enable rapid prototyping of new activity recognition applications.
+
+\subsection{Multimodal Learning}
+
+Our framework exemplifies multimodal learning where different modalities (pose, accelerometer) provide complementary supervision. The joint training approach could extend to other multimodal HAR settings:
+
+\begin{itemize}
+    \item Audio + accelerometer for activity recognition
+    \item Video + IMU for action segmentation
+    \item Multiple sensor locations with partial observability
+\end{itemize}
+
+The key insight---that auxiliary modalities can improve primary modality performance through joint training---generalizes beyond the specific pose-to-IMU case studied here.

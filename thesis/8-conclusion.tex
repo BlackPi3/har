@@ -1,0 +1,137 @@
+\chapter{Conclusion}
+\label{chap:conclusion}
+
+This chapter summarizes the contributions of this thesis, provides answers to the research questions posed in the introduction, and outlines directions for future work.
+
+\section{Summary of Contributions}
+\label{sec:contributions}
+
+This thesis investigated the use of simulated accelerometer signals derived from skeleton pose data to improve Human Activity Recognition (HAR). We developed an end-to-end framework that jointly trains a pose-to-IMU regressor and activity classifier, and systematically evaluated multiple training scenarios across two benchmark datasets. The main contributions are:
+
+\subsection{Systematic Comparison of Training Scenarios}
+
+We defined and evaluated eight distinct training scenarios that explore different architectural choices and loss configurations:
+
+\begin{enumerate}
+    \item \textbf{Baseline:} Shared feature extractor and classifier with classification, feature similarity, and regression losses
+    \item \textbf{Loss ablations:} Variants removing MSE loss ($\gamma=0$) or feature similarity loss ($\beta=0$) to isolate component contributions
+    \item \textbf{Architecture variants:} Separate feature extractors or separate classifiers for real and simulated paths
+    \item \textbf{Auxiliary data:} Integration of secondary pose-only datasets (NTU RGB+D) for additional training signal
+    \item \textbf{Adversarial training:} Feature-level and signal-level discriminators with gradient reversal for domain alignment
+\end{enumerate}
+
+This systematic comparison revealed dataset-dependent optimal configurations, providing practitioners with evidence-based guidance for scenario selection.
+
+\subsection{Adversarial Domain Adaptation for Sim-to-Real}
+
+We adapted adversarial domain adaptation techniques to bridge the gap between simulated and real accelerometer data. By incorporating a discriminator with gradient reversal layer, the framework learns domain-invariant representations that generalize across the sim-to-real divide.
+
+Our analysis of discriminator dynamics, feature space visualization, and ablation studies provides insights into when and how adversarial training benefits HAR:
+\begin{itemize}
+    \item Feature-level discrimination encourages the feature extractor to produce representations indistinguishable between domains
+    \item Signal-level discrimination pressures the regressor to produce realistic accelerometer waveforms
+    \item The GRL lambda schedule is critical for balancing feature learning and domain alignment
+\end{itemize}
+
+\subsection{Multi-Pass Hyperparameter Optimization Strategy}
+
+We developed a three-pass HPO strategy that efficiently searches the large hyperparameter space:
+
+\begin{enumerate}
+    \item \textbf{Pass 1:} Loss weights and data parameters (highest impact on training dynamics)
+    \item \textbf{Pass 2:} Regularization parameters (learning rate, dropout, weight decay)
+    \item \textbf{Pass 3:} Model capacity parameters (filter sizes, hidden dimensions)
+\end{enumerate}
+
+This hierarchical approach reduces combinatorial explosion while ensuring important interactions are captured. The duplicate-aware sampling and top-K validation with multiple seeds provide robust configuration selection.
+
+\subsection{Reproducible Implementation}
+
+We provide an open-source implementation built on modern deep learning infrastructure:
+\begin{itemize}
+    \item Hydra-based configuration management enabling systematic experimentation
+    \item Unified trainer supporting all scenarios through configuration flags
+    \item Optuna integration for hyperparameter optimization with SQLite persistence
+    \item Comprehensive logging, checkpointing, and evaluation pipelines
+\end{itemize}
+
+All experimental configurations are provided, enabling full reproduction of reported results.
+
+\section{Answers to Research Questions}
+\label{sec:research-questions}
+
+We now revisit the research questions posed at the outset of this thesis.
+
+\subsection{RQ1: Does simulated accelerometer data improve HAR?}
+
+\textbf{Answer: Yes, under specific conditions.}
+
+Our experiments demonstrate that jointly training on real and simulated accelerometer data improves classification performance compared to training on real data alone. The improvement is most pronounced when:
+\begin{itemize}
+    \item The primary dataset is small (limited training subjects)
+    \item High-quality synchronized pose data is available
+    \item Target activities involve clear motions visible in the skeleton
+\end{itemize}
+
+The baseline scenario with shared weights and all losses enabled ($\alpha, \beta, \gamma > 0$) provides consistent improvements compared to the real-only baseline.
+
+However, simulation does not universally help. When pose quality is poor, when activities depend on subtle motions not captured by skeleton, or when abundant real data already exists, the benefit diminishes or may become negative.
+
+\subsection{RQ2: Which training scenario is most effective?}
+
+\textbf{Answer: Dataset-dependent, with the baseline as a robust default.}
+
+No single scenario dominates across all conditions. For practitioners without resources for extensive experimentation, the baseline scenario (shared $F$ and $C$, all losses enabled) provides a robust starting point that performs competitively across datasets.
+
+The ablation studies reveal the relative importance of each loss component and architectural choice, enabling informed decisions based on specific dataset characteristics and computational constraints.
+
+\subsection{RQ3: Does adversarial learning help close the domain gap?}
+
+\textbf{Answer: Partially, with caveats.}
+
+Adversarial training with feature-level discrimination can provide additional benefit beyond explicit feature similarity loss, but requires careful hyperparameter tuning. Key findings include:
+\begin{itemize}
+    \item \textbf{Training stability:} Adversarial training is more sensitive to hyperparameters than non-adversarial approaches
+    \item \textbf{GRL scheduling:} The lambda schedule is critical for balancing feature learning and domain alignment
+    \item \textbf{Feature vs. signal level:} Feature-level discrimination directly improves representations used for classification
+\end{itemize}
+
+The adversarial approach is most valuable when the domain gap is substantial and when careful hyperparameter tuning is feasible.
+
+\section{Future Work}
+\label{sec:future-work}
+
+Several promising directions extend the work presented in this thesis.
+
+\subsection{Extension to Other Sensor Modalities}
+
+The pose-to-IMU framework naturally extends to other inertial measurements:
+
+\textbf{Gyroscope simulation.} Angular velocity can be derived from pose derivatives. The regressor architecture would take pose velocity as input and predict 3-axis angular velocity, enabling simulation of full 6-DOF IMU data.
+
+\textbf{Multi-sensor simulation.} Extending to multiple body locations (wrist, hip, ankle) would require joint-specific regressors or a unified architecture that conditions on sensor placement.
+
+\subsection{Cross-Dataset Generalization}
+
+A valuable but challenging extension is training on one dataset and evaluating on another (e.g., train on UTD-MHAD, test on MM-Fit). This would test whether the learned representations and simulation strategies generalize across different sensor placements, activity vocabularies, and recording conditions.
+
+\subsection{Real-Time Deployment}
+
+Deploying pose-to-IMU simulation in real-time applications introduces additional constraints including latency requirements, edge device computational limits, and streaming inference architectures. Model compression techniques would be needed for practical on-device deployment.
+
+\subsection{Integration with Video-Based HAR}
+
+A natural extension is multimodal fusion combining appearance features from video with simulated accelerometer features. Cross-modal distillation could leverage video-based models pretrained on large-scale data to supervise accelerometer-based models.
+
+\subsection{Leveraging Large-Scale Video Data}
+
+A compelling application is leveraging vast amounts of unlabeled or weakly-labeled video data available online. Self-supervised pretraining using simulated IMU signals from unlabeled video, followed by fine-tuning on labeled sensor data, could dramatically reduce the data collection burden for HAR research.
+
+\section{Closing Remarks}
+\label{sec:closing}
+
+This thesis demonstrates that simulated accelerometer data derived from skeleton pose sequences can meaningfully improve Human Activity Recognition. The end-to-end joint training paradigm, where simulation and classification are optimized together, outperforms traditional decoupled approaches by allowing the simulation to be guided by task objectives.
+
+The systematic exploration of training scenarios---from loss ablations to architectural variants to adversarial training---provides a foundation for practitioners to make informed decisions when applying these techniques to new HAR problems. While no single configuration universally dominates, the insights from our experiments offer clear guidance on when and how simulation-augmented training is most beneficial.
+
+As wearable sensing continues to expand into health monitoring, fitness tracking, and ambient intelligence, the ability to leverage existing video data to improve sensor-based models becomes increasingly valuable. We hope the methods and findings presented here contribute to making HAR systems more accurate, more data-efficient, and more accessible to researchers and practitioners working with limited labeled sensor data.

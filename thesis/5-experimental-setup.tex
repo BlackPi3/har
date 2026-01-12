@@ -1,0 +1,327 @@
+\chapter{Experimental Setup}
+\label{chap:experimental-setup}
+
+This chapter describes the experimental framework used to evaluate our proposed method. We detail the datasets employed, preprocessing procedures, evaluation protocols, and baseline methods against which we compare our approach.
+
+\section{Datasets}
+\label{sec:datasets}
+
+We evaluate our method on two primary datasets that provide synchronized skeleton pose and inertial measurement unit (IMU) data: UTD-MHAD and MM-Fit. Additionally, we use NTU RGB+D as a secondary pose-only dataset for auxiliary training experiments.
+
+\subsection{UTD-MHAD}
+\label{sec:utd-dataset}
+
+The University of Texas at Dallas Multimodal Human Action Dataset (UTD-MHAD) \citep{chen2015utd} is a benchmark dataset for multimodal action recognition. It captures human activities using both a Microsoft Kinect sensor and a wearable inertial sensor.
+
+\subsubsection{Dataset Statistics}
+
+\begin{itemize}
+    \item \textbf{Subjects:} 8 participants
+    \item \textbf{Activity classes:} 21 actions, including gestures (waving, clapping), sports movements (tennis swing, basketball shoot), and daily activities (walking, sitting)
+    \item \textbf{Samples:} 671 action clips (approximately 4 repetitions per subject per action)
+    \item \textbf{Modalities:} 3D skeleton (20 joints) and 3-axis accelerometer
+    \item \textbf{Sampling rate:} 50 Hz for both skeleton and accelerometer
+\end{itemize}
+
+The Kinect sensor captures 3D joint positions at 30 fps, which are upsampled to 50 Hz to match the inertial sensor. The wearable sensor is placed on the subject's right wrist for upper-body actions and right thigh for lower-body actions, recording acceleration at 50 Hz.
+
+\subsubsection{Data Splits}
+
+We employ a subject-disjoint split to evaluate generalization to unseen individuals:
+\begin{itemize}
+    \item \textbf{Training:} Subjects 1--4 (4 subjects)
+    \item \textbf{Validation:} Subjects 5--6 (2 subjects)
+    \item \textbf{Test:} Subjects 7--8 (2 subjects)
+\end{itemize}
+
+This split ensures that models are evaluated on subjects never seen during training or hyperparameter tuning.
+
+\subsection{MM-Fit}
+\label{sec:mmfit-dataset}
+
+The MM-Fit dataset \citep{stromback2020mm} captures fitness activities in a gym setting, providing synchronized video and wearable sensor data from multiple body locations.
+
+\subsubsection{Dataset Statistics}
+
+\begin{itemize}
+    \item \textbf{Subjects:} 21 participants performing structured workout sessions
+    \item \textbf{Activity classes:} 11 classes including 10 exercises (squats, lunges, bicep curls, situps, pushups, tricep extensions, dumbbell rows, jumping jacks, dumbbell shoulder press, lateral shoulder raises) plus a ``no activity'' class for rest periods
+    \item \textbf{Recording structure:} Each session comprises 3 sets of 10 exercises with 10 repetitions each
+    \item \textbf{Modalities:} 3D skeleton pose (17 joints) and 3-axis accelerometer from left wrist smartwatch
+    \item \textbf{Sampling rate:} 100 Hz for accelerometer; video at 30 fps with pose estimation
+\end{itemize}
+
+Unlike UTD-MHAD which contains discrete action clips, MM-Fit provides continuous recordings where activities are annotated with start and end timestamps. This requires careful windowing to handle activity boundaries.
+
+\subsubsection{Data Splits}
+
+\begin{itemize}
+    \item \textbf{Training:} 12 subjects (w00--w08, w16--w18)
+    \item \textbf{Validation:} 4 subjects (w14, w15, w19, w20)
+    \item \textbf{Test:} 4 subjects (w09--w11, w13)
+\end{itemize}
+
+One subject (w12) is excluded due to data quality issues. The splits follow the protocol established in the original MM-Fit paper to enable direct comparison with prior work.
+
+\subsection{NTU RGB+D}
+\label{sec:ntu-dataset}
+
+The NTU RGB+D dataset \citep{shahroudy2016ntu} is a large-scale action recognition benchmark captured with Microsoft Kinect v2 sensors. We use it as a secondary dataset for auxiliary pose training experiments.
+
+\subsubsection{Dataset Statistics}
+
+\begin{itemize}
+    \item \textbf{Subjects:} 40 participants
+    \item \textbf{Activity classes:} 60 action classes spanning daily activities, mutual interactions, and health-related actions
+    \item \textbf{Samples:} Over 56,000 video clips
+    \item \textbf{Modalities:} 3D skeleton only (25 joints); no IMU data
+    \item \textbf{Skeleton model:} Kinect v2 body tracking with 25 joints
+\end{itemize}
+
+Since NTU RGB+D lacks accelerometer data, it serves exclusively as a source of additional pose sequences for training the regressor in auxiliary data experiments (\Cref{sec:scenario-auxiliary}).
+
+\subsubsection{Data Splits}
+
+\begin{itemize}
+    \item \textbf{Training:} Subjects 1--30 (30 subjects)
+    \item \textbf{Validation:} Subjects 31--35 (5 subjects)
+    \item \textbf{Test:} Subjects 36--40 (5 subjects)
+\end{itemize}
+
+\subsubsection{Temporal Resampling}
+
+To match the sampling rates of primary datasets, we provide two resampled versions:
+\begin{itemize}
+    \item \textbf{50 Hz version:} For use with UTD-MHAD (window length: 100 frames = 2 seconds)
+    \item \textbf{100 Hz version:} For use with MM-Fit (window length: 250 frames = 2.5 seconds)
+\end{itemize}
+
+\subsection{Dataset Summary}
+
+\Cref{tab:dataset-summary} summarizes the key characteristics of all datasets used in this work.
+
+\begin{table}[!t]
+\centering
+\caption{Summary of datasets used in experiments.}
+\label{tab:dataset-summary}
+\begin{tabular}{lccccc}
+\hline
+\textbf{Dataset} & \textbf{Subjects} & \textbf{Classes} & \textbf{Rate (Hz)} & \textbf{Modalities} & \textbf{Role} \\
+\hline
+UTD-MHAD & 8 & 21 & 50 & Pose + IMU & Primary \\
+MM-Fit & 21 & 11 & 100 & Pose + IMU & Primary \\
+NTU RGB+D & 40 & 60 & 50/100 & Pose only & Secondary \\
+\hline
+\end{tabular}
+\end{table}
+
+\section{Preprocessing}
+\label{sec:preprocessing}
+
+Raw sensor data requires several preprocessing steps before training. This section describes the normalization, alignment, and segmentation procedures applied to each modality.
+
+\subsection{Skeleton Normalization}
+
+Skeleton pose data exhibits significant variation across subjects due to differences in body proportions and global positioning. We apply a two-stage normalization procedure to ensure scale and translation invariance.
+
+\subsubsection{Translation Normalization}
+
+All skeleton sequences are centered relative to the hip position in the first frame:
+\begin{equation}
+    \mathbf{p}'_{t,j} = \mathbf{p}_{t,j} - \mathbf{p}_{1,\text{hip}}
+\end{equation}
+where $\mathbf{p}_{t,j} \in \mathbb{R}^3$ is the position of joint $j$ at timestep $t$, and $\mathbf{p}_{1,\text{hip}}$ is the hip position at the first frame. Using the first-frame hip as reference (rather than per-frame centering) preserves the global motion trajectory of the skeleton.
+
+\subsubsection{Scale Normalization}
+
+To account for varying body sizes, we scale all coordinates by the median torso length:
+\begin{equation}
+    s = \text{median}_{t} \|\mathbf{p}_{t,\text{head}} - \mathbf{p}_{t,\text{hip}}\|_2
+\end{equation}
+\begin{equation}
+    \mathbf{p}''_{t,j} = \frac{\mathbf{p}'_{t,j}}{s}
+\end{equation}
+
+Using the median (rather than mean) provides robustness to outlier frames. A minimum threshold of $10^{-4}$ is applied to prevent division by near-zero values.
+
+\subsection{Temporal Alignment}
+
+When skeleton and accelerometer data have different temporal lengths (due to frame drops or sampling rate mismatches), we align them through linear interpolation.
+
+For each skeleton joint coordinate, we define normalized time axes:
+\begin{align}
+    t_{\text{skel}} &= \text{linspace}(0, 1, N_{\text{skel}}) \\
+    t_{\text{acc}} &= \text{linspace}(0, 1, N_{\text{acc}})
+\end{align}
+and interpolate skeleton positions to match accelerometer timestamps:
+\begin{equation}
+    \mathbf{p}_{\text{aligned}}(t) = \text{interp}(t_{\text{skel}}, \mathbf{p}_{\text{raw}}, t_{\text{acc}})
+\end{equation}
+
+This produces synchronized pose and accelerometer sequences of equal length.
+
+\subsection{Accelerometer Standardization}
+
+Accelerometer signals are standardized to zero mean and unit variance using statistics computed from the training set only:
+\begin{equation}
+    \mathbf{a}_{\text{std}} = \frac{\mathbf{a} - \boldsymbol{\mu}_{\text{train}}}{\boldsymbol{\sigma}_{\text{train}} + \epsilon}
+\end{equation}
+where $\boldsymbol{\mu}_{\text{train}}, \boldsymbol{\sigma}_{\text{train}} \in \mathbb{R}^3$ are the per-axis mean and standard deviation computed over all training samples, and $\epsilon = 10^{-8}$ prevents division by zero.
+
+Importantly, the same training statistics are applied to validation and test sets to prevent data leakage.
+
+\subsection{Sliding Window Segmentation}
+
+Continuous sensor streams are segmented into fixed-length windows for batch processing. Each window provides a single training sample.
+
+\subsubsection{Window Parameters}
+
+\begin{itemize}
+    \item \textbf{UTD-MHAD:} Window length of 100 samples (2 seconds at 50 Hz) with stride of 5 samples (0.1 seconds)
+    \item \textbf{MM-Fit:} Window length of 500 samples (5 seconds at 100 Hz) with stride of 20 samples (0.2 seconds)
+\end{itemize}
+
+The shorter stride relative to window length creates overlapping windows, effectively augmenting the training data.
+
+\subsubsection{Activity Label Assignment}
+
+For datasets with per-frame labels (MM-Fit), each window is assigned the label of the activity occurring at its temporal midpoint. Windows spanning activity boundaries are included if at least 50\% of frames belong to the assigned activity; otherwise, they are discarded.
+
+\subsubsection{Short Sequence Handling}
+
+Action clips shorter than the window length are padded by replicating edge values:
+\begin{equation}
+    \mathbf{x}_{\text{padded}}[t] = \begin{cases}
+        \mathbf{x}[0] & \text{if } t < 0 \\
+        \mathbf{x}[T-1] & \text{if } t \geq T \\
+        \mathbf{x}[t] & \text{otherwise}
+    \end{cases}
+\end{equation}
+
+This edge-padding strategy preserves the temporal characteristics of the original signal better than zero-padding.
+
+\subsection{Joint Selection}
+
+For pose-to-IMU regression, we select the three arm joints corresponding to the accelerometer placement location:
+
+\begin{itemize}
+    \item \textbf{UTD-MHAD:} Joints 8, 9, 10 (right shoulder, elbow, wrist) matching the right-wrist sensor
+    \item \textbf{MM-Fit:} Joints 16, 17, 18 (left shoulder, elbow, wrist) matching the left-wrist smartwatch
+\end{itemize}
+
+This reduces the input dimensionality from the full skeleton (17--25 joints) to the kinematically relevant arm chain.
+
+\section{Evaluation Protocol}
+\label{sec:evaluation-protocol}
+
+This section describes the metrics, validation strategy, and statistical procedures used to evaluate model performance.
+
+\subsection{Metrics}
+
+We report the following classification metrics:
+
+\textbf{Macro F1 Score.} The primary evaluation metric, computed as the unweighted mean of per-class F1 scores:
+\begin{equation}
+    \text{F1}_{\text{macro}} = \frac{1}{K} \sum_{k=1}^{K} \frac{2 \cdot P_k \cdot R_k}{P_k + R_k}
+\end{equation}
+where $P_k$ and $R_k$ are precision and recall for class $k$. Macro F1 treats all classes equally regardless of sample count, making it appropriate for imbalanced datasets.
+
+\textbf{Accuracy.} The proportion of correctly classified samples:
+\begin{equation}
+    \text{Accuracy} = \frac{1}{N} \sum_{i=1}^{N} \mathbbm{1}[\hat{y}_i = y_i]
+\end{equation}
+
+We prioritize macro F1 over accuracy because activity datasets often exhibit class imbalance (e.g., ``no activity'' periods are overrepresented in MM-Fit).
+
+\subsection{Validation Strategy}
+
+Model selection and hyperparameter tuning use validation set performance:
+\begin{itemize}
+    \item \textbf{Early stopping:} Training halts when validation macro F1 does not improve for 35 consecutive epochs
+    \item \textbf{Model selection:} The checkpoint with highest validation F1 is retained for test evaluation
+    \item \textbf{HPO objective:} Optuna maximizes validation F1 when comparing hyperparameter configurations
+\end{itemize}
+
+Test set evaluation is performed only once per final configuration to prevent implicit overfitting through repeated evaluation.
+
+\subsection{Statistical Reporting}
+
+To account for initialization variance, we report results as mean $\pm$ standard deviation over multiple random seeds:
+\begin{itemize}
+    \item \textbf{HPO validation:} Top-$K$ configurations are validated with 5 seeds
+    \item \textbf{Final test evaluation:} Best configuration is evaluated with 10 seeds
+\end{itemize}
+
+This provides confidence intervals on reported performance and guards against reporting results from ``lucky'' random initializations.
+
+\section{Baselines}
+\label{sec:baselines}
+
+We compare our joint training approach against several baseline methods that represent alternative strategies for leveraging pose and accelerometer data.
+
+\subsection{Real-Only Baseline}
+
+The simplest baseline trains only on real accelerometer data without any simulated data:
+\begin{equation}
+    \mathbf{a}_{\text{real}} \xrightarrow{F} \mathbf{z} \xrightarrow{C} \hat{y}
+\end{equation}
+
+This baseline establishes the performance achievable with supervised learning on the available labeled IMU data alone. It uses the same feature extractor and classifier architectures as our method.
+
+\subsection{Regression-First Baseline}
+
+This two-stage approach trains the pose-to-IMU regressor independently before classifier training:
+
+\textbf{Stage 1:} Train regressor $R$ to minimize MSE between simulated and real accelerometer:
+\begin{equation}
+    R^* = \arg\min_R \sum_{i} \|\mathbf{a}_i - R(\mathbf{p}_i)\|^2
+\end{equation}
+
+\textbf{Stage 2:} Train classifier on combined real and simulated data:
+\begin{equation}
+    F^*, C^* = \arg\min_{F,C} \mathcal{L}_{\text{CE}}(C(F(\mathbf{a})), y) + \mathcal{L}_{\text{CE}}(C(F(R^*(\mathbf{p}))), y)
+\end{equation}
+
+The key limitation is that the regressor receives no task-specific feedback---it optimizes signal-level similarity without considering whether the generated data is useful for activity recognition.
+
+\subsection{Pose-Only Baseline}
+
+This baseline trains exclusively on simulated accelerometer data:
+\begin{equation}
+    \mathbf{p} \xrightarrow{R} \tilde{\mathbf{a}} \xrightarrow{F} \mathbf{z} \xrightarrow{C} \hat{y}
+\end{equation}
+
+At test time, predictions are made using real accelerometer data through the same feature extractor and classifier. This baseline tests whether simulated data alone can train an effective classifier, representing a scenario where real sensor data is unavailable during training.
+
+\subsection{Simple Augmentation Baseline}
+
+This baseline augments real accelerometer data with standard signal transformations rather than pose-derived simulation:
+\begin{itemize}
+    \item \textbf{Additive noise:} $\mathbf{a}' = \mathbf{a} + \mathcal{N}(0, \sigma^2)$
+    \item \textbf{Scaling:} $\mathbf{a}' = s \cdot \mathbf{a}$ where $s \sim \text{Uniform}(0.8, 1.2)$
+    \item \textbf{Time warping:} Non-linear temporal distortion
+\end{itemize}
+
+Comparing against this baseline isolates the benefit of semantically meaningful pose-derived augmentation versus generic signal perturbations.
+
+\subsection{Baseline Summary}
+
+\Cref{tab:baselines} summarizes the baseline methods and their key characteristics.
+
+\begin{table}[!t]
+\centering
+\caption{Summary of baseline methods.}
+\label{tab:baselines}
+\begin{tabular}{lp{4cm}p{4cm}}
+\hline
+\textbf{Baseline} & \textbf{Training Data} & \textbf{Key Limitation} \\
+\hline
+Real-only & Real accelerometer only & No data augmentation \\
+Regression-first & Sequential: regressor then classifier & No task feedback to regressor \\
+Pose-only & Simulated accelerometer only & Domain gap at test time \\
+Simple augmentation & Real + noise/warping & Augmentations lack semantic meaning \\
+\hline
+\end{tabular}
+\end{table}
+
+Our proposed joint training approach addresses these limitations by simultaneously optimizing the regressor for both signal fidelity and task performance, while training the classifier on both real and simulated data to reduce domain gap.

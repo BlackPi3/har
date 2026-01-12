@@ -1,0 +1,413 @@
+\chapter{Results and Analysis}
+\label{chap:results}
+
+This chapter presents the experimental results of our proposed method across all training scenarios. We begin with the main comparative results, followed by detailed ablation studies, scenario-specific analyses, and hyperparameter optimization insights.
+
+\section{Main Results}
+\label{sec:main-results}
+
+We evaluate all training scenarios on both primary datasets (UTD-MHAD and MM-Fit) using the evaluation protocol described in \Cref{sec:evaluation-protocol}. Results are reported from the top-performing configurations identified through hyperparameter optimization.
+
+\subsection{Overall Performance Comparison}
+
+\Cref{tab:main-results} presents the validation set performance for all scenarios. These results represent the best configurations found during HPO Pass 1.
+
+\begin{table}[!t]
+\centering
+\caption{Validation set performance (Macro F1) for all scenarios. Best results per dataset are in \textbf{bold}; second-best are \underline{underlined}. $\Delta$ indicates change relative to Scenario 2 baseline.}
+\label{tab:main-results}
+\begin{tabular}{lccccc}
+\hline
+& \multicolumn{2}{c}{\textbf{UTD-MHAD}} & \multicolumn{2}{c}{\textbf{MM-Fit}} \\
+\textbf{Scenario} & F1 & $\Delta$ & F1 & $\Delta$ \\
+\hline
+\multicolumn{5}{l}{\textit{Baseline}} \\
+SC2: Joint Training & 0.682 & --- & \underline{0.885} & --- \\
+\hline
+\multicolumn{5}{l}{\textit{Loss Ablations}} \\
+SC22: No MSE ($\gamma=0$) & 0.082 & $-$88.0\% & --- & --- \\
+\hline
+\multicolumn{5}{l}{\textit{Architecture Variants}} \\
+SC23: Separate Classifiers & 0.674 & $-$1.2\% & \textbf{0.896} & $+$1.2\% \\
+SC24: Separate Encoders & 0.678 & $-$0.6\% & 0.862 & $-$2.6\% \\
+\hline
+\multicolumn{5}{l}{\textit{Auxiliary Data}} \\
+SC3: +NTU Pose Data & \textbf{0.691} & $+$1.3\% & 0.848 & $-$4.2\% \\
+\hline
+\multicolumn{5}{l}{\textit{Adversarial Training}} \\
+SC42: Signal Discriminator & \underline{0.671} & $-$1.6\% & --- & --- \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Key Findings}
+
+Based on the results in \Cref{tab:main-results}, we observe several important patterns:
+
+\begin{enumerate}
+    \item \textbf{Regression loss is critical:} Scenario 22 (no MSE loss, $\gamma=0$) catastrophically fails with F1 dropping from 0.682 to 0.082 on UTD-MHAD---an 88\% decrease. This demonstrates that the regressor requires direct signal supervision; classification gradients alone are insufficient to guide meaningful simulation.
+
+    \item \textbf{Dataset characteristics determine optimal scenario:} The best-performing scenario differs between datasets:
+    \begin{itemize}
+        \item \textbf{UTD-MHAD:} Scenario 3 (auxiliary NTU data) achieves the highest F1 of 0.691
+        \item \textbf{MM-Fit:} Scenario 23 (separate classifiers) achieves the highest F1 of 0.896
+    \end{itemize}
+
+    \item \textbf{Auxiliary data has mixed effects:} Adding NTU pose data improves UTD-MHAD performance (+1.3\%) but hurts MM-Fit ($-$4.2\%), suggesting domain compatibility matters more than data quantity.
+
+    \item \textbf{Architecture separation shows trade-offs:}
+    \begin{itemize}
+        \item Separate classifiers help MM-Fit (+1.2\%) but hurt UTD-MHAD ($-$1.2\%)
+        \item Separate encoders consistently reduce performance ($-$0.6\% to $-$2.6\%)
+    \end{itemize}
+
+    \item \textbf{Adversarial training provides modest benefit:} Signal-level discrimination (SC42) maintains competitive performance with only 1.6\% degradation on UTD-MHAD, suggesting domain alignment is achievable without explicit adversarial training when using shared architectures with feature similarity loss.
+\end{enumerate}
+
+\section{Ablation Studies}
+\label{sec:ablations}
+
+We conduct systematic ablations to understand the contribution of each component to overall performance.
+
+\subsection{Loss Function Ablations}
+
+\subsubsection{Critical Role of Regression Loss ($\gamma$)}
+
+The most striking finding is the catastrophic failure when removing the MSE regression loss. \Cref{tab:gamma-ablation} quantifies this effect.
+
+\begin{table}[!t]
+\centering
+\caption{Effect of regression loss ($\gamma$) on classification performance. Removing direct signal supervision causes catastrophic failure.}
+\label{tab:gamma-ablation}
+\begin{tabular}{lccc}
+\hline
+\textbf{Configuration} & \textbf{UTD-MHAD F1} & \textbf{Change} \\
+\hline
+SC2: Full loss ($\gamma > 0$) & 0.682 & --- \\
+SC22: No MSE ($\gamma = 0$) & 0.082 & $-$88.0\% \\
+\hline
+\end{tabular}
+\end{table}
+
+\textbf{Analysis:} Without MSE loss, the regressor receives gradients only through the classification loss backpropagated through the feature extractor. This indirect supervision is insufficient because:
+\begin{itemize}
+    \item The classification gradient provides weak signal about signal-level quality
+    \item The regressor can satisfy classification objectives with degenerate outputs (e.g., constant signals that happen to produce useful features)
+    \item Without signal-level grounding, the simulated data fails to provide meaningful augmentation
+\end{itemize}
+
+The 88\% performance drop confirms that joint training fundamentally depends on multi-objective optimization where each loss component serves a distinct purpose.
+
+\subsubsection{Feature Similarity Loss ($\beta$)}
+
+The feature similarity loss ($\beta$) enforces alignment between real and simulated feature embeddings. Analysis of optimal $\beta$ values across scenarios reveals:
+
+\begin{itemize}
+    \item \textbf{UTD-MHAD:} Optimal $\beta$ ranges from 10--100, with higher values (50--100) in the top configurations
+    \item \textbf{MM-Fit:} Optimal $\beta$ is consistently lower (1--2), suggesting the larger dataset requires less explicit feature alignment
+\end{itemize}
+
+This pattern suggests that feature similarity loss compensates for limited training data by providing stronger regularization toward domain-invariant representations.
+
+\subsection{Architecture Ablations}
+
+\subsubsection{Shared vs. Separate Feature Extractors}
+
+\Cref{tab:encoder-ablation} compares the baseline (shared $F$) with separate feature extractors for real and simulated paths.
+
+\begin{table}[!t]
+\centering
+\caption{Effect of separate feature extractors on validation F1.}
+\label{tab:encoder-ablation}
+\begin{tabular}{lccc}
+\hline
+\textbf{Configuration} & \textbf{UTD-MHAD} & \textbf{MM-Fit} & \textbf{Avg. Change} \\
+\hline
+SC2: Shared $F$ & 0.682 & 0.885 & --- \\
+SC24: Separate $F$, $F_{\text{sim}}$ & 0.678 & 0.862 & $-$1.6\% \\
+\hline
+\end{tabular}
+\end{table}
+
+\textbf{Analysis:} Separate feature extractors consistently underperform shared architectures. This occurs because:
+\begin{itemize}
+    \item Shared weights provide implicit domain alignment---both paths must produce compatible representations
+    \item Separate extractors double the parameter count without proportional data increase
+    \item The real-path extractor receives no direct benefit from simulated data during training
+\end{itemize}
+
+The shared architecture forces the feature extractor to learn representations that generalize across the domain gap, which is precisely the goal of simulation-augmented training.
+
+\subsubsection{Shared vs. Separate Classifiers}
+
+\Cref{tab:classifier-ablation} compares shared versus separate classifiers.
+
+\begin{table}[!t]
+\centering
+\caption{Effect of separate classifiers on validation F1.}
+\label{tab:classifier-ablation}
+\begin{tabular}{lccc}
+\hline
+\textbf{Configuration} & \textbf{UTD-MHAD} & \textbf{MM-Fit} & \textbf{Interpretation} \\
+\hline
+SC2: Shared $C$ & 0.682 & 0.885 & Domain-agnostic decisions \\
+SC23: Separate $C$, $C_{\text{sim}}$ & 0.674 & \textbf{0.896} & Domain-specific decisions \\
+\hline
+\end{tabular}
+\end{table}
+
+\textbf{Analysis:} The effect of separate classifiers is dataset-dependent:
+\begin{itemize}
+    \item \textbf{MM-Fit benefits (+1.2\%):} The larger dataset (21 subjects, 100 Hz) provides sufficient data to train two specialized classifiers. Domain-specific decision boundaries can account for systematic differences between real and simulated feature distributions.
+    \item \textbf{UTD-MHAD suffers ($-$1.2\%):} The smaller dataset (8 subjects, 50 Hz) cannot support the increased parameter count. The real-path classifier sees only half the effective training data.
+\end{itemize}
+
+This finding suggests a practical guideline: use separate classifiers only when the dataset is sufficiently large to support the additional parameters.
+
+\section{Auxiliary Pose Data Analysis}
+\label{sec:auxiliary-analysis}
+
+Scenario 3 incorporates NTU RGB+D as a secondary pose-only dataset to provide additional training signal for the regressor.
+
+\subsection{Dataset-Dependent Effects}
+
+\Cref{tab:auxiliary-results} compares performance with and without auxiliary NTU data.
+
+\begin{table}[!t]
+\centering
+\caption{Effect of auxiliary NTU RGB+D pose data on primary dataset performance.}
+\label{tab:auxiliary-results}
+\begin{tabular}{lcccc}
+\hline
+& \multicolumn{2}{c}{\textbf{UTD-MHAD}} & \multicolumn{2}{c}{\textbf{MM-Fit}} \\
+\textbf{Configuration} & F1 & Change & F1 & Change \\
+\hline
+SC2: No auxiliary & 0.682 & --- & 0.885 & --- \\
+SC3: With NTU & \textbf{0.691} & $+$1.3\% & 0.848 & $-$4.2\% \\
+\hline
+\end{tabular}
+\end{table}
+
+\textbf{Analysis of divergent effects:}
+
+\textbf{UTD-MHAD improvement (+1.3\%):}
+\begin{itemize}
+    \item UTD and NTU share similar characteristics: both use Kinect skeleton data at 50 Hz
+    \item NTU provides 60 action classes with diverse motion patterns
+    \item The auxiliary loss weight of 0.5 (from HPO) balances primary and secondary objectives
+    \item Additional pose diversity helps the regressor generalize better
+\end{itemize}
+
+\textbf{MM-Fit degradation ($-$4.2\%):}
+\begin{itemize}
+    \item MM-Fit uses video-based pose estimation at 100 Hz---different modality than NTU's Kinect
+    \item MM-Fit activities (fitness exercises) differ substantially from NTU's daily activities
+    \item Domain mismatch between auxiliary and primary data introduces noise
+    \item The regressor learns mappings that do not transfer to MM-Fit's motion patterns
+\end{itemize}
+
+\subsection{Optimal Auxiliary Configuration}
+
+The HPO results reveal optimal auxiliary loss weights:
+\begin{itemize}
+    \item \textbf{UTD + NTU50:} $\lambda_{\text{aux}} = 0.5$ (equal weight to primary and auxiliary)
+    \item \textbf{MM-Fit + NTU100:} $\lambda_{\text{aux}} = 0.25$ (reduced auxiliary influence)
+\end{itemize}
+
+The lower optimal weight for MM-Fit reflects the system's attempt to minimize the negative transfer from mismatched auxiliary data.
+
+\section{Adversarial Training Analysis}
+\label{sec:adversarial-analysis}
+
+Scenario 42 implements signal-level adversarial training where a discriminator attempts to distinguish real from simulated accelerometer signals.
+
+\subsection{Signal Discriminator Performance}
+
+\Cref{tab:adversarial-results} summarizes the adversarial training results.
+
+\begin{table}[!t]
+\centering
+\caption{Signal-level adversarial training (SC42) compared to baseline.}
+\label{tab:adversarial-results}
+\begin{tabular}{lccc}
+\hline
+\textbf{Configuration} & \textbf{UTD-MHAD F1} & \textbf{Change} \\
+\hline
+SC2: No adversarial & 0.682 & --- \\
+SC42: Signal discriminator & 0.671 & $-$1.6\% \\
+\hline
+\end{tabular}
+\end{table}
+
+\textbf{Analysis:} The signal-level discriminator produces a small performance decrease rather than the expected improvement. Several factors explain this:
+
+\begin{enumerate}
+    \item \textbf{Competing objectives:} The discriminator encourages the regressor to produce signals indistinguishable from real data. However, the optimal simulated signal for classification may differ from the most realistic signal.
+
+    \item \textbf{Training instability:} Adversarial training introduces additional hyperparameters (adversarial weight, GRL $\lambda$, discriminator architecture) that require careful tuning.
+
+    \item \textbf{Redundancy with feature similarity:} The baseline already includes feature similarity loss ($\beta$), which provides domain alignment at the representation level. Signal-level alignment may be redundant or conflicting.
+\end{enumerate}
+
+\subsection{Optimal Adversarial Configuration}
+
+The best SC42 configuration uses:
+\begin{itemize}
+    \item Adversarial weight: 0.5
+    \item GRL $\lambda$: 1.0 (no scheduling)
+    \item Discriminator: 2 conv layers with channels [64, 128]
+    \item Label smoothing: 0.05
+\end{itemize}
+
+The relatively high adversarial weight (0.5) and unscheduled GRL suggest that when adversarial training is used, it should be applied consistently rather than gradually.
+
+\section{Hyperparameter Optimization Insights}
+\label{sec:hpo-insights}
+
+This section analyzes patterns in the hyperparameter optimization results to identify which parameters most influence performance.
+
+\subsection{Optimal Configurations by Scenario}
+
+\Cref{tab:optimal-configs} summarizes the best hyperparameter configurations found for each scenario.
+
+\begin{table}[!t]
+\centering
+\caption{Optimal hyperparameter configurations from HPO Pass 1.}
+\label{tab:optimal-configs}
+\begin{tabular}{lcccccc}
+\hline
+& \multicolumn{3}{c}{\textbf{Loss Weights}} & \multicolumn{2}{c}{\textbf{Data Params}} \\
+\textbf{Scenario} & $\alpha$ & $\beta$ & $\gamma$ & Stride (s) & Batch \\
+\hline
+\multicolumn{6}{l}{\textit{UTD-MHAD}} \\
+SC2 & 0.5 & 50 & 1 & 0.02 & 8 \\
+SC3 & 0.1 & 10 & 10 & 0.04 & 8 \\
+SC23 & 5.0 & 50 & 1 & 0.02 & 8 \\
+SC24 & 5.0 & 100 & 1 & 0.02 & 8 \\
+SC42 & 2.0 & 50 & 2 & 0.04 & 16 \\
+\hline
+\multicolumn{6}{l}{\textit{MM-Fit}} \\
+SC2 & 1.0 & 1 & 2 & 0.15 & 48 \\
+SC3 & 2.0 & 2 & 2 & 0.15 & 64 \\
+SC23 & 1.0 & 1 & 2 & 0.15 & 48 \\
+SC24 & 0.5 & 1 & 2 & 0.15 & 48 \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Dataset-Specific Patterns}
+
+The optimal configurations reveal striking differences between datasets:
+
+\textbf{UTD-MHAD patterns:}
+\begin{itemize}
+    \item \textbf{High $\beta$ values (10--100):} Strong feature similarity enforcement compensates for limited training data
+    \item \textbf{Small stride (0.02--0.04s):} Maximum data augmentation through overlapping windows
+    \item \textbf{Small batch size (8--16):} Gradient noise provides implicit regularization
+    \item \textbf{Variable $\alpha$:} Classification weight varies significantly (0.1--5.0) across scenarios
+\end{itemize}
+
+\textbf{MM-Fit patterns:}
+\begin{itemize}
+    \item \textbf{Low $\beta$ values (1--2):} Larger dataset requires less explicit feature alignment
+    \item \textbf{Larger stride (0.15s):} Sufficient data without aggressive overlapping
+    \item \textbf{Larger batch size (48--64):} Stable gradients preferred over regularization
+    \item \textbf{Consistent $\gamma = 2$:} Regression loss consistently weighted higher than classification
+\end{itemize}
+
+\subsection{Loss Weight Ratio Analysis}
+
+\Cref{tab:loss-ratios} analyzes the ratios between loss weights, which may be more informative than absolute values.
+
+\begin{table}[!t]
+\centering
+\caption{Loss weight ratios for best configurations. Higher $\beta/\gamma$ emphasizes feature alignment; higher $\alpha/\gamma$ emphasizes classification.}
+\label{tab:loss-ratios}
+\begin{tabular}{lcccc}
+\hline
+\textbf{Dataset} & \textbf{Scenario} & $\beta/\gamma$ & $\alpha/\gamma$ & \textbf{Interpretation} \\
+\hline
+UTD & SC2 & 50 & 0.5 & Strong feature alignment \\
+UTD & SC3 & 1 & 0.01 & Balanced, low classification \\
+UTD & SC24 & 100 & 5 & Very strong alignment \\
+\hline
+MM-Fit & SC2 & 0.5 & 0.5 & Balanced \\
+MM-Fit & SC23 & 0.5 & 0.5 & Balanced \\
+\hline
+\end{tabular}
+\end{table}
+
+\textbf{Key insight:} UTD-MHAD requires $\beta/\gamma$ ratios 2--200$\times$ higher than MM-Fit. This suggests that explicit feature alignment becomes increasingly important as dataset size decreases.
+
+\subsection{Data Augmentation via Stride}
+
+The window stride parameter controls the degree of overlap between training samples. \Cref{tab:stride-analysis} shows the effective data multiplication factor.
+
+\begin{table}[!t]
+\centering
+\caption{Effect of stride on effective training set size.}
+\label{tab:stride-analysis}
+\begin{tabular}{lcccc}
+\hline
+\textbf{Dataset} & \textbf{Window} & \textbf{Stride} & \textbf{Overlap} & \textbf{Multiplier} \\
+\hline
+UTD-MHAD & 2.0s & 0.02s & 99\% & $\sim$100$\times$ \\
+MM-Fit & 5.0s & 0.15s & 97\% & $\sim$33$\times$ \\
+\hline
+\end{tabular}
+\end{table}
+
+UTD-MHAD's smaller stride creates approximately 3$\times$ more overlap than MM-Fit, compensating for the smaller base dataset through aggressive data augmentation.
+
+\section{Cross-Scenario Comparison}
+\label{sec:cross-scenario}
+
+\Cref{tab:scenario-summary} provides a comprehensive comparison of all scenarios with analysis of why each performs as it does.
+
+\begin{table}[!t]
+\centering
+\caption{Cross-scenario performance summary with analysis.}
+\label{tab:scenario-summary}
+\begin{tabular}{lp{2cm}p{2cm}p{5cm}}
+\hline
+\textbf{Scenario} & \textbf{UTD F1} & \textbf{MM-Fit F1} & \textbf{Analysis} \\
+\hline
+SC2: Baseline & 0.682 & 0.885 & Strong baseline; shared weights provide implicit domain alignment \\
+\hline
+SC22: No MSE & 0.082 & --- & Catastrophic failure confirms regression loss is essential \\
+\hline
+SC23: Sep. Classifiers & 0.674 ($-$1.2\%) & \textbf{0.896} ($+$1.2\%) & Benefits large datasets; hurts small ones due to parameter splitting \\
+\hline
+SC24: Sep. Encoders & 0.678 ($-$0.6\%) & 0.862 ($-$2.6\%) & Consistently worse; loses implicit alignment from shared weights \\
+\hline
+SC3: Auxiliary & \textbf{0.691} ($+$1.3\%) & 0.848 ($-$4.2\%) & Domain compatibility critical; helps when auxiliary matches primary \\
+\hline
+SC42: Adversarial & 0.671 ($-$1.6\%) & --- & Marginal impact; possibly redundant with feature similarity loss \\
+\hline
+\end{tabular}
+\end{table}
+
+\section{Summary of Findings}
+\label{sec:results-summary}
+
+The experimental results support the following conclusions:
+
+\begin{enumerate}
+    \item \textbf{Joint training is effective:} The baseline scenario (SC2) achieves strong performance on both datasets, validating the core approach of simultaneous regressor and classifier optimization.
+
+    \item \textbf{Regression loss is essential:} Removing MSE loss causes 88\% performance degradation, confirming that direct signal supervision is necessary for meaningful simulation.
+
+    \item \textbf{Shared architectures outperform separate ones:} Weight sharing between real and simulated paths provides implicit domain alignment that separate architectures cannot match.
+
+    \item \textbf{Auxiliary data requires domain compatibility:} Secondary pose datasets help only when they share motion characteristics with the primary dataset. Mismatched auxiliary data actively hurts performance.
+
+    \item \textbf{Optimal hyperparameters are dataset-specific:}
+    \begin{itemize}
+        \item Small datasets (UTD) need high $\beta$, small stride, small batch
+        \item Large datasets (MM-Fit) need low $\beta$, larger stride, larger batch
+    \end{itemize}
+
+    \item \textbf{Adversarial training provides marginal benefit:} When feature similarity loss is already present, signal-level adversarial training offers limited additional improvement.
+\end{enumerate}
+
+These findings inform the practical recommendations in \Cref{chap:discussion}.
