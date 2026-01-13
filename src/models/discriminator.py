@@ -308,26 +308,195 @@ class SignalDiscriminator(nn.Module):
         else:
             return torch.full((batch_size, 1), self.label_smoothing, device=device)
 
+    def forward_no_grl(self, signal: torch.Tensor):
+        """Forward pass without GRL (for gradient penalty computation in WGAN)."""
+        x = self.conv_net(signal)
+        x = x.view(x.size(0), -1)
+        return self.fc(x)
+
 
 def compute_grl_lambda_schedule(epoch: int, total_epochs: int, gamma: float = 10.0) -> float:
     """
     Compute scheduled GRL lambda using the formula from DANN paper.
-    
+
     Lambda increases from 0 to 1 over training, allowing the model to:
     1. Learn good features early (low lambda = weak adversarial signal)
     2. Enforce domain invariance later (high lambda = strong adversarial signal)
-    
+
     Formula: lambda = 2 / (1 + exp(-gamma * p)) - 1
     where p = epoch / total_epochs
-    
+
     Args:
         epoch: Current epoch (0-indexed)
         total_epochs: Total number of epochs
         gamma: Controls steepness of schedule (default 10.0 from DANN)
-        
+
     Returns:
         lambda value in [0, 1]
     """
     import math
     p = epoch / max(total_epochs - 1, 1)
     return 2.0 / (1.0 + math.exp(-gamma * p)) - 1.0
+
+
+def compute_gradient_penalty(
+    discriminator: nn.Module,
+    real_samples: torch.Tensor,
+    fake_samples: torch.Tensor,
+    device: torch.device,
+    lambda_gp: float = 10.0,
+) -> torch.Tensor:
+    """
+    Compute gradient penalty for WGAN-GP.
+
+    The gradient penalty enforces the Lipschitz constraint by penalizing
+    gradients that deviate from unit norm on interpolated samples.
+
+    Formula: GP = E[(||∇D(x_interp)||_2 - 1)^2]
+
+    Args:
+        discriminator: The discriminator network
+        real_samples: Real data samples (B, C, L) for signal or (B, F) for features
+        fake_samples: Generated/simulated samples, same shape as real
+        device: Torch device
+        lambda_gp: Gradient penalty coefficient (default 10.0 from WGAN-GP paper)
+
+    Returns:
+        Gradient penalty loss term
+    """
+    batch_size = real_samples.size(0)
+
+    # Random interpolation coefficient
+    alpha = torch.rand(batch_size, *([1] * (real_samples.dim() - 1)), device=device)
+
+    # Interpolate between real and fake
+    interpolated = (alpha * real_samples + (1 - alpha) * fake_samples).requires_grad_(True)
+
+    # Get discriminator output for interpolated samples (without GRL)
+    if hasattr(discriminator, 'forward_no_grl'):
+        d_interpolated = discriminator.forward_no_grl(interpolated)
+    else:
+        d_interpolated = discriminator(interpolated, apply_grl=False)
+
+    # Compute gradients w.r.t. interpolated samples
+    gradients = torch.autograd.grad(
+        outputs=d_interpolated,
+        inputs=interpolated,
+        grad_outputs=torch.ones_like(d_interpolated),
+        create_graph=True,
+        retain_graph=True,
+        only_inputs=True,
+    )[0]
+
+    # Flatten gradients and compute L2 norm
+    gradients = gradients.view(batch_size, -1)
+    gradient_norm = gradients.norm(2, dim=1)
+
+    # Penalty: (||grad|| - 1)^2
+    gradient_penalty = lambda_gp * ((gradient_norm - 1) ** 2).mean()
+
+    return gradient_penalty
+
+
+class WGANLoss:
+    """
+    Wasserstein GAN loss computation for adversarial training.
+
+    WGAN uses the Wasserstein distance (Earth Mover's distance) instead of
+    JS divergence, providing better gradient signal especially when
+    distributions don't overlap well.
+
+    Loss formulas:
+    - D loss: E[D(fake)] - E[D(real)] + λ_gp * GP  (D wants to maximize real - fake)
+    - G loss: -E[D(fake)]  (G wants to maximize D(fake), i.e., fool D)
+
+    Note: With GRL, we use a single forward pass where:
+    - D receives normal gradients (learns to discriminate)
+    - G/FE/Regressor receive reversed gradients (learns to fool D)
+
+    The combined loss becomes: E[D(real)] - E[D(fake)] + GP
+    With GRL on fake path, this naturally creates the adversarial dynamic.
+    """
+
+    def __init__(self, lambda_gp: float = 10.0, use_gp: bool = True):
+        """
+        Args:
+            lambda_gp: Gradient penalty coefficient
+            use_gp: Whether to use gradient penalty (recommended for stability)
+        """
+        self.lambda_gp = lambda_gp
+        self.use_gp = use_gp
+
+    def discriminator_loss(
+        self,
+        d_real: torch.Tensor,
+        d_fake: torch.Tensor,
+        gradient_penalty: torch.Tensor = None,
+    ) -> torch.Tensor:
+        """
+        Compute discriminator loss for WGAN.
+
+        D wants: D(real) high, D(fake) low
+        Loss = E[D(fake)] - E[D(real)] + GP
+
+        Args:
+            d_real: Discriminator output for real samples (B, 1)
+            d_fake: Discriminator output for fake samples (B, 1)
+            gradient_penalty: Pre-computed gradient penalty (optional)
+
+        Returns:
+            Discriminator loss
+        """
+        loss = d_fake.mean() - d_real.mean()
+        if gradient_penalty is not None:
+            loss = loss + gradient_penalty
+        return loss
+
+    def generator_loss(self, d_fake: torch.Tensor) -> torch.Tensor:
+        """
+        Compute generator loss for WGAN.
+
+        G wants: D(fake) high (fool D into thinking fake is real)
+        Loss = -E[D(fake)]
+
+        Args:
+            d_fake: Discriminator output for fake/generated samples
+
+        Returns:
+            Generator loss
+        """
+        return -d_fake.mean()
+
+    def combined_loss_with_grl(
+        self,
+        d_real: torch.Tensor,
+        d_fake: torch.Tensor,
+        gradient_penalty: torch.Tensor = None,
+    ) -> torch.Tensor:
+        """
+        Compute combined loss when using GRL (single backward pass).
+
+        With GRL applied to fake samples before D:
+        - D sees: real (normal grad) and fake (reversed grad to upstream)
+        - Loss: E[D(real)] - E[D(fake)] + GP
+
+        The GRL automatically handles the adversarial gradient reversal,
+        so we optimize this single loss and gradients flow correctly:
+        - To D: normal gradients (D learns to discriminate)
+        - To G/FE: reversed gradients (G learns to fool D)
+
+        Args:
+            d_real: D output for real samples
+            d_fake: D output for fake samples (GRL already applied in forward)
+            gradient_penalty: Gradient penalty term
+
+        Returns:
+            Combined loss for single backward pass
+        """
+        # Wasserstein distance: D(real) - D(fake)
+        # We want to maximize this for D, minimize for G
+        # With GRL on fake path, minimizing this loss achieves both
+        loss = d_real.mean() - d_fake.mean()
+        if gradient_penalty is not None:
+            loss = loss + gradient_penalty
+        return loss

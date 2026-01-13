@@ -14,28 +14,28 @@ We evaluate all training scenarios on both primary datasets (UTD-MHAD and MM-Fit
 
 \begin{table}[!t]
 \centering
-\caption{Validation set performance (Macro F1) for all scenarios. Best results per dataset are in \textbf{bold}; second-best are \underline{underlined}. $\Delta$ indicates change relative to Scenario 2 baseline.}
+\caption{Validation set performance (Macro F1) for all scenarios. Best results per dataset are in \textbf{bold}; second-best are \underline{underlined}. $\Delta$F1 indicates relative change compared to baseline.}
 \label{tab:main-results}
 \begin{tabular}{lccccc}
 \hline
 & \multicolumn{2}{c}{\textbf{UTD-MHAD}} & \multicolumn{2}{c}{\textbf{MM-Fit}} \\
-\textbf{Scenario} & F1 & $\Delta$ & F1 & $\Delta$ \\
+\textbf{Scenario} & F1 & $\Delta$F1 & F1 & $\Delta$F1 \\
 \hline
 \multicolumn{5}{l}{\textit{Baseline}} \\
-SC2: Joint Training & 0.682 & --- & \underline{0.885} & --- \\
+Baseline & 0.682 & --- & \underline{0.885} & --- \\
 \hline
 \multicolumn{5}{l}{\textit{Loss Ablations}} \\
-SC22: No MSE ($\gamma=0$) & 0.082 & $-$88.0\% & --- & --- \\
+Ablation: No MSE ($\gamma=0$) & 0.082 & $-$88.0\% & --- & --- \\
 \hline
 \multicolumn{5}{l}{\textit{Architecture Variants}} \\
-SC23: Separate Classifiers & 0.674 & $-$1.2\% & \textbf{0.896} & $+$1.2\% \\
-SC24: Separate Encoders & 0.678 & $-$0.6\% & 0.862 & $-$2.6\% \\
+Shared Encoder, Sep. Classifiers & 0.674 & $-$1.2\% & \textbf{0.896} & $+$1.2\% \\
+Sep. Encoders, Shared Classifier & 0.678 & $-$0.6\% & 0.862 & $-$2.6\% \\
 \hline
 \multicolumn{5}{l}{\textit{Auxiliary Data}} \\
-SC3: +NTU Pose Data & \textbf{0.691} & $+$1.3\% & 0.848 & $-$4.2\% \\
+Auxiliary NTU Pose & \textbf{0.691} & $+$1.3\% & 0.848 & $-$4.2\% \\
 \hline
 \multicolumn{5}{l}{\textit{Adversarial Training}} \\
-SC42: Signal Discriminator & \underline{0.671} & $-$1.6\% & --- & --- \\
+Signal Discriminator & \underline{0.671} & $-$1.6\% & --- & --- \\
 \hline
 \end{tabular}
 \end{table}
@@ -45,12 +45,12 @@ SC42: Signal Discriminator & \underline{0.671} & $-$1.6\% & --- & --- \\
 Based on the results in \Cref{tab:main-results}, we observe several important patterns:
 
 \begin{enumerate}
-    \item \textbf{Regression loss is critical:} Scenario 22 (no MSE loss, $\gamma=0$) catastrophically fails with F1 dropping from 0.682 to 0.082 on UTD-MHAD---an 88\% decrease. This demonstrates that the regressor requires direct signal supervision; classification gradients alone are insufficient to guide meaningful simulation.
+    \item \textbf{Regression loss is critical:} The ablation removing MSE loss ($\gamma=0$) catastrophically fails with F1 dropping from 0.682 to 0.082 on UTD-MHAD---an 88\% decrease. This demonstrates that the regressor requires direct signal supervision; classification gradients alone are insufficient to guide meaningful simulation.
 
     \item \textbf{Dataset characteristics determine optimal scenario:} The best-performing scenario differs between datasets:
     \begin{itemize}
-        \item \textbf{UTD-MHAD:} Scenario 3 (auxiliary NTU data) achieves the highest F1 of 0.691
-        \item \textbf{MM-Fit:} Scenario 23 (separate classifiers) achieves the highest F1 of 0.896
+        \item \textbf{UTD-MHAD:} Auxiliary NTU pose data achieves the highest F1 of 0.691
+        \item \textbf{MM-Fit:} Shared encoder with separate classifiers achieves the highest F1 of 0.896
     \end{itemize}
 
     \item \textbf{Auxiliary data has mixed effects:} Adding NTU pose data improves UTD-MHAD performance (+1.3\%) but hurts MM-Fit ($-$4.2\%), suggesting domain compatibility matters more than data quantity.
@@ -61,7 +61,7 @@ Based on the results in \Cref{tab:main-results}, we observe several important pa
         \item Separate encoders consistently reduce performance ($-$0.6\% to $-$2.6\%)
     \end{itemize}
 
-    \item \textbf{Adversarial training provides modest benefit:} Signal-level discrimination (SC42) maintains competitive performance with only 1.6\% degradation on UTD-MHAD, suggesting domain alignment is achievable without explicit adversarial training when using shared architectures with feature similarity loss.
+    \item \textbf{Adversarial training provides modest benefit:} Signal-level discrimination maintains competitive performance with only 1.6\% degradation on UTD-MHAD, suggesting domain alignment is achievable without explicit adversarial training when using shared architectures with feature similarity loss.
 \end{enumerate}
 
 \section{Ablation Studies}
@@ -81,10 +81,10 @@ The most striking finding is the catastrophic failure when removing the MSE regr
 \label{tab:gamma-ablation}
 \begin{tabular}{lccc}
 \hline
-\textbf{Configuration} & \textbf{UTD-MHAD F1} & \textbf{Change} \\
+\textbf{Configuration} & \textbf{UTD-MHAD F1} & \textbf{$\Delta$F1} \\
 \hline
-SC2: Full loss ($\gamma > 0$) & 0.682 & --- \\
-SC22: No MSE ($\gamma = 0$) & 0.082 & $-$88.0\% \\
+Baseline ($\gamma > 0$) & 0.682 & --- \\
+Ablation: No MSE ($\gamma = 0$) & 0.082 & $-$88.0\% \\
 \hline
 \end{tabular}
 \end{table}
@@ -121,10 +121,10 @@ This pattern suggests that feature similarity loss compensates for limited train
 \label{tab:encoder-ablation}
 \begin{tabular}{lccc}
 \hline
-\textbf{Configuration} & \textbf{UTD-MHAD} & \textbf{MM-Fit} & \textbf{Avg. Change} \\
+\textbf{Configuration} & \textbf{UTD-MHAD} & \textbf{MM-Fit} & \textbf{Avg. $\Delta$F1} \\
 \hline
-SC2: Shared $F$ & 0.682 & 0.885 & --- \\
-SC24: Separate $F$, $F_{\text{sim}}$ & 0.678 & 0.862 & $-$1.6\% \\
+Baseline (Shared $F$) & 0.682 & 0.885 & --- \\
+Sep. Encoders, Shared Classifier & 0.678 & 0.862 & $-$1.6\% \\
 \hline
 \end{tabular}
 \end{table}
@@ -150,8 +150,8 @@ The shared architecture forces the feature extractor to learn representations th
 \hline
 \textbf{Configuration} & \textbf{UTD-MHAD} & \textbf{MM-Fit} & \textbf{Interpretation} \\
 \hline
-SC2: Shared $C$ & 0.682 & 0.885 & Domain-agnostic decisions \\
-SC23: Separate $C$, $C_{\text{sim}}$ & 0.674 & \textbf{0.896} & Domain-specific decisions \\
+Baseline (Shared $C$) & 0.682 & 0.885 & Domain-agnostic decisions \\
+Shared Encoder, Sep. Classifiers & 0.674 & \textbf{0.896} & Domain-specific decisions \\
 \hline
 \end{tabular}
 \end{table}
@@ -167,7 +167,7 @@ This finding suggests a practical guideline: use separate classifiers only when 
 \section{Auxiliary Pose Data Analysis}
 \label{sec:auxiliary-analysis}
 
-Scenario 3 incorporates NTU RGB+D as a secondary pose-only dataset to provide additional training signal for the regressor.
+The auxiliary pose data scenario incorporates NTU RGB+D as a secondary pose-only dataset to provide additional training signal for the regressor.
 
 \subsection{Dataset-Dependent Effects}
 
@@ -180,10 +180,10 @@ Scenario 3 incorporates NTU RGB+D as a secondary pose-only dataset to provide ad
 \begin{tabular}{lcccc}
 \hline
 & \multicolumn{2}{c}{\textbf{UTD-MHAD}} & \multicolumn{2}{c}{\textbf{MM-Fit}} \\
-\textbf{Configuration} & F1 & Change & F1 & Change \\
+\textbf{Configuration} & F1 & $\Delta$F1 & F1 & $\Delta$F1 \\
 \hline
-SC2: No auxiliary & 0.682 & --- & 0.885 & --- \\
-SC3: With NTU & \textbf{0.691} & $+$1.3\% & 0.848 & $-$4.2\% \\
+Baseline (no auxiliary) & 0.682 & --- & 0.885 & --- \\
+Auxiliary NTU Pose & \textbf{0.691} & $+$1.3\% & 0.848 & $-$4.2\% \\
 \hline
 \end{tabular}
 \end{table}
@@ -219,7 +219,7 @@ The lower optimal weight for MM-Fit reflects the system's attempt to minimize th
 \section{Adversarial Training Analysis}
 \label{sec:adversarial-analysis}
 
-Scenario 42 implements signal-level adversarial training where a discriminator attempts to distinguish real from simulated accelerometer signals.
+The signal discriminator scenario implements signal-level adversarial training where a discriminator attempts to distinguish real from simulated accelerometer signals.
 
 \subsection{Signal Discriminator Performance}
 
@@ -227,14 +227,14 @@ Scenario 42 implements signal-level adversarial training where a discriminator a
 
 \begin{table}[!t]
 \centering
-\caption{Signal-level adversarial training (SC42) compared to baseline.}
+\caption{Signal-level adversarial training compared to baseline.}
 \label{tab:adversarial-results}
 \begin{tabular}{lccc}
 \hline
-\textbf{Configuration} & \textbf{UTD-MHAD F1} & \textbf{Change} \\
+\textbf{Configuration} & \textbf{UTD-MHAD F1} & \textbf{$\Delta$F1} \\
 \hline
-SC2: No adversarial & 0.682 & --- \\
-SC42: Signal discriminator & 0.671 & $-$1.6\% \\
+Baseline (no adversarial) & 0.682 & --- \\
+Signal Discriminator & 0.671 & $-$1.6\% \\
 \hline
 \end{tabular}
 \end{table}
@@ -251,7 +251,7 @@ SC42: Signal discriminator & 0.671 & $-$1.6\% \\
 
 \subsection{Optimal Adversarial Configuration}
 
-The best SC42 configuration uses:
+The best signal discriminator configuration uses:
 \begin{itemize}
     \item Adversarial weight: 0.5
     \item GRL $\lambda$: 1.0 (no scheduling)
@@ -280,17 +280,17 @@ This section analyzes patterns in the hyperparameter optimization results to ide
 \textbf{Scenario} & $\alpha$ & $\beta$ & $\gamma$ & Stride (s) & Batch \\
 \hline
 \multicolumn{6}{l}{\textit{UTD-MHAD}} \\
-SC2 & 0.5 & 50 & 1 & 0.02 & 8 \\
-SC3 & 0.1 & 10 & 10 & 0.04 & 8 \\
-SC23 & 5.0 & 50 & 1 & 0.02 & 8 \\
-SC24 & 5.0 & 100 & 1 & 0.02 & 8 \\
-SC42 & 2.0 & 50 & 2 & 0.04 & 16 \\
+Baseline & 0.5 & 50 & 1 & 0.02 & 8 \\
+Auxiliary NTU Pose & 0.1 & 10 & 10 & 0.04 & 8 \\
+Shared Enc., Sep. Cls. & 5.0 & 50 & 1 & 0.02 & 8 \\
+Sep. Enc., Shared Cls. & 5.0 & 100 & 1 & 0.02 & 8 \\
+Signal Discriminator & 2.0 & 50 & 2 & 0.04 & 16 \\
 \hline
 \multicolumn{6}{l}{\textit{MM-Fit}} \\
-SC2 & 1.0 & 1 & 2 & 0.15 & 48 \\
-SC3 & 2.0 & 2 & 2 & 0.15 & 64 \\
-SC23 & 1.0 & 1 & 2 & 0.15 & 48 \\
-SC24 & 0.5 & 1 & 2 & 0.15 & 48 \\
+Baseline & 1.0 & 1 & 2 & 0.15 & 48 \\
+Auxiliary NTU Pose & 2.0 & 2 & 2 & 0.15 & 64 \\
+Shared Enc., Sep. Cls. & 1.0 & 1 & 2 & 0.15 & 48 \\
+Sep. Enc., Shared Cls. & 0.5 & 1 & 2 & 0.15 & 48 \\
 \hline
 \end{tabular}
 \end{table}
@@ -327,12 +327,12 @@ The optimal configurations reveal striking differences between datasets:
 \hline
 \textbf{Dataset} & \textbf{Scenario} & $\beta/\gamma$ & $\alpha/\gamma$ & \textbf{Interpretation} \\
 \hline
-UTD & SC2 & 50 & 0.5 & Strong feature alignment \\
-UTD & SC3 & 1 & 0.01 & Balanced, low classification \\
-UTD & SC24 & 100 & 5 & Very strong alignment \\
+UTD & Baseline & 50 & 0.5 & Strong feature alignment \\
+UTD & Auxiliary NTU & 1 & 0.01 & Balanced, low classification \\
+UTD & Sep. Enc., Shared Cls. & 100 & 5 & Very strong alignment \\
 \hline
-MM-Fit & SC2 & 0.5 & 0.5 & Balanced \\
-MM-Fit & SC23 & 0.5 & 0.5 & Balanced \\
+MM-Fit & Baseline & 0.5 & 0.5 & Balanced \\
+MM-Fit & Shared Enc., Sep. Cls. & 0.5 & 0.5 & Balanced \\
 \hline
 \end{tabular}
 \end{table}
@@ -372,17 +372,17 @@ UTD-MHAD's smaller stride creates approximately 3$\times$ more overlap than MM-F
 \hline
 \textbf{Scenario} & \textbf{UTD F1} & \textbf{MM-Fit F1} & \textbf{Analysis} \\
 \hline
-SC2: Baseline & 0.682 & 0.885 & Strong baseline; shared weights provide implicit domain alignment \\
+Baseline & 0.682 & 0.885 & Strong baseline; shared weights provide implicit domain alignment \\
 \hline
-SC22: No MSE & 0.082 & --- & Catastrophic failure confirms regression loss is essential \\
+Ablation: No MSE & 0.082 & --- & Catastrophic failure confirms regression loss is essential \\
 \hline
-SC23: Sep. Classifiers & 0.674 ($-$1.2\%) & \textbf{0.896} ($+$1.2\%) & Benefits large datasets; hurts small ones due to parameter splitting \\
+Shared Enc., Sep. Cls. & 0.674 ($-$1.2\%) & \textbf{0.896} ($+$1.2\%) & Benefits large datasets; hurts small ones due to parameter splitting \\
 \hline
-SC24: Sep. Encoders & 0.678 ($-$0.6\%) & 0.862 ($-$2.6\%) & Consistently worse; loses implicit alignment from shared weights \\
+Sep. Enc., Shared Cls. & 0.678 ($-$0.6\%) & 0.862 ($-$2.6\%) & Consistently worse; loses implicit alignment from shared weights \\
 \hline
-SC3: Auxiliary & \textbf{0.691} ($+$1.3\%) & 0.848 ($-$4.2\%) & Domain compatibility critical; helps when auxiliary matches primary \\
+Auxiliary NTU Pose & \textbf{0.691} ($+$1.3\%) & 0.848 ($-$4.2\%) & Domain compatibility critical; helps when auxiliary matches primary \\
 \hline
-SC42: Adversarial & 0.671 ($-$1.6\%) & --- & Marginal impact; possibly redundant with feature similarity loss \\
+Signal Discriminator & 0.671 ($-$1.6\%) & --- & Marginal impact; possibly redundant with feature similarity loss \\
 \hline
 \end{tabular}
 \end{table}
@@ -393,7 +393,7 @@ SC42: Adversarial & 0.671 ($-$1.6\%) & --- & Marginal impact; possibly redundant
 The experimental results support the following conclusions:
 
 \begin{enumerate}
-    \item \textbf{Joint training is effective:} The baseline scenario (SC2) achieves strong performance on both datasets, validating the core approach of simultaneous regressor and classifier optimization.
+    \item \textbf{Joint training is effective:} The baseline scenario achieves strong performance on both datasets, validating the core approach of simultaneous regressor and classifier optimization.
 
     \item \textbf{Regression loss is essential:} Removing MSE loss causes 88\% performance degradation, confirming that direct signal supervision is necessary for meaningful simulation.
 

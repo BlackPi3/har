@@ -24,6 +24,7 @@ htmlcov/
 /datasets/
 /legacy/
 /SciSpace/
+/adversarial-har/
 
 # Experiment outputs
 outputs/

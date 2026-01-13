@@ -43,8 +43,9 @@ secondary:
   data: ntu50.yaml  # name of a config under conf/data (e.g., ntu50.yaml or ntu100.yaml)
   n_classes: 60
 
-# Adversarial training (Scenario 4): feature-level discriminator with GRL.
-# Enforces that simulated features are indistinguishable from real features.
+# Adversarial training (Scenario 4/42): discriminator with GRL.
+# Scenario 4: feature-level (discriminator.input_type: features)
+# Scenario 42: signal-level (discriminator.input_type: signal)
 adversarial:
   enabled: false
   weight: 0.1           # weight of adversarial loss in total loss
@@ -55,6 +56,19 @@ adversarial:
   # For future extension: alternating D/G updates instead of GRL
   alternating: false    # NOT YET IMPLEMENTED - use GRL for now
   n_critic: 1           # D updates per G update (only for alternating mode)
+  # Staged training: pretrain regressor with MSE before adding adversarial loss
+  # This helps stabilize training by giving the regressor a reasonable starting point
+  pretrain_epochs: 0    # epochs to train with MSE only (0 = no pretraining)
   discriminator:
-    hidden_units: [64]  # MLP hidden layer sizes
+    input_type: features  # "features" (Scenario 4) or "signal" (Scenario 42)
+    hidden_units: [64]    # MLP hidden layer sizes (for feature discriminator)
+    hidden_channels: [32, 64]  # Conv channels (for signal discriminator)
     dropout: 0.3
+    normalize_features: true   # L2 normalize features before D (feature discriminator only)
+    use_spectral_norm: false   # Constrain D capacity with spectral normalization
+    label_smoothing: 0.1       # Smooth labels for BCE (0.1 → real=0.9, fake=0.1)
+    # Loss type: "bce" (vanilla GAN) or "wgan" (Wasserstein with gradient penalty)
+    # WGAN recommended for signal-level discrimination (better gradients for time-series)
+    # NOTE: For WGAN, set use_grl=false and use alternating optimization (not yet implemented)
+    loss_type: bce
+    lambda_gp: 10.0       # Gradient penalty coefficient (only for WGAN)
