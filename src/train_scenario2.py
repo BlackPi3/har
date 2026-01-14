@@ -270,6 +270,22 @@ class Trainer:
             real_feat = self.models["fe"](acc)
             logits_real = self.models[self.real_classifier_key](real_feat)
             act_loss_real = self.ce(logits_real, labels)
+            d_acc = 0.0
+            if self.use_adversarial:
+                sim_acc = self.models["pose2imu"](pose)
+                D = self.models["discriminator"]
+                if self.adv_signal_input:
+                    d_input_real = acc
+                    d_input_sim = sim_acc
+                else:
+                    sim_feat = self.models[self.sim_fe_key](sim_acc)
+                    d_input_real = real_feat
+                    d_input_sim = sim_feat
+                d_real_logits = D(d_input_real, apply_grl=False)
+                d_sim_logits = D(d_input_sim, apply_grl=False)
+                d_pred_real = (torch.sigmoid(d_real_logits) > 0.5).float()
+                d_pred_sim = (torch.sigmoid(d_sim_logits) < 0.5).float()
+                d_acc = float((d_pred_real.mean() + d_pred_sim.mean()) / 2)
             # Return activity loss as total; zeros for training-only losses
             return (
                 act_loss_real,  # total loss = activity loss on real branch
@@ -278,7 +294,7 @@ class Trainer:
                 float(act_loss_real.detach().cpu()),  # act_loss (real only)
                 0.0,            # sec_act_loss (not computed in eval)
                 0.0,            # adv_loss (not computed in eval)
-                0.0,            # d_acc (not computed in eval)
+                d_acc,          # d_acc (computed for eval diagnostics)
                 0.0,            # feat_dist (not computed in eval)
                 0.0,            # mmd_loss (not computed in eval)
                 0.0,            # contrastive_loss (not computed in eval)
@@ -768,7 +784,7 @@ class Trainer:
             "train_loss", "val_loss", "train_f1", "val_f1", "train_acc", "val_acc",
             "train_mse", "val_mse", "train_sim_loss", "val_sim_loss",
             "train_act_loss", "val_act_loss", "train_sec_loss",
-            "train_adv_loss", "train_d_acc", "train_feat_dist", "train_signal_dist",
+            "train_adv_loss", "train_d_acc", "val_d_acc", "train_feat_dist", "train_signal_dist",
             "train_mmd_loss", "train_contrastive_loss", "train_silhouette",
         )
         if self.objective_metric not in valid_metrics:
@@ -791,7 +807,7 @@ class Trainer:
             "train_sim_loss": [], "val_sim_loss": [],
             "train_act_loss": [], "val_act_loss": [],
             "train_sec_loss": [],
-            "train_adv_loss": [], "train_d_acc": [],
+            "train_adv_loss": [], "train_d_acc": [], "val_d_acc": [],
             "train_feat_dist": [], "train_signal_dist": [],
             "train_grl_lambda": [],
             "train_mmd_loss": [], "train_contrastive_loss": [], "train_silhouette": [],
@@ -850,11 +866,14 @@ class Trainer:
             (tr_loss, tr_f1, tr_mse, tr_sim, tr_act, tr_sec, tr_adv, tr_d_acc,
              tr_feat_dist, tr_mmd, tr_con, tr_sil, tr_acc) = self._run_epoch("train")
             if self.skip_val:
-                (val_loss, val_f1, val_mse, val_sim, val_act, _, _, _, _, _, _, _,
-                 val_acc) = (tr_loss, tr_f1, tr_mse, tr_sim, tr_act, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, tr_acc)
+                (val_loss, val_f1, val_mse, val_sim, val_act, val_sec, val_adv, val_d_acc,
+                 val_feat_dist, val_mmd, val_con, val_sil, val_acc) = (
+                    tr_loss, tr_f1, tr_mse, tr_sim, tr_act, tr_sec, tr_adv, tr_d_acc,
+                    tr_feat_dist, tr_mmd, tr_con, tr_sil, tr_acc
+                )
             else:
-                (val_loss, val_f1, val_mse, val_sim, val_act, _, _, _, _, _, _, _,
-                 val_acc) = self._run_epoch("val")
+                (val_loss, val_f1, val_mse, val_sim, val_act, val_sec, val_adv, val_d_acc,
+                 val_feat_dist, val_mmd, val_con, val_sil, val_acc) = self._run_epoch("val")
             current_lr = self.optimizer.param_groups[0]["lr"]
 
             history["train_loss"].append(tr_loss)
@@ -872,6 +891,7 @@ class Trainer:
             history["train_sec_loss"].append(tr_sec)
             history["train_adv_loss"].append(tr_adv)
             history["train_d_acc"].append(tr_d_acc)
+            history["val_d_acc"].append(val_d_acc)
             history["train_feat_dist"].append(tr_feat_dist)
             history["train_signal_dist"].append(tr_feat_dist if self.adv_signal_input else 0.0)
             history["train_mmd_loss"].append(tr_mmd)

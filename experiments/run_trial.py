@@ -946,29 +946,13 @@ def _save_plots(run_dir: Path, history: Dict[str, List[Any]], best_epoch: int | 
     )
     
     # Adversarial training diagnostics (Scenario 4)
-    if history.get("train_d_acc"):
+    if history.get("train_d_acc") or history.get("val_d_acc"):
         _plot_pair(
             history.get("train_d_acc"),
-            None,
-            ("D Accuracy", ""),
+            history.get("val_d_acc"),
+            ("Train D Accuracy", "Val D Accuracy"),
             "Discriminator Accuracy",
             "d_acc.png",
-        )
-    if history.get("train_feat_dist"):
-        _plot_pair(
-            history.get("train_feat_dist"),
-            None,
-            ("Feature Distance", ""),
-            "Real vs Sim Feature Distance (L2)",
-            "feat_dist.png",
-        )
-    if history.get("train_grl_lambda"):
-        _plot_pair(
-            history.get("train_grl_lambda"),
-            None,
-            ("GRL Lambda", ""),
-            "Gradient Reversal Lambda Schedule",
-            "grl_lambda.png",
         )
 
 
