@@ -32,18 +32,17 @@ hydra:
       # PASS 1: Loss weights + Adversarial (ACTIVE)
       # ============================================================
       trainer.alpha: choice(0.5, 1.0, 2.0)
-      trainer.beta: choice(0)              # Disabled - adversarial replaces cosine sim
+      trainer.beta: choice(0, 1, 2, 5, 10, 50)    # 0 tests if adversarial alone suffices
       trainer.gamma: choice(0.5, 1.0)
 
-      # Adversarial params - KEY for scenario 42
+      # Adversarial params - KEY for scenario 42 (WGAN-GP with alternating D/G)
       trainer.adversarial.weight: choice(0.3, 0.5, 1.0)
-      trainer.adversarial.schedule_lambda: choice(false, true)
-      trainer.adversarial.grl_lambda: choice(1.0)
+      trainer.adversarial.n_critic: choice(1, 3, 5)            # D updates per G update
+      trainer.adversarial.pretrain_epochs: choice(0, 10, 15)   # MSE-only warmup
 
       # Signal discriminator architecture (1D CNN for temporal data)
       # Larger capacity for MM-Fit's longer windows (500 samples)
       trainer.adversarial.discriminator.hidden_channels: choice([32, 64, 128], [64, 128, 256], [64, 128])
-      trainer.adversarial.discriminator.label_smoothing: choice(0.0, 0.05)
 
       data.stride_seconds: choice(0.1, 0.2)
       data.batch_size: choice(32, 64)
