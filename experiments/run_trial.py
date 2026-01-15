@@ -1129,9 +1129,9 @@ def main():
             print("[run_trial] Running test evaluation with best model...")
             with torch.no_grad():
                 test_results = trainer._run_epoch("test")
-                # Unified format: (loss, f1, mse, sim, act, sec, adv, d_acc, feat_dist, mmd, con, sil, acc)
+                # Unified format: (loss, f1, mse, sim, act, sec, adv, d_acc, feat_dist, mmd, con, sil, aux_loss, aux_acc, acc)
                 test_loss, test_f1, test_mse, test_sim, test_act = test_results[0], test_results[1], test_results[2], test_results[3], test_results[4]
-                test_acc = test_results[12]  # acc is now at index 12
+                test_acc = test_results[14]  # acc is now at index 14 (after aux_loss, aux_acc)
             test_metrics = {
                 "test_loss": test_loss,
                 "test_f1": test_f1,

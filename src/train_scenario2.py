@@ -317,6 +317,8 @@ class Trainer:
                 0.0,            # mmd_loss (not computed in eval)
                 0.0,            # contrastive_loss (not computed in eval)
                 0.0,            # silhouette (not computed in eval)
+                0.0,            # aux_loss (not computed in eval)
+                0.0,            # aux_acc (not computed in eval)
                 logits_real,
                 labels,
             )
