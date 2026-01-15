@@ -307,8 +307,13 @@ class Trainer:
                 else:
                     d_real_logits = D(d_input_real, apply_grl=False)
                     d_sim_logits = D(d_input_sim, apply_grl=False)
-                d_pred_real = (torch.sigmoid(d_real_logits) > 0.5).float()
-                d_pred_sim = (torch.sigmoid(d_sim_logits) < 0.5).float()
+                # D accuracy: for WGAN use sign, for BCE use sigmoid
+                if self.adv_loss_type == "wgan":
+                    d_pred_real = (d_real_logits > 0).float()
+                    d_pred_sim = (d_sim_logits < 0).float()
+                else:
+                    d_pred_real = (torch.sigmoid(d_real_logits) > 0.5).float()
+                    d_pred_sim = (torch.sigmoid(d_sim_logits) < 0.5).float()
                 d_acc = float((d_pred_real.mean() + d_pred_sim.mean()) / 2)
             # Return activity loss as total; zeros for training-only losses
             return (
