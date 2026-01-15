@@ -1,0 +1,384 @@
+\chapter{Related Works}
+\label{chap:relatedwork}
+
+\section{HAR: Scope and Modalities}
+\label{sec:HARScope}
+
+\subsection{HAR in General}
+
+Human Activity Recognition (HAR) refers to the task of automatically identifying and classifying human actions based on data collected from sensors such as accelerometers, gyroscopes) \cite{ramanujam2021human} or visual inputs such as video, pose estimation) \cite{pareek2021survey}. It lies at the intersection of machine learning, ubiquitous computing, and behavioral modeling, enabling systems to interpret human movement in real time.
+
+The importance of HAR is evident in its wide range of applications. In healthcare \cite{bibbo2023human}, HAR facilitates fall detection, physical rehabilitation monitoring, and disease identification \cite{zaher2025unlocking}, offering non-intrusive, continuous insights into patient behavior. In surveillance \cite{waghchaware2024machine}, it enhances situational awareness by detecting abnormal or suspicious activities in public or critical spaces. In human–computer interaction, HAR enables systems to respond contextually to user activities, improving interaction naturalness in smart assistants and ambient interfaces. In smart environments, including homes and industrial settings, HAR supports behavior-driven automation, such as adjusting lighting, alarms, or appliance control based on detected activities \cite{qureshi2025systematic}.
+
+Historically, HAR began with classical machine learning approaches using handcrafted features and rule-based classifiers. These systems, while interpretable, often struggled with scalability and noise. The field has since shifted towards deep learning models, particularly CNNs \cite{yi2023human}, RNNs \cite{sherstinsky2020fundamentals}, and Transformers \cite{han2021transformer},that automatically learn spatial-temporal features from raw sensor or video data, improving accuracy and adaptability.
+
+The field of HAR has seen significant advancements, moving beyond traditional methods to leverage sophisticated techniques for more accurate and adaptable activity detection. These advancements are crucial for addressing the inherent complexities of human motion and behavior, enabling applications ranging from healthcare monitoring, such as fall detection and physical rehabilitation, to surveillance and human-computer interaction \cite{qureshi2025systematic}. The continuous evolution in HAR aims to provide non-intrusive, continuous insights into human behavior across various environments.
+
+Deep learning models, particularly Convolutional Neural Networks (CNNs), Recurrent Neural Networks (RNNs) like Long Short-Term Memory (LSTM) networks, and Transformer architectures, have revolutionized HAR. These models automatically learn spatial-temporal features from raw sensor or video data, significantly improving accuracy and adaptability compared to earlier methods that relied on handcrafted features and rule-based classifiers \cite{zaher2025unlocking}. For instance, CNNs are effective for processing grid-like data such as images or spectrograms, while RNNs, especially LSTMs, excel at handling sequential data like sensor streams due to their ability to capture long-term dependencies \cite{zaher2025unlocking, sherstinsky2020fundamentals}. Transformers, initially prominent in natural language processing, have also shown strong capabilities in modeling complex temporal-spatial relationships in HAR data \cite{han2021transformer}.
+
+While deep learning models like CNNs, RNNs, and Transformers have significantly advanced HAR by learning spatial-temporal features, recent research, such as UniMTS \cite{zhang2024unimts} further pushes these boundaries. UniMTS proposes a unified pre-training framework that leverages masked autoencoding on motion time series, demonstrating the effectiveness of self-supervised learning for extracting robust representations from raw sensor data. This approach is particularly relevant as it addresses the challenge of learning from unlabeled data, a common scenario in real-world HAR deployments.
+
+Despite this progress, several critical challenges remain. Most notably, data scarcity and imbalance hinder the training of robust models, especially for activities that are rare, context-specific, or user-dependent. HAR systems often fail to generalize across users, environments, and sensor types due to overfitting to specific dataset distributions. Real-time deployment is further constrained by the limited computational resources of mobile and wearable devices. Privacy concerns and the need for interpretable, energy-efficient models add to the complexity.
+
+Critical challenges in HAR include data scarcity, poor generalization across users and environments, and real-time deployment constraints. UniMTS \cite{zhang2024unimts} offers a compelling solution by employing a self-supervised pre-training paradigm. By pre-training on large amounts of unlabeled motion time series data, the model learns generalizable features that can then be fine-tuned on smaller, task-specific labeled datasets. This reduces the reliance on extensive labeled data collection, making models more robust and adaptable to new contexts and users, thereby mitigating issues like overfitting to specific dataset distributions.
+
+To mitigate critical challenges like data scarcity, poor generalization across users and environments, and real-time deployment constraints, the HAR community has increasingly focused on innovative strategies. These include synthetic data generation, cross-modal learning, and advanced joint training pipelines, which are explored in detail throughout this work. For example, synthetic data generation, as discussed in \ref{sec:syntheticdatainHAR}, helps expand datasets without costly acquisition campaigns and allows modeling of rare or hazardous activities. Cross-modal learning, particularly techniques like cross-modal transfer learning, enables knowledge transfer between modalities to address data scarcity and improve model robustness.
+
+These limitations are especially pronounced in real-world settings, where labeled data is scarce, environments are unpredictable, and the diversity of users and behaviors is high. Addressing these challenges requires new strategies,such as synthetic data generation, cross-modal learning, and joint training pipelines, that form the core motivation of this thesis.
+
+\subsection{Audio-based HAR}
+
+Audio-based HAR involves the classification of human actions using acoustic signals captured from the environment. Unlike vision- or motion-based modalities, audio HAR can operate passively and non-intrusively, making it appealing for ambient intelligence applications. The underlying approach typically involves extracting features from environmental sounds,such as footsteps, door movements, or object interactions,and classifying them using machine learning or deep learning models.
+
+One of the earliest and most cited works in this area is by Liang and Thomaz~\cite{liang2018audioar}, who developed \textit{AudioAR}, a system that leverages large-scale acoustic embeddings from YouTube videos to recognize 15 common household activities. By avoiding user-specific training and using pre-trained embeddings, the model achieved promising results: 81\% accuracy in controlled experiments and 65\% in real-world scripted settings. Their work highlighted the feasibility of large-scale transfer learning for audio-based HAR.
+
+Despite its potential, recent surveys have consistently noted that audio HAR is not widely used as a standalone modality. Instead, it is increasingly framed as a \textit{complementary source of information} in multi-modal HAR systems~\cite{shin2025comprehensive, kaseris2024comprehensive}. Audio can capture contextual cues that are difficult to obtain from inertial sensors or visual streams,for instance, distinguishing between cooking and vacuuming based on background noise,but it struggles with activities that lack distinctive sounds, such as stretching or reading.
+
+Several limitations restrict the use of audio as a primary modality. First, ambient noise and overlapping sound sources degrade model performance. Second, privacy concerns related to continuous audio monitoring present ethical and legal challenges, particularly in home or workplace environments. Third, acoustic ambiguity and context dependency make it difficult to achieve high classification accuracy for fine-grained or silent activities.
+
+In summary, audio HAR offers a low-cost and passive sensing alternative but is best used in conjunction with other modalities. As noted in recent literature, its strength lies in enhancing robustness and contextual understanding when fused with inertial or visual data, rather than serving as the primary input for activity recognition.
+
+\subsection{IMU-based HAR}
+
+Inertial Measurement Units (IMUs), composed of accelerometers, gyroscopes, and sometimes magnetometers, are a core sensing modality for human activity recognition (HAR). These sensors are widely used due to their affordability, low power consumption, and suitability for wearable devices such as smartphones, smartwatches, and fitness trackers. IMU-based HAR operates by capturing movement-induced signals, which are then processed using classical machine learning or deep learning techniques to recognize patterns associated with human activities.
+
+Recent advancements have led to the dominance of deep learning models,particularly Convolutional Neural Networks (CNNs), Long Short-Term Memory (LSTM) networks, and Transformer architectures,for extracting and modeling temporal-spatial features from raw IMU signals. IMUs are especially effective for activities involving substantial body motion, such as walking, running, climbing stairs, or exercising, where distinct inertial patterns emerge.
+
+Despite their utility, IMU-based HAR systems face several challenges. A major issue is the high sensitivity to sensor placement and orientation. IMU-based HAR systems are highly sensitive to the exact placement and orientation of sensors. Even minor deviations in sensor positioning can lead to significant drops in recognition accuracy. Additionally, the generalization of models across users, devices, and environments remains difficult, often necessitating personalization or domain adaptation. Models trained on IMU data often struggle to generalize effectively across different users, devices, and environments, frequently requiring personalization or domain adaptation to maintain performance.
+
+Sampling irregularities, such as timestamp jitter and missing data caused by hardware constraints or transmission delays, pose a critical concern. Common deep learning models often fail to robustly handle these non-uniform time-series data issues. Liu et al.~\cite{liu2025assessing} analyzed the effect of \textit{sampling irregularity}, caused by hardware constraints or transmission delays,on HAR performance. They demonstrated that common deep learning models fail to robustly handle timestamp jitter and missing data, suggesting a need for novel temporal modeling approaches tailored for non-uniform time-series data.
+
+To mitigate data scarcity and improve generalization, simulation-based approaches have emerged. Oishi et al.~\cite{oishi2025wimusim} introduced \textit{WIMUSim}, a high-fidelity IMU simulation framework capable of generating realistic synthetic IMU data by modeling human dynamics, sensor placement, and device characteristics. Models trained using WIMUSim-generated data achieved comparable or even superior performance to those trained on real-world IMU datasets, demonstrating the potential of synthetic augmentation for robust HAR development.
+
+In summary, IMU-based HAR remains foundational to the field due to its practicality and signal richness. However, addressing challenges related to generalization, sampling noise, and data annotation continues to be an active area of research, with simulation and augmentation techniques offering promising solutions.
+
+\subsection{Pose-based HAR}
+Pose-based HAR refers to the classification of human actions using structured representations of the human body, typically in the form of 2D or 3D skeletal keypoints. These keypoints are extracted from video frames using pose estimation algorithms such as OpenPose or HRNet and represent joint positions over time. The modality has gained prominence due to its privacy-preserving nature, reduced sensitivity to background noise, and compact representation of complex human motion.
+
+A foundational approach in this area is to model the human body as a graph, where joints are nodes and bones are edges. Graph Convolutional Networks (GCNs), particularly Spatio-Temporal GCNs (ST-GCN), have been widely adopted to learn spatial relationships between joints and their temporal evolution across frames. These models leverage the inherent structure of skeleton data and are highly effective for recognizing dynamic activities such as walking, running, waving, or performing martial arts.
+
+Recent research has advanced the field significantly by addressing limitations in spatial-temporal modeling and nonlinearity. Han et al.~\cite{han2025spatio} introduced ST-KT, a hybrid framework that combines traditional ST-GCN modules with a novel transformer architecture based on the Kolmogorov–Arnold Network (KAN). This architecture captures both short-range and long-range dependencies across the skeletal graph by using spatio-temporal position embeddings and transformer attention layers. The proposed model achieved 97.5\% accuracy on SHREC’17 and 94.3\% on DHG-14/28, demonstrating its superior ability to model complex joint dependencies in hand gesture recognition tasks.
+
+Another advancement comes from DSTSA-GCN, proposed by Cui et al.~\cite{cui2025dstsa}, which improves upon existing GCN architectures by introducing dynamic semantic-aware spatio-temporal topology modeling. The model features group-wise channel and temporal convolutions that adaptively learn multiscale structural dependencies. This framework outperformed prior methods on standard datasets such as NTU RGB+D and DHG-28 by more effectively modeling global and local correlations in joint motion.
+
+Pose-based HAR, however, faces several key challenges. One major issue is robustness under occlusion, where joint visibility is reduced due to environmental conditions or body orientation. To address this, Karácsony et al.~\cite{karacsony2025blanketgen2} introduced BlanketGen2-Fit3D, a synthetic augmentation framework designed to improve pose estimation under in-bed occlusion caused by blankets. The system uses SMPL body models and simulated occlusion layers to generate large-scale augmented datasets, which significantly boosted pose estimation performance on both synthetic and real-world occluded data.
+
+Other common challenges in pose-based HAR include inter-subject and intra-subject variability, camera viewpoint sensitivity, and domain transfer limitations. Pose-based HAR models face difficulties due to variations in movement patterns between different individuals (inter-subject variability) and within the same individual over time (intra-subject variability). The performance of pose-based systems can be adversely affected by changes in camera viewpoint. Additionally, transferring models to new domains or environments often presents limitations. Furthermore, the accuracy of HAR models is often tightly coupled to the quality of the underlying pose estimation, which can be noisy or biased under certain lighting and motion conditions.
+
+Despite these limitations, pose-based HAR continues to be a robust and scalable approach, particularly in scenarios where privacy concerns or visual ambiguity restrict the use of raw video data. The structured and interpretable nature of pose sequences, along with advances in graph-based and transformer-based modeling, make this modality a strong foundation for both unimodal and multimodal HAR systems.
+
+\subsection{Joint Modality HAR: Fusion, Generation, and Cross-Modal Learning}
+
+Combining multiple sensing modalities for HAR has become a dominant trend to overcome limitations of unimodal systems. Among these, joint use of \textbf{pose and IMU} has gained particular attention due to their complementary properties, as pose captures structural kinematics while IMUs provide high-frequency motion dynamics. Beyond classical fusion strategies, the literature has evolved into more nuanced categories of multimodal usage. 
+
+The evolution of fusion strategies in joint modality HAR now includes more nuanced categories beyond simple early or late fusion. Intermediate or hybrid fusion via joint latent embeddings and attention mechanisms are increasingly used to integrate diverse sensor data effectively, leading to consistent performance gains across various benchmarks. For instance, models evaluated on benchmarks like UTD-MHAD and MMFit consistently show improvements by integrating pose and IMU streams, benefiting from their complementary properties—pose capturing structural kinematics and IMUs providing high-frequency motion dynamics. Recent works also explore multimodal representation learning, where all HAR-focused modalities are aligned, and CLIP-style sensor grounding, which connects sensor modalities to general-purpose multimodal embedding spaces, both addressing data scarcity and domain shift.
+
+This section outlines three broad research paradigms in joint modality HAR, with a focus on pose and IMU:
+
+\paragraph{1. Fusion-Based Multimodal HAR.}
+The most established approach is \textit{fusion}, where both modalities are used during training and/or inference to enhance performance. Fusion can be implemented in several forms: \textit{early fusion} (feature concatenation), \textit{late fusion} (decision-level merging), and \textit{intermediate or hybrid fusion} via joint latent embeddings or attention mechanisms. Numerous models evaluated on benchmarks such as UTD-MHAD and MMFit show consistent gains from integrating pose and IMU streams \cite{stromback2020mm, chen2015utd, zhou2024cross, khattak2022cross}.
+
+\begin{table}[t]
+  \centering
+  \footnotesize
+  \caption{Fusion strategies for pose + IMU HAR.}
+  \label{tab:fusion-strategies}
+  \begin{tabular}{l l l p{5.2cm} l}
+    \toprule
+    \textbf{Strategy} & \textbf{Fusion level} & \textbf{Modalities} & \textbf{Mechanism} & \textbf{Reference} \\
+    \midrule
+    Early fusion & Feature & Pose + IMU & Concatenate embeddings or raw features before classification. & \cite{chen2015utd} \\
+    Late fusion & Decision & Pose + IMU & Merge per-modality logits or probabilities. & \cite{stromback2020mm} \\
+    Intermediate / hybrid & Latent & Pose + IMU & Joint latent embedding with attention or gating across streams. & \cite{khattak2022cross, zhou2024cross} \\
+    Contrastive / joint embedding & Representation & Pose + IMU (+ video/language) & Contrastive alignment of modalities in a shared space. & \cite{fritsch2025mujo, dixon2024modality} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{2. Synthetic IMU Generation from Pose.}
+A growing body of work addresses the problem of data scarcity by generating synthetic IMU data from pose sequences. This form of \textit{cross-modal augmentation} allows HAR models to be trained on abundant pose data while benefiting from IMU signal diversity. Notable contributions include:
+\begin{itemize}
+    \item \textbf{Multi$^3$Net} \cite{fortes2024enhancing}: Uses pose and language to synthesize realistic IMU data, improving low-data HAR scenarios.
+    \item \textbf{SynHAR} \cite{uhlenberg2024synhar}: Generates personalized IMU samples via biomechanical modeling for better generalization.
+    \item \textbf{Yet It Moves} \cite{rey2020yet}: Learns IMU signals from YouTube videos by aligning motion patterns and accelerometry.
+\end{itemize}
+These methods are particularly valuable in wearable contexts, where obtaining IMU data for every user and activity is impractical.
+
+\paragraph{3. Cross-Modal Adversarial / Transfer Learning.}
+Another emerging direction is \textit{cross-modal transfer learning}, where knowledge is transferred between modalities using adversarial or representation-alignment techniques. This includes cases where paired data may be missing or come from different datasets. Examples include:
+\begin{itemize}
+    \item \textbf{SA-GAN} \cite{soleimani2021cross}: Uses adversarial learning to adapt HAR models across different subjects using IMU data.
+    \item \textbf{Physical-aware Adversarial Networks}: Generates pose from IMU while enforcing physical constraints and semantic realism.
+    \item \textbf{Cross-Domain HAR} \cite{thukral2025cross}: Applies teacher-student transfer for few-shot recognition across sensor domains.
+\end{itemize}
+These approaches help bridge gaps between domains, sensors, and data types, an essential capability in real-world HAR deployments.
+
+\paragraph{Feature- vs. signal-level discriminators.}
+Adversarial alignment can be applied either on learned features or directly on raw or generated sensor signals. Feature-level discriminators operate on latent embeddings to encourage domain-invariant representations, while signal-level discriminators operate on IMU waveforms to reduce sim-to-real mismatch at the measurement level. The two levels are complementary: feature-level alignment targets classifier robustness, while signal-level alignment targets synthesis fidelity.
+
+\begin{table}[t]
+  \centering
+  \footnotesize
+  \caption{Feature- and signal-level discriminators used for adversarial alignment in HAR.}
+  \label{tab:discriminator-levels}
+  \begin{tabular}{l l p{6.0cm} l}
+    \toprule
+    \textbf{Level} & \textbf{Input} & \textbf{Goal} & \textbf{Example} \\
+    \midrule
+    Feature & Encoder embeddings & Align latent distributions to produce domain-invariant representations. & \cite{sanabria2021contrasgan, wu2024class} \\
+    Signal & Raw or generated IMU signals & Match signal statistics to reduce sim-to-real gap at the measurement level. & Pose-to-IMU adversarial synthesis \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+
+\section{Synthetic Data in HAR}
+\label{sec:syntheticdatainHAR}
+\subsection{Why Synthetic Data in HAR Matters}
+
+HAR systems require large and diverse datasets to achieve high performance and robust generalization. However, real-world data collection in HAR is constrained by several factors. First, the \textbf{high cost of collection and annotation} remains a major bottleneck, as recording multimodal data,such as Inertial Measurement Unit (IMU) signals and video-based pose sequences,requires specialized equipment, controlled environments, and expert labeling. Second, \textbf{privacy constraints} are particularly critical for vision-based HAR, where identifiable visual information can prevent data sharing and reuse \cite{kamboj2024survey}. Third, many publicly available datasets suffer from \textbf{limited subject and environment diversity}, leading to overfitting and reduced generalization to new users, sensors, or contexts.
+
+To address these challenges, synthetic data has emerged as a powerful tool in HAR research. Synthetic data can:
+\begin{itemize}
+    \item \textbf{Expand datasets without additional recording}, reducing the dependence on costly acquisition campaigns.
+    \item \textbf{Model rare or hazardous activities} that are difficult or unsafe to capture in real environments.
+    \item \textbf{Enable personalization} of HAR models for individual users without requiring direct data collection from them.
+\end{itemize}
+
+Recent advances in generative modeling and cross-modal learning have enabled the creation of highly realistic synthetic HAR data. For instance, \textbf{SynHAR} \cite{uhlenberg2024synhar} generates synthetic IMU signals from biomechanical simulations to augment scarce datasets, improving recognition performance in low-data scenarios. Similarly, \textbf{Yet It Moves} \cite{rey2020yet} leverages freely available video content to extract human pose and generate corresponding IMU signals, reducing reliance on physical sensor recordings. A recent survey by Kamboj and Do \cite{kamboj2024survey} categorizes these techniques within the broader landscape of cross-modal transfer learning, emphasizing their potential to mitigate privacy concerns and address the scarcity of labeled multimodal HAR datasets.
+
+By reducing the dependency on large-scale real-world data collection, synthetic data not only addresses key limitations of current HAR research but also opens opportunities for new applications in healthcare, sports, and ubiquitous computing, where data availability is often the main barrier to deployment.
+
+\subsection{Cross-Modal Synthetic Data Generation}
+
+Cross-modal synthetic data generation has emerged as a promising strategy to mitigate the scarcity of labeled data in HAR. The key idea is to leverage \textit{data-rich source modalities},such as human pose, language descriptions, or videos,to generate corresponding data in \textit{low-resource target modalities}, such as Inertial Measurement Unit (IMU) signals. This approach enables the enrichment of scarce sensor datasets without additional sensor deployment or manual data collection.
+
+\paragraph{Pose $\rightarrow$ IMU.}
+Pose-to-IMU generation exploits abundant motion capture or vision-based pose estimation data to synthesize realistic IMU sequences. For example, \textbf{SynHAR} \cite{uhlenberg2024synhar} uses combined biomechanical dynamics models and human surface models to simulate accurate IMU time series from pose inputs, improving HAR performance in both direct training and transfer learning scenarios. Similarly, \textbf{Yet It Moves} \cite{rey2020yet} learns a regression mapping from pose features extracted from online videos to IMU signals, allowing the creation of large-scale virtual IMU datasets from readily available video sources.
+
+\paragraph{Language $\rightarrow$ IMU.}
+With the rise of large language models (LLMs) and text-to-motion synthesis, language descriptions of activities have become a viable source for generating IMU data. \textbf{IMUGPT 2.0} \cite{leng2024imugpt} converts natural language activity descriptions into IMU sequences using a text-to-motion pipeline, introducing motion filtering and diversity metrics to enhance data quality and efficiency. In a similar vein, the work by ? employs ChatGPT to produce detailed textual activity descriptions, which are then transformed into 3D motion sequences and finally converted into synthetic IMU streams.
+
+\paragraph{Video $\rightarrow$ IMU.}
+Video-to-IMU approaches generate sensor signals directly from video recordings, allowing the reuse of massive video datasets for wearable sensor HAR. The \textbf{Vi2IMU} framework \cite{santhalingam2023synthetic} translates in-the-wild American Sign Language (ASL) videos into wrist-worn IMU acceleration and gyro data by estimating wrist orientation and capturing fine-grained motion details. This enables training gesture recognition models without collecting real IMU measurements.
+
+These cross-modal generation techniques share a common goal: to exploit modalities where data is abundant and easy to acquire to enrich those where it is scarce, thereby reducing the dependency on costly, privacy-sensitive, and labor-intensive sensor-based data collection. In the context of this thesis, the Pose $\rightarrow$ IMU pathway plays a central role, forming the basis for synthetic augmentation experiments, while the principles from Language $\rightarrow$ IMU and Video $\rightarrow$ IMU research further illustrate the generalizability and scalability of the cross-modal generation paradigm.
+
+\subsection{Generative Models for Synthetic HAR Data}
+
+Generative models have become a key enabler for producing realistic synthetic data in Human Activity Recognition (HAR), particularly under data scarcity constraints. They allow the creation of new samples that follow the underlying distribution of real sensor or pose data, improving model robustness and generalization. Three major families of generative models have been applied in HAR: Generative Adversarial Networks (GANs), Variational Autoencoders (VAEs), and Diffusion Models. Each offers unique advantages and limitations.
+
+Generative models, such as Generative Adversarial Networks (GANs), Variational Autoencoders (VAEs), and Diffusion Models, are pivotal in creating new synthetic data samples that accurately reflect the underlying distribution of real sensor or pose. This capability is essential for improving model robustness and generalization when real-world data is limited. GANs, for example, are widely used for generating high-fidelity and realistic data by learning the underlying distribution of training samples through a generator-discriminator game. VAEs offer a probabilistic approach to data generation by learning a latent space, producing diverse samples, while Diffusion Models, an emerging class, iteratively refine random noise into structured data, offering stable training and high-quality outputs. These models have been applied in various contexts, including generating balanced IMU datasets and creating synthetic IMU data from pose sequences.
+
+\paragraph{GAN-based Approaches.}
+Generative Adversarial Networks (GANs) are widely used in HAR for their ability to generate high-fidelity and realistic data by learning the underlying distribution of training samples through a generator–discriminator game. For example, Alharbi et al. \cite{alharbi2020synthetic} proposed a Wasserstein GAN (WGAN) to synthesize balanced IMU datasets, significantly improving performance in cases of class imbalance. Similarly, Djemaa et al. \cite{djemaa2024improved} introduced a controllable GAN that generates both normal and abnormal activity classes, incorporating Dynamic Time Warping (DTW) for fidelity evaluation and transformer-based classification for improved accuracy. In the domain of gesture recognition, Kontogiannis et al. \cite{kontogiannis2024exploring} demonstrated GANs’ potential to create multi-variate IMU gesture data for healthcare applications, addressing fidelity, diversity, and privacy concerns. Despite their success, GANs face known challenges such as \textbf{mode collapse},where the generator produces limited variations,and \textbf{training instability}, especially for complex time-series distributions.
+
+\paragraph{VAE-based Approaches.}
+Variational Autoencoders (VAEs) offer a probabilistic approach to data generation by learning a latent space from which new samples can be drawn. While VAEs typically produce more diverse samples and better coverage of the target distribution than GANs, they often result in lower signal sharpness and fine-grained detail, which can impact HAR model performance. Although VAEs have seen less use in recent HAR-specific research compared to GANs and diffusion models, earlier studies demonstrated their potential for generating sensor time series, particularly when reconstruction fidelity is less critical than sample diversity.
+
+\paragraph{Diffusion Model Approaches.}
+Diffusion models are an emerging class of generative models that iteratively refine random noise into structured data through a learned denoising process, offering stable training and high-quality outputs. Shao and Sanchez \cite{shao2023study} evaluated diffusion models for sensor-based HAR, comparing them against GAN-based augmentation and redesigning the UNet backbone for improved efficiency. Zuo et al. \cite{zuo2023unsupervised} proposed an unsupervised, statistical feature-guided diffusion model that generates diverse IMU signals by conditioning on dataset-level statistics such as mean, standard deviation, and skewness. Their method outperformed traditional oversampling and GAN approaches in downstream HAR classification tasks. Diffusion models have also been applied in \textit{same-modality generation} scenarios, such as IMU$\rightarrow$IMU and Pose$\rightarrow$Pose, where the objective is to expand an existing dataset while maintaining the intrinsic structure of the target modality.
+
+Overall, GANs excel in producing sharp and realistic signals, VAEs provide broader coverage of activity variations, and diffusion models combine diversity with stability, making them particularly attractive for sensor-based HAR data generation in both single- and cross-modality settings.
+
+
+\subsection{Simulation-based Approaches}
+
+Simulation-based approaches offer a powerful alternative to collecting large-scale real-world datasets for Human Activity Recognition (HAR). By leveraging physical models, motion capture, and game engine environments, these methods can generate rich, labeled, and highly customizable synthetic datasets. This not only addresses data scarcity but also enables the controlled creation of rare or dangerous activities that are difficult to capture in practice. Simulation-based HAR generation can be broadly categorized into \textbf{physics-based motion synthesis}, \textbf{motion capture with biomechanical modeling}, and \textbf{game engine-based simulations}.
+
+\paragraph{Physics-based Motion Synthesis.}
+Physics simulation frameworks model human body kinematics, sensor characteristics, and environmental constraints to produce realistic wearable sensor signals. \textbf{WIMUSim} \cite{oishi2025wimusim} is a recent example that simulates 6-axis IMU data by parameterizing body dynamics, sensor placement, and hardware specifications. It optimizes these parameters against real recordings via gradient descent, achieving high fidelity in replicating real IMU signals. WIMUSim supports two augmentation strategies: \emph{Comprehensive Parameter Mixing} to increase data diversity, and \emph{Personalized Dataset Generation} tailored to individual users, yielding accuracy improvements of up to 10 percentage points for specific subjects.
+
+\paragraph{Motion Capture and Biomechanics.}
+Another simulation pathway combines motion capture with biomechanical modeling to produce realistic, annotated sensor data. \textbf{SynDa} \cite{rajendran2022synda} employs photorealistic rendering and AI-based pose estimation to transform existing motion capture sequences into new large-scale datasets, suitable for HAR model training. This approach allows the re-purposing of high-quality motion capture archives for synthetic data generation, while introducing variability in actor morphology, clothing, and environmental conditions.
+
+\paragraph{Game Engine-based Simulations.}
+Modern game engines such as Unity and Blender provide flexible, highly parameterizable environments for large-scale synthetic HAR data generation. \textbf{M3Act} \cite{chakma2023domain} is a Unity-based multi-view, multi-group human activity simulator that produces synchronized RGB images, 2D/3D pose, segmentation masks, and group activity labels. It incorporates extensive domain randomization in lighting, camera placement, and group configurations to improve transferability to real-world data. \textbf{SynthAct} \cite{schneider2024synthact} similarly uses game engine simulations to generate multi-view RGB, depth, and pose data for HAR, validated on NTU RGB+D and Toyota Smarthome benchmarks. Earlier work by Plunkett et al. \cite{plunkett2019designing} introduced a simulation platform for procedurally generating household activity videos, randomizing camera position, human models, and interaction patterns to boost dataset diversity.
+
+Overall, simulation-based methods provide a scalable and privacy-preserving means of generating HAR data across a wide variety of activities, subjects, and environments. By combining physics realism, motion capture fidelity, and the flexibility of virtual worlds, these approaches can bridge gaps in real-world datasets and enable more robust and generalizable HAR models.
+
+\begin{table*}[t]
+  \centering
+  \footnotesize
+  \caption{Representative synthetic data generation methods for HAR (NR denotes not reported or not directly comparable).}
+  \label{tab:synthetic-methods}
+  \begin{tabular}{l l l p{3.6cm} p{2.6cm} p{2.8cm}}
+    \toprule
+    \textbf{Method} & \textbf{Type} & \textbf{Input -> Output} & \textbf{Core idea} & \textbf{Eval signal} & \textbf{Notes} \\
+    \midrule
+    Multi$^3$Net \cite{fortes2024enhancing} & Cross-modal & Pose + language -> IMU & Joint conditioning on pose and text for IMU synthesis. & NR & Designed for low-data HAR. \\
+    SynHAR \cite{uhlenberg2024synhar} & Biomechanics & Pose -> IMU & Biomechanical modeling for personalized IMU generation. & NR & Targets generalization across users. \\
+    Yet It Moves \cite{rey2020yet} & Cross-modal & Video/pose -> IMU & Regression mapping from pose to IMU signals. & NR & Uses large-scale web video. \\
+    Vi2IMU \cite{santhalingam2023synthetic} & Cross-modal & Video -> IMU & Video-based wrist motion to IMU synthesis. & NR & Focused on ASL gestures. \\
+    IMUGPT 2.0 \cite{leng2024imugpt} & Text-to-motion & Language -> IMU & Text-to-motion pipeline producing IMU sequences. & NR & Emphasizes diversity controls. \\
+    WIMUSim \cite{oishi2025wimusim} & Simulation & Motion + sensor params -> IMU & Physics-based IMU simulation with parameter optimization. & Signal similarity & Personalized parameter mixing. \\
+    M3Act \cite{chakma2023domain} & Simulation & Virtual scene -> pose/RGB & Unity-based multi-view activity simulation. & Transfer to real & Multi-view, group activities. \\
+    SynthAct \cite{schneider2024synthact} & Simulation & Virtual scene -> pose/RGB/depth & Game engine data with domain randomization. & Transfer to real & Evaluated on NTU RGB+D. \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+
+\subsection{Challenges and Open Problems}
+
+While synthetic data has shown strong potential for addressing data scarcity in Human Activity Recognition (HAR), several challenges remain unresolved. These issues span from technical limitations in generation methods to broader concerns about fairness and generalization.
+
+\paragraph{Domain Gap Between Synthetic and Real Data.}
+One of the most persistent challenges is the \textbf{domain gap} between synthetic and real-world data. Models trained exclusively or predominantly on synthetic datasets often experience performance drops when deployed in real environments due to differences in noise patterns, motion variability, and sensor-specific characteristics. This gap can arise from simplified assumptions in physics-based simulations, limited variability in generative models, or unmodeled artifacts present in real sensors. Although various domain adaptation strategies have been proposed in the broader HAR literature \cite{mhalla2024domain}, bridging this gap remains particularly difficult in cross-modal generation, where modality-specific nuances must also be preserved.
+
+\paragraph{Evaluation Metrics for Realism.}
+Evaluating the realism and utility of synthetic HAR data is non-trivial. General synthetic data research has proposed multiple validation metrics, such as statistical similarity tests, distributional divergence measures, and task-specific performance metrics, to quantify fidelity and diversity \cite{kiran2023synthetic}. In the HAR context, fidelity is often assessed using time-series similarity measures such as Dynamic Time Warping (DTW), as employed by Djemaa et al. \cite{djemaa2024improved}. However, no consensus yet exists on standardized metrics that balance realism, diversity, and downstream task utility for HAR.
+
+\paragraph{Semantic Alignment in Cross-Modal Generation.}
+For cross-modal synthetic data generation such as Pose$\rightarrow$IMU), a key challenge lies in ensuring \textbf{semantic alignment},the generated data must not only match the target modality's distribution but also faithfully represent the same underlying activity. Misalignment can occur due to weak supervision, differences in dataset annotation protocols, or incomplete modeling of temporal dependencies. Such misalignments can degrade classifier performance, especially in fine-grained activity recognition.
+
+\paragraph{Bias Introduction and Amplification.}
+Synthetic data generation carries the risk of encoding and amplifying biases present in the source data. For example, if the motion capture or pose data used for IMU synthesis overrepresents certain movement styles, demographics, or activity contexts, the resulting synthetic data may skew model predictions toward those patterns. This bias can inadvertently reduce generalization to underrepresented populations or environments \cite{kiran2023synthetic}. Controllable generation frameworks, such as that of Djemaa et al. \cite{djemaa2024improved}, partially address this by allowing targeted augmentation of rare classes, but systematic bias detection and mitigation remain open research areas.
+
+In summary, while synthetic data offers a powerful tool for augmenting HAR datasets, careful attention must be paid to the domain gap, evaluation methodology, semantic fidelity, and bias mitigation to fully realize its potential in practical applications.
+
+
+
+
+\subsection{Knowledge Transfer and Domain Adaptation in HAR}
+
+% =================== Domain Adaptation Taxonomy (placeholder) ===================
+\begin{table}[t]
+  \centering
+  \footnotesize
+  \caption{Domain shift types and representative adaptation strategies in HAR.}
+  \label{tab:adaptation-taxonomy}
+  \begin{tabular}{l p{2.1cm} p{3.6cm}}
+    \toprule
+    \textbf{Shift} & \textbf{Examples} & \textbf{Common approaches} \\
+    \midrule
+    User & cross-subject, physiology & Pseudo-label refinement \cite{fu2021personalized}, self-training \cite{thukral2025cross} \\
+    Device & placement, sampling, noise & Adversarial alignment \cite{sanabria2021contrasgan}, modality discriminator \cite{wu2024class} \\
+    Context & environment, scene & Augmentation policies, self-training, domain randomization \cite{chakma2023domain} \\
+    Modality & IMU vs radar/vision & Structural transfer \cite{alinia2023model}, cross-modal alignment \cite{thukral2025cross} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+% ================================================================================
+
+HAR systems often suffer performance degradation when deployed in conditions different from training data, necessitating transfer learning and domain adaptation. UniMTS \cite{zhang2024unimts} exemplifies an advanced form of knowledge transfer. By pre-training on a vast and diverse collection of motion time series, it learns universal motion patterns. This pre-trained model can then be effectively adapted to new users, devices, or activities with minimal fine-tuning, significantly reducing the effort required for personalization and domain adaptation across various HAR scenarios. This approach aligns with techniques aimed at learning domain-invariant features and improving generalization across diverse settings.
+
+HAR systems trained on wearable sensor data often face significant performance degradation when deployed in conditions different from those seen during training. Such distribution shifts arise from differences in \textbf{users} such as physical characteristics, movement styles), \textbf{devices} such as sampling rates, sensor noise profiles), and \textbf{environments} such as floor surfaces, ambient interference). Collecting and annotating new datasets for every possible target setting is prohibitively expensive, motivating the use of \textbf{transfer learning} and \textbf{domain adaptation} techniques to enable model reuse across domains.
+
+\paragraph{Survey of Domain Adaptation in IMU-based HAR.}
+Chakma et al. \cite{chakma2023domain} present a comprehensive survey of domain adaptation methods for IMU-based HAR, categorizing approaches into instance-based, feature-based, and model-based adaptation. They identify three primary transfer scenarios: cross-user, cross-device, and cross-location adaptation. The survey highlights the role of adversarial learning, metric learning, and self-supervised pretraining in mitigating domain shifts, while emphasizing open challenges such as handling multi-modal heterogeneity and extreme low-label regimes.
+
+\paragraph{Cross-User and Cross-Device Adaptation.}
+Personalized HAR seeks to adapt generic models to new users without extensive retraining. Fu et al. \cite{fu2021personalized} propose an Improved Pseudo-Label Joint Probability Domain Adaptation (IPL-JPDA) method that combines domain-invariant feature extraction with pseudo-label refinement to improve cross-user performance. In the few-shot setting, Thukral et al. \cite{thukral2025cross} introduce \emph{Cross-Domain HAR}, a teacher–student self-training framework that effectively bridges gaps in sensor placement and activity definitions between source and target datasets, significantly outperforming conventional fine-tuning approaches.
+
+\paragraph{Adversarial and GAN-based Domain Adaptation.}
+Generative Adversarial Networks (GANs) have been leveraged for domain adaptation in HAR to align source and target feature distributions. Rosales Sanabria et al. \cite{sanabria2021contrasgan} propose \emph{ContrasGAN}, which integrates bi-directional GANs with contrastive learning to enhance discriminability while achieving domain invariance, demonstrating strong results in cross-body, cross-user, and cross-sensor settings. Wu et al. \cite{wu2024class} address cross-modal and cross-user adaptation using a Class-Aware Sample Weight Learning (CASWL) framework, which incorporates a modality discriminator to reduce inter-modality variance and applies class-aware weighting to prioritize well-aligned samples during adversarial training.
+
+\paragraph{Cross-Modal Adaptation.}
+Beyond adapting between domains of the same modality, some works explore cross-modal adaptation, where knowledge from a well-labeled modality such as IMU) is transferred to a low-resource modality such as radar, EMG). Alinia et al. \cite{alinia2023model} propose \emph{ActiLabel}, a model-agnostic structural transfer learning approach that maps dependency graphs of activities across modalities and devices, enabling cross-modality, cross-location, and cross-subject adaptation without requiring aligned datasets. This is conceptually similar to \emph{IMU2Doppler}-style systems, where labeled IMU data is used to bootstrap recognition in radar-based HAR with minimal annotation effort.
+
+\begin{table}[t]
+  \centering
+  \footnotesize
+  \caption{Representative transfer and domain adaptation methods in HAR.}
+  \label{tab:adaptation-methods}
+  \begin{tabular}{l l l p{4.2cm} l}
+    \toprule
+    \textbf{Method} & \textbf{Transfer} & \textbf{Source -> Target} & \textbf{Technique} & \textbf{Reference} \\
+    \midrule
+    IPL-JPDA & Cross-user & IMU -> IMU & Pseudo-label refinement with domain-invariant feature extraction. & \cite{fu2021personalized} \\
+    Cross-Domain HAR & Cross-user/device & IMU -> IMU & Teacher-student self-training for few-shot adaptation. & \cite{thukral2025cross} \\
+    ContrasGAN & Cross-sensor/user & IMU -> IMU & Adversarial alignment with contrastive learning. & \cite{sanabria2021contrasgan} \\
+    CASWL & Cross-modal/user & IMU + other -> IMU & Modality discriminator with class-aware sample weighting. & \cite{wu2024class} \\
+    ActiLabel & Cross-modal & IMU -> radar/other & Structural transfer via activity dependency graphs. & \cite{alinia2023model} \\
+    UniMTS & Cross-domain & IMU -> IMU & Self-supervised pretraining on motion time series. & \cite{zhang2024unimts} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+In summary, knowledge transfer and domain adaptation in HAR encompass a range of strategies from traditional instance-based reweighting to advanced adversarial cross-modal frameworks. These methods are key to building HAR systems that generalize across diverse users, devices, and sensing modalities, reducing the dependence on large-scale labeled datasets for every deployment scenario.
+
+\section{Multimodal HAR and Representation Learning}
+
+Human Activity Recognition (HAR) benefits significantly from leveraging multiple sensing modalities, as each captures complementary aspects of human motion. For example, inertial measurement units (IMUs) provide precise local motion dynamics, while pose and video data capture holistic spatial context. Multimodal representation learning aims to integrate such diverse signals into a unified embedding space that supports robust recognition, even under missing modality or low-data scenarios.
+
+\paragraph{Contrastive and Multimodal Learning Approaches.}
+Recent advances in self-supervised and multimodal learning have demonstrated substantial performance gains in HAR through contrastive objectives. 
+Fritsch et al. \cite{fritsch2025mujo} introduce \textbf{MuJo} (Multimodal Joint Feature Space Learning), a framework that jointly learns from video, language, pose, and IMU data using a combination of contrastive and multitask learning. On the MM-Fit dataset, MuJo achieves a macro-F1 score of 0.992 using only 2\% of the training data, reaching 0.999 with full data, and maintains competitive generalization on unseen datasets. 
+Dixon et al. \cite{dixon2024modality} propose \textbf{Modality-Aware Contrastive Learning} (MACL), which addresses modality differences and inter-modality dependencies by treating each modality as a distinct view and maximizing similarity for the same activity across sensing types. 
+Choi et al. \cite{choi2023multimodal} tackle the issue of negative sample selection in multimodal HAR by introducing a hard negative sampling strategy that selects negatives based on their proximity in latent space, achieving state-of-the-art results on UTD-MHAD and MMAct benchmarks.
+
+\paragraph{CLIP-style Multimodal Representation Learning.}
+The success of CLIP \cite{radford2021learning}, which aligns image and text embeddings via large-scale contrastive learning, has inspired similar architectures in HAR. 
+Moon et al. \cite{moon2022imu2clip} present \textbf{IMU2CLIP}, a pretraining approach that projects IMU recordings into CLIP’s joint video-text embedding space, enabling applications such as motion-to-text retrieval and zero-shot activity classification. This method demonstrates that sensor data can be grounded in rich semantic spaces learned from web-scale multimodal corpora. 
+Zhou et al. \cite{zhou2024cross} extend audio-language contrastive pretraining to a setting where multiple complementary source modalities such as IMU + audio) align with a target modality, reporting 10.3\% to 35.0\% improvements over single-source baselines.
+
+\paragraph{Summary.}
+Multimodal contrastive learning for HAR can be broadly divided into \emph{HAR-specific multimodal representation learning},where all modalities are HAR-focused,and \emph{CLIP-style sensor grounding}, which connects sensor modalities to general-purpose multimodal embedding spaces. Both paradigms address data scarcity and domain shift by enabling robust cross-modal alignment, although they face challenges such as ensuring balanced representation across modalities, handling asynchronous data streams, and scaling pretraining to diverse activity sets.
+
+
+
+
+% =================== Benchmarks & Evaluation Protocols (placeholder) ===================
+\subsection{Benchmarks and Evaluation Protocols}
+\label{subsec:har-benchmarks}
+% NOTE: This subsection adds scaffolding for datasets and evaluation. 
+% It uses \toprule/\midrule/\bottomrule from booktabs. Ensure your preamble includes:
+% \usepackage{booktabs}
+%
+% If you prefer explicit TODOs, replace the bracketed prompts below as you fill things in.
+
+\begin{table*}[t]
+  \centering
+  \footnotesize
+  \caption{Common HAR datasets and protocols relevant to this thesis.}
+  \label{tab:har-datasets}
+  \begin{tabular}{l l l l l l l p{3.4cm}}
+    \toprule
+    \textbf{Dataset} & \textbf{Modality} & \textbf{Placement(s)} & \textbf{Subjects} & \textbf{\#Acts} & \textbf{Rate} & \textbf{Protocol} & \textbf{Notes} \\
+    \midrule
+    UTD-MHAD & IMU + skeleton & Wearable IMU & 8 & 21 & 50 Hz & LOSO & Paired IMU + pose; 21-class subset used in this thesis. \\
+    MM-Fit & IMU + pose/video & Wearable IMU & 21 & 11 & 100 Hz & Workout-based split & Exercise-focused dataset; used in this thesis. \\
+    NTU RGB+D & Pose (3D skeleton) & Multi-view cameras & 40 & 60 & 50/100 Hz & Cross-subject & Secondary pose-only dataset. \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+\paragraph*{Evaluation protocols \& pitfalls.}
+\begin{itemize}[leftmargin=1.2em]
+  \item \textbf{Windowing:} 2 s windows at 50 Hz (UTD/NTU; 100 samples) and 5 s windows at 100 Hz (MM-Fit; 500 samples), with stride 0.04--0.2 s; report mean$\pm$std over N=10 seeds for final evaluation.
+  \item \textbf{Splits:} LOSO for UTD/NTU and workout-based splits for MM-Fit; note any cross-device or cross-domain shifts explicitly.
+  \item \textbf{Leakage:} avoid overlapping windows from the same sequence split across train/test.
+  \item \textbf{Metrics:} prefer macro-F1 for imbalance; also accuracy, precision, recall, and class-wise F1.
+  \item \textbf{Synthetic realism:} report signal-level similarity (e.g., DTW or MMD) alongside downstream HAR utility.
+\end{itemize}
+% =======================================================================================
+
+\section{Comparisons: State-of-the-Art \& Methodological Gaps}
+
+In Human Activity Recognition (HAR), both Generative Adversarial Networks (GANs) and contrastive multimodal approaches have emerged as leading strategies to tackle data scarcity and domain shift. While both paradigms aim to enhance model generalization, they differ fundamentally in their objectives, mechanisms, and optimal application scenarios.
+
+\paragraph{GAN-based Domain Adaptation and Synthetic Data Augmentation.}
+GAN-based methods have been widely explored for generating realistic synthetic data and adapting models to new domains. Lupión et al.~\cite{lupion2024data} introduced conditional Wasserstein GANs (cWGANs) to generate accelerometry signals, showing that performance gains from synthetic data are especially significant in smaller datasets, though challenges remain in defining optimal architectures and robust quality metrics. Feng et al.~\cite{feng2023damun} proposed DAMUN, a domain-adaptive HAR network integrating a GAN-based radar-to-image translation module with multimodal feature fusion, effectively reducing inter-environment discrepancies through adversarial domain discrimination. Djemaa et al.~\cite{djemaa2024improved} leveraged controllable GANs to generate rare and abnormal activity classes for healthcare monitoring, employing Dynamic Time Warping (DTW) for realism assessment and transformer-based classification. For skeleton-based HAR, Shen et al.~\cite{shen2021imaginative} introduced the Imaginative GAN, which automatically generates synthetic motion sequences without manual hyperparameter tuning, enhancing recognition accuracy over classical augmentation.
+
+While these GAN-based approaches excel at enriching datasets, modeling rare events, and reducing domain gaps, they are prone to issues such as mode collapse, unstable training, and difficulty in ensuring semantic alignment across modalities. Moreover, most current works lack standardized evaluation protocols for measuring the utility of synthetic HAR data.
+
+\paragraph{CLIP-style Contrastive and Multimodal Representation Learning.}
+In parallel, contrastive learning and CLIP-inspired architectures have demonstrated strong performance in multimodal HAR by focusing on cross-modal embedding alignment rather than direct data generation. Fritsch et al.~\cite{fritsch2025mujo} proposed \textbf{MuJo}, a joint learning framework for video, pose, language, and IMU modalities that achieves near-perfect F1 scores on the MM-Fit dataset with only 2\% labeled data. Moon et al.~\cite{moon2022imu2clip} presented \textbf{IMU2CLIP}, which projects IMU data into a pre-trained video-text embedding space, enabling zero-shot classification and cross-modal retrieval. Dixon et al.~\cite{dixon2024modality} developed Modality-Aware Contrastive Learning (MACL) to explicitly model inter-modality relationships in sensor fusion, achieving superior cross-device and cross-user generalization. Zhou et al.~\cite{zhou2024cross} extended this paradigm by aligning audio and IMU signals with language embeddings, demonstrating significant improvements over single-modality baselines.
+
+These methods excel in low-label regimes, enable flexible integration of new modalities, and often generalize well across domains without retraining. However, they require large-scale paired datasets for pretraining and do not directly address data scarcity via sample generation.
+
+\paragraph{Head-to-Head Comparison.}
+GAN-based methods and contrastive multimodal approaches occupy complementary niches in HAR research. GANs are best suited for:
+\begin{itemize}
+    \item Synthetic data augmentation for scarce or imbalanced activity classes.
+    \item Domain adaptation by generating modality-specific or environment-specific samples.
+    \item Modeling rare, dangerous, or privacy-sensitive activities without real-world recording.
+\end{itemize}
+Contrastive methods, on the other hand, excel in:
+\begin{itemize}
+    \item Learning robust, transferable multimodal embeddings.
+    \item Achieving few-shot or zero-shot recognition without extensive retraining.
+    \item Leveraging large-scale multimodal corpora for downstream HAR tasks.
+\end{itemize}
+Given their complementary strengths, hybrid frameworks that integrate GAN-based sample generation with contrastive representation learning present a promising future direction for scalable, adaptable HAR systems.

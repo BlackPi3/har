@@ -299,8 +299,14 @@ class Trainer:
                     sim_feat = self.models[self.sim_fe_key](sim_acc)
                     d_input_real = real_feat
                     d_input_sim = sim_feat
-                d_real_logits = D(d_input_real, apply_grl=False)
-                d_sim_logits = D(d_input_sim, apply_grl=False)
+                if self.use_acgan:
+                    d_real_out = D(d_input_real, labels=labels, apply_grl=False)
+                    d_sim_out = D(d_input_sim, labels=labels, apply_grl=False)
+                    d_real_logits, _ = d_real_out
+                    d_sim_logits, _ = d_sim_out
+                else:
+                    d_real_logits = D(d_input_real, apply_grl=False)
+                    d_sim_logits = D(d_input_sim, apply_grl=False)
                 d_pred_real = (torch.sigmoid(d_real_logits) > 0.5).float()
                 d_pred_sim = (torch.sigmoid(d_sim_logits) < 0.5).float()
                 d_acc = float((d_pred_real.mean() + d_pred_sim.mean()) / 2)

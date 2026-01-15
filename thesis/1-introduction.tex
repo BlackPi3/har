@@ -1,0 +1,140 @@
+\chapter{Introduction}
+
+% Background and Context
+Human Activity Recognition (HAR) refers to the task of automatically identifying and classifying physical activities, such as swinging tennis bat, doing push-ups, or throwing a ball, using data collected from various sensors. These sensors include Inertial Measurement Units (IMUs), which typically consist of accelerometers and gyroscopes, as well as video cameras, depth sensors, and audio devices. HAR is central to enabling context-aware computing, wherein systems adapt to the user's activity and environment in real-time.
+
+Initially, HAR systems relied on hand-crafted features and classical machine learning techniques such as Decision Trees, Support Vector Machines, and Random Forests \cite{lara2012survey}. However, the advent of deep learning, particularly convolutional neural networks (CNNs) and recurrent neural networks (RNNs), has dramatically improved performance by enabling automatic feature extraction from raw sensor data \cite{hammerla2016deep, wang2019deep}. More recently, attention-based models and transformers have further enhanced sequential data modeling capabilities \cite{zeng2018understanding}.
+
+Key concepts in HAR include:
+\begin{itemize}
+    \item \textbf{Sensor Modalities:} Different types of sensors (e.g. IMU, RGB video, audio) used to capture activity data.
+    \item \textbf{Temporal Dynamics:} The importance of sequence and time dependency in accurate recognition of activities.
+    \item \textbf{Feature Extraction:} Techniques to transform raw sensor data into meaningful representations, by handcrafted or learned features.
+    \item \textbf{Multi-modal Data:} Combining multiple sensor sources to improve recognition accuracy and robustness.
+\end{itemize}
+
+HAR plays a significant role across diverse domains:
+\begin{itemize}
+    \item In healthcare, it facilitates patient monitoring, rehabilitation assessment, and fall detection \cite{yoshida2022data, sangeethalakshmi2023patient}.
+    \item In fitness and sports, HAR systems enable personalized training, movement analysis, and injury prevention.
+    \item In industry, HAR supports ergonomic risk detection, workplace safety automation, and productivity monitoring.
+\end{itemize}
+These applications highlight the social and economic value of accurate HAR systems and its growing integration into smart environments \cite{hammerla2016deep, wang2019deep}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Problem statement
+Despite progress in deep learning models, such as Convolutional Neural Networks (CNNs), Long Short-Term Memory networks (LSTMs), and transformers, Human Activity Recognition (HAR) remains bottlenecked by the scarcity of labeled data. Collecting and annotating real-world sensor data is both expensive and time-consuming, requiring diverse participants, varied environments, and meticulous labeling. Consequently, state-of-the-art HAR models often suffer from poor generalization to unseen users, novel activities, or differing sensor configurations, significantly constraining broader deployment in real-world settings.
+
+This limitation is especially critical given the growing reliance on HAR in domains like healthcare, industrial safety, and fitness monitoring. In healthcare, for example, poor model generalization can lead to misclassifications that compromise patient monitoring and fall detection systems \cite{yoshida2022data}. Similarly, in industrial settings, unreliable HAR can hinder automation aimed at ensuring worker safety and ergonomics.
+
+Addressing the data scarcity challenge is therefore pivotal not only for improving model accuracy and robustness, but also for enabling the reliable, scalable application of HAR technologies in everyday and high-stakes environments.
+
+Researchers have proposed several approaches to mitigate this challenge:
+
+\begin{itemize}
+    \item \textbf{Data augmentation}: Techniques such as noise injection, time-warping, rotation, and scaling artificially expand training datasets, though they may lack the semantic richness needed for complex activities \cite{um2017data}.
+    \item \textbf{Generative models}: GANs and diffusion models synthesize realistic sensor data, introducing richer variability in activity patterns \cite{li2024diffusionhar}.
+    \item \textbf{Cross-modal synthetic data generation}:
+    \begin{itemize}
+        \item \textit{Video-to-IMU pipelines} (e.g. IMUTube) generate synthetic IMU signals from large-scale video datasets, capturing realistic temporal and kinematic dynamics \cite{li2025imutube}.
+        \item \textit{Language-to-IMU pipelines} (e.g. IMUGPT) convert textual activity descriptions into motion data, producing diverse sensor signals with semantic variety \cite{li2025imutube}.
+    \end{itemize}
+\end{itemize}
+
+These advanced methods have demonstrated substantial improvements in HAR performance under limited data regimes, often surpassing traditional augmentation strategies. Nevertheless, challenges persist in ensuring temporal consistency, modality alignment, and generalizability of the generated data, areas that this thesis seeks to explore further.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Research Questions or Hypotheses
+Given the challenges of data scarcity in Human Activity Recognition (HAR) and the opportunities presented by multi-modal data, this thesis investigates several interrelated questions aimed at enhancing HAR performance, on well known datasets such as MMFit and UTD-MHAD \cite{stromback2020mm, chen2015utd}, through novel training pipelines.
+
+A primary objective of this work is to explore whether HAR performance can be improved by integrating a joint training framework that concurrently learns a sensor data regressor and an activity classifier. Specifically, this involves generating synthetic wrist accelerometer data from corresponding joint pose sequences, comprising the wrist, elbow, and shoulder, and utilizing both real and generated sensor data to inform the classifier. This approach differs from prior works where regressors and classifiers were trained separately, and we hypothesize that concurrent optimization may yield more robust activity representations.
+
+Another key investigation concerns the role of loss functions in this pipeline. We examine whether relying solely on the classification loss, without enforcing explicit alignment via a mean squared error (MSE) loss between real and synthetic sensor data, affects the classifier’s effectiveness. Understanding the contribution of each loss component is critical for designing efficient HAR models.
+
+Additionally, this thesis compares the performance of the joint multimodal framework against modality-specific classifiers trained exclusively on either sensor data or pose data. This comparison will clarify whether integrating synthetic sensor data provides a measurable advantage over specialized, uni-modal classifiers.
+
+We also investigate the potential of leveraging external pose datasets, such as Kinetics-400 and NTURGBD \cite{kay2017kinetics, shahroudy2016ntu}, to supplement the pose-to-sensor data generation process. By incorporating pose data from a broader range of activities, we aim to assess whether cross-dataset augmentation can further enhance IMU-based HAR performance, particularly under low-data regimes.
+
+Finally, we explore the introduction of an adversarial component into the training pipeline. This discriminator is tasked with distinguishing between real and synthetic sensor data, operating alongside the classifier and regressor in a concurrent training setup. In this setup we examine the impact of incorporating secondary datasets that contain activities overlapping with the primary dataset, evaluating whether this adversarial supervision further improves the robustness and accuracy of HAR models. We also analyze the adversarial learning process to answer how is the competition between generator and discriminator is helping the classification accuracy. 
+
+Through these inquiries, this thesis seeks to advance understanding of how synthetic data generation, multi-modal learning, loss function design, and adversarial training interact to address data scarcity and enhance the generalization capabilities of HAR systems.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Research Objectives
+
+The overarching objective of this thesis is to address the data scarcity problem in Human Activity Recognition (HAR) by leveraging multi-modal data and advanced training strategies. To this end, the specific objectives of this research are:
+
+\begin{enumerate}
+    \item To design and implement a unified training pipeline that concurrently trains a sensor data regressor and an activity classifier, integrating real and synthetic sensor data derived from joint pose sequences from MMFit and UTD-MHAD datasets.
+    
+    \item To investigate the effect of different loss function strategies within this pipeline, specifically evaluating the impact of incorporating mean squared error (MSE) loss alongside classification loss.
+    
+    \item To compare the performance of the proposed multi-modal framework against modality-specific classifiers trained exclusively on either sensor data or pose data.
+    
+    \item To augment the pose-to-sensor data generation process with external pose datasets, such as Kinetics-400, and evaluate their contribution to improving IMU-based HAR performance.
+    
+    \item To integrate an adversarial discriminator into the training pipeline to distinguish between real and synthetic sensor data, and assess its impact on model robustness and accuracy. For this, we will make use of a secondary dataset containing activities that overlap with the primary dataset
+\end{enumerate}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Scope and Limitations
+
+This thesis focuses on addressing the data scarcity problem in Human Activity Recognition (HAR) by leveraging multi-modal data, specifically wrist accelerometer data and upper-limb joint pose data (wrist, elbow, shoulder). The study primarily utilizes publicly available datasets such as MMFit and UTD-MHAD, with supplementary pose data sourced from larger datasets like Kinetics-400 where applicable.
+
+The research explores the design and evaluation of a joint training pipeline that concurrently trains a sensor data regressor and an activity classifier. Additional components such as adversarial discriminators and cross-modal synthetic data generation are investigated to enhance HAR performance. Experiments focus on evaluating classification accuracy, robustness to inter-subject variability, and the impact of various loss functions under limited data scenarios.
+
+However, this research is subject to several limitations. The work is constrained to the selected datasets and may not generalize across all types of HAR data or sensor configurations, such as gyroscope or magnetometer readings. The experiments are conducted in an offline setting without addressing real-time inference constraints or optimization for deployment on resource-constrained devices. The synthetic data generation is activity-specific and may not generalize well to activities not represented in the training datasets. Furthermore, the scope is limited to upper-limb joint poses; comprehensive modeling of full-body activities remains outside the current research focus.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Thesis Structure
+
+The remainder of this thesis is organized as follows:
+
+\begin{itemize}
+    \item \textbf{Chapter 2: Related Works} \\
+    % This chapter reviews relevant literature on Human Activity Recognition (HAR), with a particular focus on data scarcity challenges, data augmentation methods, multimodal learning approaches, and synthetic data generation techniques. It also discusses previous work on joint training pipelines and adversarial learning within the context of HAR.
+
+    \item \textbf{Chapter 3: Method} \\
+    % This chapter presents the proposed framework for enhancing HAR performance under data-scarce conditions. It details the architecture of the joint training pipeline, including the sensor data regressor, classifier, and adversarial discriminator. The chapter also describes the loss functions employed, the datasets used, and the overall experimental design.
+
+    \item \textbf{Chapter 4: Experiments} \\
+    % This chapter describes the experimental protocols, including data preprocessing, training configurations, and evaluation metrics. It also provides baseline models and modality-specific classifiers used for comparison.
+
+    \item \textbf{Chapter 5: Results and Discussion} \\
+    % This chapter presents the experimental results, analyzing the impact of the joint training approach, loss function strategies, adversarial training, and cross-modal data augmentation. The findings are discussed in the context of the research questions and hypotheses outlined earlier.
+
+    \item \textbf{Chapter 6: Conclusion and Future Work} \\
+    % This chapter summarizes the key contributions and findings of the thesis. It reflects on the limitations of the current study and proposes potential directions for future research to further advance the field of HAR under data-scarcity constraints.
+\end{itemize}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% In this thesis, we introduce a novel adversarial learning approach to enhance wearable sensor-based Human Activity Recognition (HAR) by leveraging synthetic sensor data generation. Specifically, we propose two approaches, with the core innovation being the introduction of an adversarial framework that significantly outperforms a standard end-to-end pipeline without a discriminator.
+
+% The first approach involves a pose-to-sensor network that generates IMU sensor data directly from 3D skeleton pose sequences. Unlike traditional methods, this model jointly trains the pose-to-sensor network and the HAR classifier. The pose-to-sensor network is optimized to minimize both the reconstruction loss between the ground-truth sensor data and the generated sensor data, as well as the classification loss of the HAR classifier using both real and synthetic data. This simultaneous training process allows the generated synthetic sensor data to closely mimic real sensor data while directly improving the performance of the activity classifier. While this end-to-end pipeline shows performance gains by leveraging the relationship between sensor data generation and activity recognition, it remains limited in its ability to fully capture the complexity of real-world sensor distributions.
+
+% To address these limitations, we introduce an adversarial learning scheme in the second approach, which significantly enhances the generation of realistic sensor data. This method incorporates a discriminator network into the architecture, which distinguishes between real and generated sensor data.
+
+% To evaluate the proposed methods, we evaluate the proposed method on the well-known open-access benchmark datasets, MM-Fit \cite{stromback2020mm}, UTD-MHAD \cite{chen2015utd}, NTURGB+D \cite{shahroudy2016ntu} and NTURGB+D 120 \cite{liu2019ntu} which provide multimodal data including the skeleton, IMU, and label data, except for NTURGB+D which does not provide IMU data, enabling the synthesis of realistic and diverse training samples. Experimental results demonstrate that the proposed framework provides better performance improvement in terms of accuracy and macro F1 score compared to existing methods, including IMUTube \cite{kwon2020imutube}, Chen et al. \cite{chen2015utd}, and Memmesheimer et al. \cite{memmesheimer2020gimme}, and baseline which trains the pose-to-sensor network model without considering the classifier. 
+
+% The contributions of this thesis build on a previous publication \cite{zolfaghari2024sensor}, where we developed a pose-to-sensor network for generating synthetic sensor data. This thesis advances that work by integrating adversarial learning, resulting in improved synthetic data realism and better activity classification performance.
+% The main contributions of this thesis are summarized as follows:
+
+% \begin{itemize}
+%     \item We propose an adversarial learning framework for Human Activity Recognition (HAR) that enhances the performance of an activity classifier by integrating a discriminator network. The discriminator distinguishes between real accelerometer data from the primary dataset and synthetic accelerometer data generated by a pose-to-sensor network. This adversarial scheme forces the generator to produce high-quality sensor data, leading to improved classification accuracy.
+%     \item Unlike conventional end-to-end pipelines, the adversarial approach leverages a pre-trained pose-to-sensor network to initialize the generator. This network is trained on the primary dataset to generate realistic sensor data from 3D skeletal poses. The inclusion of a discriminator significantly boosts the quality of the generated data and enables the feature extractor to learn more discriminative features, resulting in better generalization and robustness in activity recognition.
+%     \item The adversarial scheme is compared against a baseline model that uses the same network architecture without the discriminator. The results show that the adversarial model achieves superior performance in terms of activity classification accuracy.
+%     \item Extensive evaluations are conducted using the UTD-MHAD \cite{chen2015utd}, NTU-RGB+D \cite{shahroudy2016ntu}, and MM-Fit \cite{liu2019ntu} datasets, demonstrating consistent improvements in HAR performance over the baseline model.
+% \end{itemize}
+
+
+% The remainder of this thesis is organized as follows: \cref{chap:relatedworks} reviews related work improving HAR performance by generating IMU sensor data augmentation. \cref{chap:method} describes the methodology, including the data synthesis process and the end-to-end training pipeline. \cref{chap:experiments} presents the experimental setup, results, and comparative analysis. Finally, \cref{chap:conclusion} concludes the paper with a summary of our findings and a discussion of potential future work.
+
+
+% Human Activity Recognition (HAR) has become a fundamental technology across various domains, including personal fitness, healthcare, and industrial automation. The widespread adoption of smart wearable devices, such as smartwatches and fitness trackers, has revolutionized the ability to monitor physical activities in real-time. These devices, equipped with sophisticated sensors like Inertial Measurement Units (IMUs), generate vast amounts of data that offer valuable insights into user behavior. When effectively analyzed, this data can be leveraged to provide tailored health and fitness recommendations, enhancing the user’s ability to achieve their wellness and performance goals. Despite this potential, the challenge remains in harnessing the full capability of deep learning models due to the scarcity of labeled data required for robust activity classification. This underscores the importance of augmenting existing sensor data to improve the accuracy and reliability of HAR systems in real-world applications.
+
+% Beyond fitness, the implications of precise HAR are profound, extending into elderly care for fall detection \cite{yoshida2022data}, patient monitoring in healthcare \cite{sangeethalakshmi2023patient}, and even worker safety in manufacturing line \cite{suh2023worker}. Accurate activity recognition facilitates the development of intelligent systems that are responsive to human needs, enhancing safety, productivity, and overall quality of life.
+
+% Despite its vast potential, Human Activity Recognition (HAR) faces significant challenges, primarily due to the limited availability of labeled sensor data. Unlike computer vision tasks, where large annotated datasets are readily available, HAR struggles with a severe bottleneck in obtaining the extensive annotated sensor data needed to train accurate and generalizable models. The process of manually labeling sensor data for diverse and nuanced human activities is not only time-consuming and labor-intensive but also prohibitively expensive, particularly as the complexity of activities increases. Moreover, many HAR systems rely on deploying sensors across multiple body parts to capture detailed motion information, further complicating the data collection process and increasing both the logistical burden and cost of annotation. These challenges underscore the importance of developing data-efficient methods, such as adversarial data augmentation, to mitigate the reliance on large labeled datasets while maintaining or even enhancing recognition accuracy.
+
+% To address these challenges, researchers have explored alternative avenues. Data augmentation stands as a powerful technique to combat the dearth of labeled data, enhancing the diversity and volume of training datasets, and thereby improving the performance of machine learning models. In scenarios where data is scarce or expensive to obtain, augmentation has proven to be effective, particularly in image and speech recognition tasks. In particular, recently, several sensor data generation methods from video sequences have emerged in the HAR community. Existing works \cite{kwon2020imutube, fortes2021translating, santhalingam2023synthetic} estimate 2D or 3D joint positions from videos and infer joint orientations to compute inertial measurement unit (IMU) data. While these methods improved the spatial accuracy of generated sensor data and enhanced the performance of wearable sensor-based HAR, they still struggle with capturing the intricacies of sensor characteristics and may not fully exploit the potential for cross-modality transfer. 
