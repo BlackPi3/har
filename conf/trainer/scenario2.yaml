@@ -72,3 +72,9 @@ adversarial:
     # NOTE: For WGAN, set use_grl=false and use alternating optimization (not yet implemented)
     loss_type: bce
     lambda_gp: 10.0       # Gradient penalty coefficient (only for WGAN)
+    # ACGAN: class-conditional discriminator with auxiliary classifier
+    # When enabled, D receives class labels and predicts both real/fake and activity class
+    # This encourages class-specific realism (e.g., "real jumping" vs "fake jumping")
+    use_acgan: false      # Enable ACGAN-style class conditioning
+    aux_weight: 1.0       # Weight for auxiliary classification loss
+    embed_dim: 32         # Dimension of class label embedding

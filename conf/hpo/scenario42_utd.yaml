@@ -43,6 +43,10 @@ hydra:
       # Signal discriminator architecture (1D CNN for temporal data)
       trainer.adversarial.discriminator.hidden_channels: choice([32, 64], [32, 64, 128], [64, 128])
 
+      # ACGAN: class-conditional discrimination (search whether it helps)
+      trainer.adversarial.discriminator.use_acgan: choice(false, true)
+      trainer.adversarial.discriminator.aux_weight: choice(0.5, 1.0, 2.0)
+
       data.stride_seconds: choice(0.04) # TODO widen later
       data.batch_size: choice(16) # TODO widen later
 

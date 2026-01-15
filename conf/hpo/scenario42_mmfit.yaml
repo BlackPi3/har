@@ -44,6 +44,10 @@ hydra:
       # Larger capacity for MM-Fit's longer windows (500 samples)
       trainer.adversarial.discriminator.hidden_channels: choice([32, 64, 128], [64, 128, 256], [64, 128])
 
+      # ACGAN: class-conditional discrimination (search whether it helps)
+      trainer.adversarial.discriminator.use_acgan: choice(false, true)
+      trainer.adversarial.discriminator.aux_weight: choice(0.5, 1.0, 2.0)
+
       data.stride_seconds: choice(0.1, 0.2)
       data.batch_size: choice(32, 64)
 

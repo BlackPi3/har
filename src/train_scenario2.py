@@ -28,8 +28,13 @@ except Exception:  # pragma: no cover - fallback path
 # MMD + Contrastive losses for Scenario 5
 from src.models.losses import MMDLoss, ContrastiveLoss
 
-# WGAN-GP for Scenario 42
-from src.models.discriminator import compute_gradient_penalty, WGANLoss
+# WGAN-GP for Scenario 42, ACGAN support
+from src.models.discriminator import (
+    compute_gradient_penalty,
+    compute_gradient_penalty_acgan,
+    WGANLoss,
+    ACSignalDiscriminator,
+)
 
 def _to_bool(value):
     """
@@ -182,11 +187,21 @@ class Trainer:
         # Staged training: pretrain with MSE before adversarial
         self.adv_pretrain_epochs = int(getattr(adv_cfg, "pretrain_epochs", 0)) if adv_cfg else 0
 
+        # ACGAN: class-conditional discriminator with auxiliary classifier
+        self.use_acgan = _to_bool(getattr(disc_cfg, "use_acgan", False)) if disc_cfg else False
+        self.acgan_aux_weight = float(getattr(disc_cfg, "aux_weight", 1.0)) if disc_cfg else 1.0
+
         if self.use_adversarial:
             if "discriminator" not in self.models:
                 raise ValueError(
                     "adversarial.enabled=true but 'discriminator' model is missing. "
                     "Ensure experiments.run_trial builds it."
+                )
+            # Validate ACGAN discriminator type
+            if self.use_acgan and not isinstance(self.models["discriminator"], ACSignalDiscriminator):
+                raise ValueError(
+                    "use_acgan=true but discriminator is not ACSignalDiscriminator. "
+                    "Ensure experiments.run_trial builds ACSignalDiscriminator when use_acgan is enabled."
                 )
             # Loss function based on config
             if self.adv_loss_type == "wgan":
@@ -196,6 +211,9 @@ class Trainer:
                 # BCE with logits for discriminator (numerically stable)
                 self.bce = torch.nn.BCEWithLogitsLoss()
                 self.wgan_loss = None
+            # CE loss for ACGAN auxiliary classifier (no label smoothing for aux)
+            if self.use_acgan:
+                self.aux_ce = torch.nn.CrossEntropyLoss()
             # Track total epochs for lambda scheduling (set in fit())
             self._total_epochs = None
             # Track current epoch for pretrain logic
@@ -336,8 +354,10 @@ class Trainer:
 
         # Adversarial loss (Scenario 4/42): discriminator classifies real vs simulated
         adv_loss = zero
+        aux_loss = zero  # ACGAN auxiliary classifier loss
         d_acc = 0.0
         feat_dist = 0.0
+        aux_acc = 0.0  # ACGAN auxiliary classifier accuracy
 
         # Check if we're in pretrain phase (skip adversarial)
         in_pretrain = (
@@ -364,57 +384,101 @@ class Trainer:
             # Check if using alternating optimization (for WGAN)
             use_alternating = getattr(self, 'use_alternating', False)
 
+            # Helper to unpack discriminator output (handles both regular and ACGAN)
+            def _unpack_d_output(d_out):
+                """Unpack discriminator output: (adv_logits,) or (adv_logits, aux_logits)."""
+                if isinstance(d_out, tuple):
+                    return d_out[0], d_out[1]  # ACGAN: (adv, aux)
+                return d_out, None  # Regular: just adv logits
+
             if use_alternating and self.adv_loss_type == "wgan":
                 # WGAN with alternating D/G updates (proper approach for signal-level)
                 # This is called from _run_epoch which handles the alternating logic
                 # Here we just compute the combined loss for logging purposes
-                # The actual D and G losses are computed separately in _run_epoch
 
                 # Forward pass without GRL
-                d_real_logits = D(d_input_real, apply_grl=False)
-                d_sim_logits = D(d_input_sim, apply_grl=False)
+                if self.use_acgan:
+                    d_real_out = D(d_input_real, labels=labels, apply_grl=False)
+                    d_sim_out = D(d_input_sim, labels=labels, apply_grl=False)
+                else:
+                    d_real_out = D(d_input_real, apply_grl=False)
+                    d_sim_out = D(d_input_sim, apply_grl=False)
 
-                # For combined loss (logging only), use standard WGAN formulation
-                # D loss = D(fake) - D(real) + GP
-                # G loss = -D(fake)
+                d_real_logits, aux_real_logits = _unpack_d_output(d_real_out)
+                d_sim_logits, aux_sim_logits = _unpack_d_output(d_sim_out)
+
                 # Combined for logging: D(real) - D(fake) (Wasserstein distance estimate)
                 adv_loss = d_real_logits.mean() - d_sim_logits.mean()
+
+                # ACGAN auxiliary loss
+                if self.use_acgan and aux_real_logits is not None:
+                    aux_loss = self.aux_ce(aux_real_logits, labels) + self.aux_ce(aux_sim_logits, labels)
 
             elif self.adv_use_grl:
                 # GRL mode (for BCE + feature-level, scenario 4)
                 current_lambda = self._current_grl_lambda if hasattr(self, '_current_grl_lambda') else self.adv_grl_lambda
 
                 # Forward pass through discriminator with GRL
-                d_real_logits = D(d_input_real, apply_grl=True, grl_lambda=current_lambda)
-                d_sim_logits = D(d_input_sim, apply_grl=True, grl_lambda=current_lambda)
+                if self.use_acgan:
+                    d_real_out = D(d_input_real, labels=labels, apply_grl=True, grl_lambda=current_lambda)
+                    d_sim_out = D(d_input_sim, labels=labels, apply_grl=True, grl_lambda=current_lambda)
+                else:
+                    d_real_out = D(d_input_real, apply_grl=True, grl_lambda=current_lambda)
+                    d_sim_out = D(d_input_sim, apply_grl=True, grl_lambda=current_lambda)
+
+                d_real_logits, aux_real_logits = _unpack_d_output(d_real_out)
+                d_sim_logits, aux_sim_logits = _unpack_d_output(d_sim_out)
 
                 if self.adv_loss_type == "wgan":
                     # WGAN with GRL (unconventional but supported)
-                    gp = compute_gradient_penalty(
-                        D, d_input_real.detach(), d_input_sim.detach(),
-                        self.device, lambda_gp=self.adv_lambda_gp
-                    )
+                    if self.use_acgan:
+                        gp = compute_gradient_penalty_acgan(
+                            D, d_input_real.detach(), d_input_sim.detach(),
+                            labels, self.device, lambda_gp=self.adv_lambda_gp
+                        )
+                    else:
+                        gp = compute_gradient_penalty(
+                            D, d_input_real.detach(), d_input_sim.detach(),
+                            self.device, lambda_gp=self.adv_lambda_gp
+                        )
                     adv_loss = self.wgan_loss.combined_loss_with_grl(d_real_logits, d_sim_logits, gp)
                 else:
                     # BCE loss (vanilla GAN) - standard for scenario 4
                     if hasattr(D, 'get_smooth_labels'):
-                        real_labels = D.get_smooth_labels(batch_size, real=True, device=self.device)
-                        sim_labels = D.get_smooth_labels(batch_size, real=False, device=self.device)
+                        real_labels_d = D.get_smooth_labels(batch_size, real=True, device=self.device)
+                        sim_labels_d = D.get_smooth_labels(batch_size, real=False, device=self.device)
                     else:
-                        real_labels = torch.ones(batch_size, 1, device=self.device)
-                        sim_labels = torch.zeros(batch_size, 1, device=self.device)
-                    adv_loss = self.bce(d_real_logits, real_labels) + self.bce(d_sim_logits, sim_labels)
+                        real_labels_d = torch.ones(batch_size, 1, device=self.device)
+                        sim_labels_d = torch.zeros(batch_size, 1, device=self.device)
+                    adv_loss = self.bce(d_real_logits, real_labels_d) + self.bce(d_sim_logits, sim_labels_d)
+
+                # ACGAN auxiliary loss
+                if self.use_acgan and aux_real_logits is not None:
+                    aux_loss = self.aux_ce(aux_real_logits, labels) + self.aux_ce(aux_sim_logits, labels)
+
             else:
                 # No GRL, no alternating - just forward pass
-                d_real_logits = D(d_input_real, apply_grl=False)
-                d_sim_logits = D(d_input_sim, apply_grl=False)
-                if hasattr(D, 'get_smooth_labels'):
-                    real_labels = D.get_smooth_labels(batch_size, real=True, device=self.device)
-                    sim_labels = D.get_smooth_labels(batch_size, real=False, device=self.device)
+                if self.use_acgan:
+                    d_real_out = D(d_input_real, labels=labels, apply_grl=False)
+                    d_sim_out = D(d_input_sim, labels=labels, apply_grl=False)
                 else:
-                    real_labels = torch.ones(batch_size, 1, device=self.device)
-                    sim_labels = torch.zeros(batch_size, 1, device=self.device)
-                adv_loss = self.bce(d_real_logits, real_labels) + self.bce(d_sim_logits, sim_labels)
+                    d_real_out = D(d_input_real, apply_grl=False)
+                    d_sim_out = D(d_input_sim, apply_grl=False)
+
+                d_real_logits, aux_real_logits = _unpack_d_output(d_real_out)
+                d_sim_logits, aux_sim_logits = _unpack_d_output(d_sim_out)
+
+                if hasattr(D, 'get_smooth_labels'):
+                    real_labels_d = D.get_smooth_labels(batch_size, real=True, device=self.device)
+                    sim_labels_d = D.get_smooth_labels(batch_size, real=False, device=self.device)
+                else:
+                    real_labels_d = torch.ones(batch_size, 1, device=self.device)
+                    sim_labels_d = torch.zeros(batch_size, 1, device=self.device)
+                adv_loss = self.bce(d_real_logits, real_labels_d) + self.bce(d_sim_logits, sim_labels_d)
+
+                # ACGAN auxiliary loss
+                if self.use_acgan and aux_real_logits is not None:
+                    aux_loss = self.aux_ce(aux_real_logits, labels) + self.aux_ce(aux_sim_logits, labels)
 
             # --- Adversarial diagnostics ---
             with torch.no_grad():
@@ -434,6 +498,13 @@ class Trainer:
                     feat_dist = float(torch.norm(real_flat.mean(0) - sim_flat.mean(0), p=2).cpu())
                 else:
                     feat_dist = float(torch.norm(real_feat.mean(0) - sim_feat.mean(0), p=2).cpu())
+
+                # ACGAN auxiliary classifier accuracy
+                if self.use_acgan and aux_real_logits is not None:
+                    aux_pred_real = aux_real_logits.argmax(dim=1)
+                    aux_pred_sim = aux_sim_logits.argmax(dim=1)
+                    aux_acc = float(((aux_pred_real == labels).float().mean() +
+                                    (aux_pred_sim == labels).float().mean()) / 2)
 
         # MMD loss (Scenario 5): domain alignment without adversarial
         mmd_loss = zero
@@ -469,6 +540,9 @@ class Trainer:
         # Adversarial loss with its own weight
         if self.use_adversarial:
             total = total + self.adv_weight * adv_loss
+        # ACGAN auxiliary classifier loss
+        if self.use_acgan:
+            total = total + self.acgan_aux_weight * aux_loss
         # MMD + Contrastive losses (Scenario 5)
         if self.use_mmd:
             total = total + self.mmd_weight * mmd_loss
@@ -487,6 +561,8 @@ class Trainer:
             float(mmd_loss.detach().cpu()) if isinstance(mmd_loss, torch.Tensor) else 0.0,
             float(contrastive_loss.detach().cpu()) if isinstance(contrastive_loss, torch.Tensor) else 0.0,
             sil_score,
+            float(aux_loss.detach().cpu()) if isinstance(aux_loss, torch.Tensor) else 0.0,
+            aux_acc,
             logits_real,
             labels,
         )
@@ -532,6 +608,12 @@ class Trainer:
         D = self.models["discriminator"]
         zero = torch.zeros((), device=self.device, dtype=pose.dtype)
 
+        # Helper to unpack discriminator output (handles both regular and ACGAN)
+        def _unpack_d_output(d_out):
+            if isinstance(d_out, tuple):
+                return d_out[0], d_out[1]  # ACGAN: (adv, aux)
+            return d_out, None  # Regular: just adv logits
+
         # ============ D UPDATE (n_critic times) ============
         for _ in range(self.adv_n_critic):
             # Forward pass through generator (no grad needed for D update)
@@ -549,15 +631,33 @@ class Trainer:
                 d_input_sim = sim_feat_d
 
             # D forward (no GRL - we're doing alternating)
-            d_real = D(d_input_real, apply_grl=False)
-            d_fake = D(d_input_sim.detach(), apply_grl=False)  # detach to not update G
+            if self.use_acgan:
+                d_real_out = D(d_input_real, labels=labels, apply_grl=False)
+                d_fake_out = D(d_input_sim.detach(), labels=labels, apply_grl=False)
+                d_real, aux_real = _unpack_d_output(d_real_out)
+                d_fake, aux_fake = _unpack_d_output(d_fake_out)
+            else:
+                d_real = D(d_input_real, apply_grl=False)
+                d_fake = D(d_input_sim.detach(), apply_grl=False)
+                aux_real, aux_fake = None, None
 
             # WGAN-GP: D loss = D(fake) - D(real) + GP
-            gp = compute_gradient_penalty(
-                D, d_input_real, d_input_sim.detach(),
-                self.device, lambda_gp=self.adv_lambda_gp
-            )
+            if self.use_acgan:
+                gp = compute_gradient_penalty_acgan(
+                    D, d_input_real, d_input_sim.detach(),
+                    labels, self.device, lambda_gp=self.adv_lambda_gp
+                )
+            else:
+                gp = compute_gradient_penalty(
+                    D, d_input_real, d_input_sim.detach(),
+                    self.device, lambda_gp=self.adv_lambda_gp
+                )
             d_loss = self.wgan_loss.discriminator_loss(d_real, d_fake, gp)
+
+            # ACGAN: add auxiliary classification loss to D
+            if self.use_acgan and aux_real is not None:
+                d_aux_loss = self.aux_ce(aux_real, labels) + self.aux_ce(aux_fake, labels)
+                d_loss = d_loss + self.acgan_aux_weight * d_aux_loss
 
             # Update only D params
             self.optimizer.zero_grad()
@@ -613,8 +713,19 @@ class Trainer:
         else:
             d_input_sim_g = sim_feat
 
-        d_fake_for_g = D(d_input_sim_g, apply_grl=False)  # no detach - grad flows to G
+        if self.use_acgan:
+            d_fake_out_g = D(d_input_sim_g, labels=labels, apply_grl=False)
+            d_fake_for_g, aux_fake_g = _unpack_d_output(d_fake_out_g)
+        else:
+            d_fake_for_g = D(d_input_sim_g, apply_grl=False)
+            aux_fake_g = None
+
         g_adv_loss = self.wgan_loss.generator_loss(d_fake_for_g)
+
+        # ACGAN auxiliary loss for G (G wants sim samples to be correctly classified)
+        aux_loss = zero
+        if self.use_acgan and aux_fake_g is not None:
+            aux_loss = self.aux_ce(aux_fake_g, labels)
 
         # Total G loss
         g_total = zero
@@ -628,6 +739,9 @@ class Trainer:
             g_total = g_total + self.secondary_loss_weight * sec_act_loss
         # Add G adversarial loss
         g_total = g_total + self.adv_weight * g_adv_loss
+        # Add ACGAN auxiliary loss for G
+        if self.use_acgan:
+            g_total = g_total + self.acgan_aux_weight * aux_loss
 
         # Update only G params (non-D)
         self.optimizer.zero_grad()
@@ -645,10 +759,19 @@ class Trainer:
         self.optimizer.step()
 
         # ============ DIAGNOSTICS ============
+        aux_acc = 0.0
         with torch.no_grad():
             # D accuracy
-            d_real_diag = D(d_input_real if not self.adv_signal_input else acc, apply_grl=False)
-            d_fake_diag = D(d_input_sim_g.detach(), apply_grl=False)
+            if self.use_acgan:
+                d_real_diag_out = D(d_input_real if not self.adv_signal_input else acc, labels=labels, apply_grl=False)
+                d_fake_diag_out = D(d_input_sim_g.detach(), labels=labels, apply_grl=False)
+                d_real_diag, aux_real_diag = _unpack_d_output(d_real_diag_out)
+                d_fake_diag, aux_fake_diag = _unpack_d_output(d_fake_diag_out)
+            else:
+                d_real_diag = D(d_input_real if not self.adv_signal_input else acc, apply_grl=False)
+                d_fake_diag = D(d_input_sim_g.detach(), apply_grl=False)
+                aux_real_diag, aux_fake_diag = None, None
+
             d_pred_real = (d_real_diag > 0).float()
             d_pred_sim = (d_fake_diag < 0).float()
             d_acc = float((d_pred_real.mean() + d_pred_sim.mean()) / 2)
@@ -665,6 +788,13 @@ class Trainer:
             # Wasserstein distance estimate for logging
             adv_loss_val = float((d_real_diag.mean() - d_fake_diag.mean()).cpu())
 
+            # ACGAN auxiliary classifier accuracy
+            if self.use_acgan and aux_real_diag is not None:
+                aux_pred_real = aux_real_diag.argmax(dim=1)
+                aux_pred_sim = aux_fake_diag.argmax(dim=1)
+                aux_acc = float(((aux_pred_real == labels).float().mean() +
+                                (aux_pred_sim == labels).float().mean()) / 2)
+
         return (
             g_total,
             float(mse.detach().cpu()),
@@ -677,6 +807,8 @@ class Trainer:
             0.0,  # mmd_loss
             0.0,  # contrastive_loss
             0.0,  # sil_score
+            float(aux_loss.detach().cpu()) if isinstance(aux_loss, torch.Tensor) else 0.0,
+            aux_acc,
             logits_real,
             labels,
         )
@@ -707,6 +839,7 @@ class Trainer:
         total, mse_acc, sim_acc, act_acc, sec_acc, adv_acc = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
         d_acc_acc, feat_dist_acc = 0.0, 0.0  # Adversarial diagnostics
         mmd_acc, con_acc, sil_acc = 0.0, 0.0, 0.0  # MMD + Contrastive diagnostics
+        aux_loss_acc, aux_acc_acc = 0.0, 0.0  # ACGAN diagnostics
         preds, trues = [], []
         with torch.set_grad_enabled(is_train):
             for batch in self.dl[split]:
@@ -720,14 +853,14 @@ class Trainer:
                 if use_alternating:
                     # Use alternating D/G updates for WGAN
                     (total_loss, mse_l, sim_l, act_l, sec_l, adv_l, d_acc_l, feat_dist_l,
-                     mmd_l, con_l, sil_l, logits, labels) = self._alternating_step(
+                     mmd_l, con_l, sil_l, aux_l, aux_acc_l, logits, labels) = self._alternating_step(
                         batch, sec_batch
                     )
                     # No separate backward/step needed - done in _alternating_step
                 else:
                     # Standard training (GRL or non-adversarial)
                     (total_loss, mse_l, sim_l, act_l, sec_l, adv_l, d_acc_l, feat_dist_l,
-                     mmd_l, con_l, sil_l, logits, labels) = self._forward_losses(
+                     mmd_l, con_l, sil_l, aux_l, aux_acc_l, logits, labels) = self._forward_losses(
                         batch, sec_batch, eval_only=eval_only
                     )
                     if is_train:
@@ -751,6 +884,8 @@ class Trainer:
                 mmd_acc += mmd_l
                 con_acc += con_l
                 sil_acc += sil_l
+                aux_loss_acc += aux_l
+                aux_acc_acc += aux_acc_l
                 p = torch.argmax(logits, dim=1).cpu().numpy()
                 preds.extend(p)
                 trues.extend(labels.cpu().numpy())
@@ -767,6 +902,8 @@ class Trainer:
         mmd_avg = mmd_acc / denom
         con_avg = con_acc / denom
         sil_avg = sil_acc / denom
+        aux_loss_avg = aux_loss_acc / denom
+        aux_acc_avg = aux_acc_acc / denom
 
         if trues:
             trues_arr = np.asarray(trues)
@@ -777,7 +914,7 @@ class Trainer:
             acc = 0.0
             f1 = 0.0
 
-        return avg_loss, f1, mse_avg, sim_avg, act_avg, sec_avg, adv_avg, d_acc_avg, feat_dist_avg, mmd_avg, con_avg, sil_avg, acc
+        return avg_loss, f1, mse_avg, sim_avg, act_avg, sec_avg, adv_avg, d_acc_avg, feat_dist_avg, mmd_avg, con_avg, sil_avg, aux_loss_avg, aux_acc_avg, acc
 
     def fit(self, epochs):
         valid_metrics = (
@@ -786,6 +923,7 @@ class Trainer:
             "train_act_loss", "val_act_loss", "train_sec_loss",
             "train_adv_loss", "train_d_acc", "val_d_acc", "train_feat_dist", "train_signal_dist",
             "train_mmd_loss", "train_contrastive_loss", "train_silhouette",
+            "train_aux_loss", "train_aux_acc",  # ACGAN metrics
         )
         if self.objective_metric not in valid_metrics:
             raise KeyError(
@@ -811,6 +949,7 @@ class Trainer:
             "train_feat_dist": [], "train_signal_dist": [],
             "train_grl_lambda": [],
             "train_mmd_loss": [], "train_contrastive_loss": [], "train_silhouette": [],
+            "train_aux_loss": [], "train_aux_acc": [],  # ACGAN metrics
         }
 
         # Print training mode
@@ -864,16 +1003,16 @@ class Trainer:
                     self._current_grl_lambda = self.adv_grl_lambda
 
             (tr_loss, tr_f1, tr_mse, tr_sim, tr_act, tr_sec, tr_adv, tr_d_acc,
-             tr_feat_dist, tr_mmd, tr_con, tr_sil, tr_acc) = self._run_epoch("train")
+             tr_feat_dist, tr_mmd, tr_con, tr_sil, tr_aux_loss, tr_aux_acc, tr_acc) = self._run_epoch("train")
             if self.skip_val:
                 (val_loss, val_f1, val_mse, val_sim, val_act, val_sec, val_adv, val_d_acc,
-                 val_feat_dist, val_mmd, val_con, val_sil, val_acc) = (
+                 val_feat_dist, val_mmd, val_con, val_sil, val_aux_loss, val_aux_acc, val_acc) = (
                     tr_loss, tr_f1, tr_mse, tr_sim, tr_act, tr_sec, tr_adv, tr_d_acc,
-                    tr_feat_dist, tr_mmd, tr_con, tr_sil, tr_acc
+                    tr_feat_dist, tr_mmd, tr_con, tr_sil, tr_aux_loss, tr_aux_acc, tr_acc
                 )
             else:
                 (val_loss, val_f1, val_mse, val_sim, val_act, val_sec, val_adv, val_d_acc,
-                 val_feat_dist, val_mmd, val_con, val_sil, val_acc) = self._run_epoch("val")
+                 val_feat_dist, val_mmd, val_con, val_sil, val_aux_loss, val_aux_acc, val_acc) = self._run_epoch("val")
             current_lr = self.optimizer.param_groups[0]["lr"]
 
             history["train_loss"].append(tr_loss)
@@ -900,7 +1039,10 @@ class Trainer:
             # Track GRL lambda for adversarial training
             grl_lam = getattr(self, '_current_grl_lambda', self.adv_grl_lambda) if self.use_adversarial else 0.0
             history["train_grl_lambda"].append(grl_lam)
-            
+            # ACGAN metrics
+            history["train_aux_loss"].append(tr_aux_loss)
+            history["train_aux_acc"].append(tr_aux_acc)
+
             # Print epoch progress (with scenario-specific diagnostics)
             if self.use_mmd or self.use_contrastive:
                 # Scenario 5: MMD + Contrastive diagnostics

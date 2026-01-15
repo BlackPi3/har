@@ -315,6 +315,257 @@ class SignalDiscriminator(nn.Module):
         return self.fc(x)
 
 
+class ACSignalDiscriminator(nn.Module):
+    """
+    ACGAN-style Signal Discriminator for class-conditional adversarial training.
+
+    Extends SignalDiscriminator with:
+    1. Class conditioning: D evaluates "is this a real sample OF CLASS Y?"
+    2. Auxiliary classifier: D also predicts activity class
+
+    This encourages class-specific realism - the generator must produce signals
+    that look like real samples of the correct activity class.
+
+    Reference: Odena et al., "Conditional Image Synthesis with Auxiliary Classifier GANs"
+
+    Args:
+        n_channels: Number of input channels (default 3 for accelerometer)
+        window_size: Temporal window length
+        n_classes: Number of activity classes
+        hidden_channels: List of conv layer channel sizes
+        embed_dim: Dimension of class label embedding
+        dropout: Dropout probability
+        use_grl: Whether to apply gradient reversal internally
+        grl_lambda: Initial GRL lambda value
+        use_spectral_norm: Apply spectral normalization to constrain D
+        label_smoothing: Smooth labels for real/fake (not used for aux classifier)
+        aux_weight: Weight for auxiliary classification loss (relative to real/fake)
+    """
+
+    def __init__(
+        self,
+        n_channels: int = 3,
+        window_size: int = 100,
+        n_classes: int = 21,
+        hidden_channels: list = None,
+        embed_dim: int = 32,
+        dropout: float = 0.3,
+        use_grl: bool = True,
+        grl_lambda: float = 1.0,
+        use_spectral_norm: bool = False,
+        label_smoothing: float = 0.1,
+        aux_weight: float = 1.0,
+    ):
+        super().__init__()
+
+        if hidden_channels is None:
+            hidden_channels = [32, 64]
+
+        self.use_grl = use_grl
+        self.grl = GradientReversalLayer(grl_lambda) if use_grl else None
+        self._grl_lambda = grl_lambda
+        self.label_smoothing = label_smoothing
+        self.n_channels = n_channels
+        self.window_size = window_size
+        self.n_classes = n_classes
+        self.aux_weight = aux_weight
+        self.embed_dim = embed_dim
+
+        # Class embedding for conditioning
+        # Broadcasts across time dimension via FiLM-style conditioning
+        self.class_embed = nn.Embedding(n_classes, embed_dim)
+
+        # Build 1D CNN: (B, n_channels, window_size) -> (B, hidden, reduced_size)
+        conv_layers = []
+        prev_ch = n_channels
+
+        for i, h_ch in enumerate(hidden_channels):
+            conv = nn.Conv1d(prev_ch, h_ch, kernel_size=5, stride=2, padding=2)
+            if use_spectral_norm:
+                conv = nn.utils.spectral_norm(conv)
+            conv_layers.extend([
+                conv,
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Dropout(dropout),
+            ])
+            prev_ch = h_ch
+
+        self.conv_net = nn.Sequential(*conv_layers)
+
+        # Compute flattened size after convolutions
+        test_input = torch.zeros(1, n_channels, window_size)
+        with torch.no_grad():
+            test_output = self.conv_net(test_input)
+            self._conv_out_size = test_output.size()  # (1, C, L)
+            flat_size = test_output.view(1, -1).size(1)
+
+        # Shared representation layer (combines conv features + class embedding)
+        # Class embedding is projected and concatenated
+        self.fc_shared = nn.Sequential(
+            nn.Linear(flat_size + embed_dim, 128),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Dropout(dropout),
+        )
+
+        # Real/Fake head (discriminator)
+        self.fc_adv = nn.Linear(128, 1)
+
+        # Auxiliary classifier head (predicts activity class)
+        self.fc_aux = nn.Linear(128, n_classes)
+
+        self._initialize_weights()
+
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, (nn.Linear, nn.Conv1d)):
+                nn.init.kaiming_normal_(m.weight, mode='fan_in', nonlinearity='leaky_relu')
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+            elif isinstance(m, nn.Embedding):
+                nn.init.normal_(m.weight, mean=0, std=0.1)
+
+    def set_grl_lambda(self, lambda_: float):
+        """Update GRL lambda (useful for scheduling)."""
+        self._grl_lambda = lambda_
+        if self.grl is not None:
+            self.grl.lambda_ = lambda_
+
+    def forward(
+        self,
+        signal: torch.Tensor,
+        labels: torch.Tensor = None,
+        apply_grl: bool = None,
+        grl_lambda: float = None,
+    ):
+        """
+        Forward pass with optional class conditioning.
+
+        Args:
+            signal: (B, n_channels, window_size) accelerometer tensor
+            labels: (B,) class labels for conditioning (optional)
+            apply_grl: Override whether to apply GRL (None = use self.use_grl)
+            grl_lambda: Override GRL lambda value
+
+        Returns:
+            If labels provided:
+                adv_logits: (B, 1) real/fake logits
+                aux_logits: (B, n_classes) activity class logits
+            If labels not provided (unconditional mode):
+                adv_logits: (B, 1) real/fake logits
+                aux_logits: (B, n_classes) activity class logits
+        """
+        x = signal
+
+        # Apply GRL if configured (before conv for gradient reversal to regressor)
+        should_apply = apply_grl if apply_grl is not None else self.use_grl
+        if should_apply and self.grl is not None:
+            lambda_val = grl_lambda if grl_lambda is not None else self._grl_lambda
+            x = self.grl(x, lambda_val)
+
+        # Conv feature extraction
+        x = self.conv_net(x)
+        x = x.view(x.size(0), -1)  # (B, flat_size)
+
+        # Class conditioning
+        if labels is not None:
+            class_emb = self.class_embed(labels)  # (B, embed_dim)
+        else:
+            # If no labels, use zero embedding (unconditional)
+            class_emb = torch.zeros(x.size(0), self.embed_dim, device=x.device)
+
+        # Concatenate features with class embedding
+        x = torch.cat([x, class_emb], dim=1)  # (B, flat_size + embed_dim)
+
+        # Shared representation
+        shared = self.fc_shared(x)  # (B, 128)
+
+        # Two heads
+        adv_logits = self.fc_adv(shared)   # (B, 1) - real/fake
+        aux_logits = self.fc_aux(shared)   # (B, n_classes) - activity class
+
+        return adv_logits, aux_logits
+
+    def forward_no_grl(self, signal: torch.Tensor, labels: torch.Tensor = None):
+        """Forward pass without GRL (for gradient penalty computation in WGAN)."""
+        x = self.conv_net(signal)
+        x = x.view(x.size(0), -1)
+
+        if labels is not None:
+            class_emb = self.class_embed(labels)
+        else:
+            class_emb = torch.zeros(x.size(0), self.embed_dim, device=x.device)
+
+        x = torch.cat([x, class_emb], dim=1)
+        shared = self.fc_shared(x)
+
+        adv_logits = self.fc_adv(shared)
+        aux_logits = self.fc_aux(shared)
+
+        return adv_logits, aux_logits
+
+    def get_smooth_labels(self, batch_size: int, real: bool, device: torch.device):
+        """Get smoothed labels for discriminator training (real/fake head only)."""
+        if real:
+            return torch.full((batch_size, 1), 1.0 - self.label_smoothing, device=device)
+        else:
+            return torch.full((batch_size, 1), self.label_smoothing, device=device)
+
+
+def compute_gradient_penalty_acgan(
+    discriminator: "ACSignalDiscriminator",
+    real_samples: torch.Tensor,
+    fake_samples: torch.Tensor,
+    labels: torch.Tensor,
+    device: torch.device,
+    lambda_gp: float = 10.0,
+) -> torch.Tensor:
+    """
+    Compute gradient penalty for WGAN-GP with ACGAN discriminator.
+
+    Same as compute_gradient_penalty but passes labels through.
+
+    Args:
+        discriminator: ACSignalDiscriminator instance
+        real_samples: Real data samples (B, C, L)
+        fake_samples: Generated/simulated samples, same shape as real
+        labels: Class labels (B,)
+        device: Torch device
+        lambda_gp: Gradient penalty coefficient
+
+    Returns:
+        Gradient penalty loss term
+    """
+    batch_size = real_samples.size(0)
+
+    # Random interpolation coefficient
+    alpha = torch.rand(batch_size, *([1] * (real_samples.dim() - 1)), device=device)
+
+    # Interpolate between real and fake
+    interpolated = (alpha * real_samples + (1 - alpha) * fake_samples).requires_grad_(True)
+
+    # Get discriminator output for interpolated samples (without GRL)
+    adv_logits, _ = discriminator.forward_no_grl(interpolated, labels)
+
+    # Compute gradients w.r.t. interpolated samples
+    gradients = torch.autograd.grad(
+        outputs=adv_logits,
+        inputs=interpolated,
+        grad_outputs=torch.ones_like(adv_logits),
+        create_graph=True,
+        retain_graph=True,
+        only_inputs=True,
+    )[0]
+
+    # Flatten gradients and compute L2 norm
+    gradients = gradients.view(batch_size, -1)
+    gradient_norm = gradients.norm(2, dim=1)
+
+    # Penalty: (||grad|| - 1)^2
+    gradient_penalty = lambda_gp * ((gradient_norm - 1) ** 2).mean()
+
+    return gradient_penalty
+
+
 def compute_grl_lambda_schedule(epoch: int, total_epochs: int, gamma: float = 10.0) -> float:
     """
     Compute scheduled GRL lambda using the formula from DANN paper.

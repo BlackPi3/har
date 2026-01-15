@@ -631,22 +631,54 @@ def _build_models(cfg) -> Dict[str, torch.nn.Module]:
 
         if disc_input_type == "signal":
             # Signal-level discriminator (Scenario 42): operates on raw accelerometer
-            from src.models.discriminator import SignalDiscriminator
             disc_hidden_channels = getattr(disc_cfg, "hidden_channels", [32, 64]) if disc_cfg else [32, 64]
             # Get accelerometer dimensions from data config
             data_cfg = getattr(cfg, "data", None)
             n_channels = int(getattr(data_cfg, "n_channels", 3)) if data_cfg else 3
             window_size = int(getattr(data_cfg, "sensor_window_length", 100)) if data_cfg else 100
-            models["discriminator"] = SignalDiscriminator(
-                n_channels=n_channels,
-                window_size=window_size,
-                hidden_channels=list(disc_hidden_channels) if disc_hidden_channels else [32, 64],
-                dropout=disc_dropout,
-                use_grl=use_grl,
-                grl_lambda=grl_lambda,
-                use_spectral_norm=use_spectral_norm,
-                label_smoothing=label_smoothing,
-            ).to(cfg.device)
+
+            # Check for ACGAN mode
+            use_acgan = bool(getattr(disc_cfg, "use_acgan", False)) if disc_cfg else False
+
+            if use_acgan:
+                # ACGAN: class-conditional discriminator with auxiliary classifier
+                from src.models.discriminator import ACSignalDiscriminator
+                # Get n_classes from discriminator config or model config
+                disc_n_classes = getattr(disc_cfg, "n_classes", None) if disc_cfg else None
+                if disc_n_classes is None:
+                    model_cfg = getattr(cfg, "model", None)
+                    enc_cls_cfg = getattr(model_cfg, "encoder_classifier", None) if model_cfg else None
+                    disc_n_classes = int(getattr(enc_cls_cfg, "n_classes", 21)) if enc_cls_cfg else 21
+                else:
+                    disc_n_classes = int(disc_n_classes)
+                embed_dim = int(getattr(disc_cfg, "embed_dim", 32)) if disc_cfg else 32
+                aux_weight = float(getattr(disc_cfg, "aux_weight", 1.0)) if disc_cfg else 1.0
+                models["discriminator"] = ACSignalDiscriminator(
+                    n_channels=n_channels,
+                    window_size=window_size,
+                    n_classes=disc_n_classes,
+                    hidden_channels=list(disc_hidden_channels) if disc_hidden_channels else [32, 64],
+                    embed_dim=embed_dim,
+                    dropout=disc_dropout,
+                    use_grl=use_grl,
+                    grl_lambda=grl_lambda,
+                    use_spectral_norm=use_spectral_norm,
+                    label_smoothing=label_smoothing,
+                    aux_weight=aux_weight,
+                ).to(cfg.device)
+            else:
+                # Standard signal discriminator (no class conditioning)
+                from src.models.discriminator import SignalDiscriminator
+                models["discriminator"] = SignalDiscriminator(
+                    n_channels=n_channels,
+                    window_size=window_size,
+                    hidden_channels=list(disc_hidden_channels) if disc_hidden_channels else [32, 64],
+                    dropout=disc_dropout,
+                    use_grl=use_grl,
+                    grl_lambda=grl_lambda,
+                    use_spectral_norm=use_spectral_norm,
+                    label_smoothing=label_smoothing,
+                ).to(cfg.device)
         else:
             # Feature-level discriminator (Scenario 4): operates on encoder features
             from src.models.discriminator import FeatureDiscriminator
