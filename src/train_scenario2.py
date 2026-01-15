@@ -950,6 +950,7 @@ class Trainer:
             "train_grl_lambda": [],
             "train_mmd_loss": [], "train_contrastive_loss": [], "train_silhouette": [],
             "train_aux_loss": [], "train_aux_acc": [],  # ACGAN metrics
+            "val_aux_loss": [], "val_aux_acc": [],  # ACGAN validation metrics
         }
 
         # Print training mode
@@ -1042,6 +1043,8 @@ class Trainer:
             # ACGAN metrics
             history["train_aux_loss"].append(tr_aux_loss)
             history["train_aux_acc"].append(tr_aux_acc)
+            history["val_aux_loss"].append(val_aux_loss)
+            history["val_aux_acc"].append(val_aux_acc)
 
             # Print epoch progress (with scenario-specific diagnostics)
             if self.use_mmd or self.use_contrastive:

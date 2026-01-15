@@ -572,15 +572,15 @@ def _build_models(cfg) -> Dict[str, torch.nn.Module]:
     reg_kwargs = {k: v for k, v in reg_kwargs.items() if v is not None}
 
     trainer_cfg = getattr(cfg, "trainer", None)
-    separate_cls = bool(getattr(trainer_cfg, "separate_classifiers", False)) if trainer_cfg else False
-    dual_fe = bool(getattr(trainer_cfg, "separate_feature_extractors", False)) if trainer_cfg else False
+    separate_cls = _to_bool(getattr(trainer_cfg, "separate_classifiers", False)) if trainer_cfg else False
+    dual_fe = _to_bool(getattr(trainer_cfg, "separate_feature_extractors", False)) if trainer_cfg else False
     secondary_cfg = getattr(trainer_cfg, "secondary", None) if trainer_cfg else None
-    secondary_enabled = bool(getattr(secondary_cfg, "enabled", False)) if secondary_cfg else False
+    secondary_enabled = _to_bool(getattr(secondary_cfg, "enabled", False)) if secondary_cfg else False
     secondary_classes = int(getattr(secondary_cfg, "n_classes", 60)) if secondary_cfg else 60
     
     # Adversarial training support (Scenario 4)
     adv_cfg = getattr(trainer_cfg, "adversarial", None) if trainer_cfg else None
-    adversarial_enabled = bool(getattr(adv_cfg, "enabled", False)) if adv_cfg else False
+    adversarial_enabled = _to_bool(getattr(adv_cfg, "enabled", False)) if adv_cfg else False
 
     # Default classifier type based on encoder if not provided
     if clf_type is None:
@@ -621,9 +621,9 @@ def _build_models(cfg) -> Dict[str, torch.nn.Module]:
     if adversarial_enabled:
         disc_cfg = getattr(adv_cfg, "discriminator", None) if adv_cfg else None
         disc_dropout = float(getattr(disc_cfg, "dropout", 0.3)) if disc_cfg else 0.3
-        use_grl = bool(getattr(adv_cfg, "use_grl", True)) if adv_cfg else True
+        use_grl = _to_bool(getattr(adv_cfg, "use_grl", True)) if adv_cfg else True
         grl_lambda = float(getattr(adv_cfg, "grl_lambda", 1.0)) if adv_cfg else 1.0
-        use_spectral_norm = bool(getattr(disc_cfg, "use_spectral_norm", False)) if disc_cfg else False
+        use_spectral_norm = _to_bool(getattr(disc_cfg, "use_spectral_norm", False)) if disc_cfg else False
         label_smoothing = float(getattr(disc_cfg, "label_smoothing", 0.1)) if disc_cfg else 0.1
 
         # Check discriminator input type: "features" (default, Scenario 4) or "signal" (Scenario 42)
@@ -637,8 +637,8 @@ def _build_models(cfg) -> Dict[str, torch.nn.Module]:
             n_channels = int(getattr(data_cfg, "n_channels", 3)) if data_cfg else 3
             window_size = int(getattr(data_cfg, "sensor_window_length", 100)) if data_cfg else 100
 
-            # Check for ACGAN mode
-            use_acgan = bool(getattr(disc_cfg, "use_acgan", False)) if disc_cfg else False
+            # Check for ACGAN mode (use _to_bool to handle string "False" from CLI)
+            use_acgan = _to_bool(getattr(disc_cfg, "use_acgan", False)) if disc_cfg else False
 
             if use_acgan:
                 # ACGAN: class-conditional discriminator with auxiliary classifier
@@ -683,7 +683,7 @@ def _build_models(cfg) -> Dict[str, torch.nn.Module]:
             # Feature-level discriminator (Scenario 4): operates on encoder features
             from src.models.discriminator import FeatureDiscriminator
             disc_hidden = getattr(disc_cfg, "hidden_units", [64]) if disc_cfg else [64]
-            normalize_features = bool(getattr(disc_cfg, "normalize_features", True)) if disc_cfg else True
+            normalize_features = _to_bool(getattr(disc_cfg, "normalize_features", True)) if disc_cfg else True
             models["discriminator"] = FeatureDiscriminator(
                 f_in=inferred_f_in,
                 hidden_units=list(disc_hidden) if disc_hidden else [64],
@@ -985,6 +985,26 @@ def _save_plots(run_dir: Path, history: Dict[str, List[Any]], best_epoch: int | 
             ("Train D Accuracy", "Val D Accuracy"),
             "Discriminator Accuracy",
             "d_acc.png",
+        )
+
+    # ACGAN auxiliary classifier diagnostics (Scenario 42 with ACGAN)
+    if history.get("train_aux_loss") or history.get("val_aux_loss"):
+        _plot_pair(
+            history.get("train_aux_loss"),
+            history.get("val_aux_loss"),
+            ("Train Aux Loss", "Val Aux Loss"),
+            "ACGAN Auxiliary Classification Loss",
+            "aux_loss.png",
+            log_scale=True,
+        )
+
+    if history.get("train_aux_acc") or history.get("val_aux_acc"):
+        _plot_pair(
+            history.get("train_aux_acc"),
+            history.get("val_aux_acc"),
+            ("Train Aux Accuracy", "Val Aux Accuracy"),
+            "ACGAN Auxiliary Classification Accuracy",
+            "aux_acc.png",
         )
 
 
