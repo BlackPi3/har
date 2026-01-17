@@ -1,7 +1,7 @@
 \chapter{Experimental Setup}
 \label{chap:experimental-setup}
 
-This chapter describes the experimental framework used to evaluate our proposed method. We detail the datasets employed, preprocessing procedures, evaluation protocols, and baseline methods against which we compare our approach.
+This chapter describes the experimental framework used to evaluate our proposed method. We detail the datasets employed, preprocessing procedures, evaluation protocols, and the experimental scenarios used to systematically analyze the contribution of each component.
 
 \section{Datasets}
 \label{sec:datasets}
@@ -254,74 +254,123 @@ To account for initialization variance, we report results as mean $\pm$ standard
 
 This provides confidence intervals on reported performance and guards against reporting results from ``lucky'' random initializations.
 
-\section{Baselines}
-\label{sec:baselines}
+\section{Experimental Scenarios}
+\label{sec:scenarios}
 
-We compare our joint training approach against several baseline methods that represent alternative strategies for leveraging pose and accelerometer data.
+Rather than comparing against external baselines, we adopt an ablation-based experimental design. Starting from a joint training baseline that uses all proposed components, we systematically disable or modify individual elements to measure their contribution. This approach isolates the effect of each design choice while controlling for implementation differences.
 
-\subsection{Real-Only Baseline}
+\subsection{Baseline: Joint Training (Scenario 2)}
+\label{sec:scenario-baseline}
 
-The simplest baseline trains only on real accelerometer data without any simulated data:
+Our baseline configuration employs joint end-to-end training with shared components and all loss terms enabled:
 \begin{equation}
-    \mathbf{a}_{\text{real}} \xrightarrow{F} \mathbf{z} \xrightarrow{C} \hat{y}
+    \mathcal{L}_{\text{total}} = \alpha \mathcal{L}_{\text{cls}} + \beta \mathcal{L}_{\text{sim}} + \gamma \mathcal{L}_{\text{mse}}
 \end{equation}
 
-This baseline establishes the performance achievable with supervised learning on the available labeled IMU data alone. It uses the same feature extractor and classifier architectures as our method.
+The architecture uses a shared feature extractor $F$ and classifier $C$ for both real and simulated paths. During training, each batch provides pose-accelerometer-label triplets $(\mathbf{p}, \mathbf{a}, y)$. The real path computes $\hat{y}_{\text{real}} = C(F(\mathbf{a}))$ while the simulated path computes $\hat{y}_{\text{sim}} = C(F(R(\mathbf{p})))$. All three loss components---activity classification on both paths, feature similarity between paths, and MSE regression---jointly optimize the entire system.
 
-\subsection{Regression-First Baseline}
+This baseline establishes the performance of our complete proposed method.
 
-This two-stage approach trains the pose-to-IMU regressor independently before classifier training:
+\subsection{Loss Ablations}
 
-\textbf{Stage 1:} Train regressor $R$ to minimize MSE between simulated and real accelerometer:
+We isolate the contribution of individual loss terms by disabling them:
+
+\subsubsection{Without MSE Loss (Scenario 22)}
+
+Setting $\gamma = 0$ removes the direct signal-level supervision on the regressor:
 \begin{equation}
-    R^* = \arg\min_R \sum_{i} \|\mathbf{a}_i - R(\mathbf{p}_i)\|^2
+    \mathcal{L}_{\text{total}} = \alpha \mathcal{L}_{\text{cls}} + \beta \mathcal{L}_{\text{sim}}
 \end{equation}
 
-\textbf{Stage 2:} Train classifier on combined real and simulated data:
+The regressor receives gradients only through the classification and similarity losses. This tests whether task-driven gradients alone can train an effective pose-to-IMU transformation, or whether explicit signal matching is necessary.
+
+\subsubsection{Without Feature Similarity (Scenario 25)}
+
+Setting $\beta = 0$ removes the explicit feature alignment constraint:
 \begin{equation}
-    F^*, C^* = \arg\min_{F,C} \mathcal{L}_{\text{CE}}(C(F(\mathbf{a})), y) + \mathcal{L}_{\text{CE}}(C(F(R^*(\mathbf{p}))), y)
+    \mathcal{L}_{\text{total}} = \alpha \mathcal{L}_{\text{cls}} + \gamma \mathcal{L}_{\text{mse}}
 \end{equation}
 
-The key limitation is that the regressor receives no task-specific feedback---it optimizes signal-level similarity without considering whether the generated data is useful for activity recognition.
+This ablation tests whether the shared feature extractor naturally learns domain-invariant representations through classification alone, or whether explicit similarity enforcement is beneficial.
 
-\subsection{Pose-Only Baseline}
+\subsection{Architecture Variants}
 
-This baseline trains exclusively on simulated accelerometer data:
+We explore alternative component sharing strategies:
+
+\subsubsection{Separate Classifiers (Scenario 23)}
+
+Using separate classifiers $C$ and $C_{\text{sim}}$ for real and simulated paths allows each to specialize:
+\begin{align}
+    \hat{y}_{\text{real}} &= C(F(\mathbf{a})) \\
+    \hat{y}_{\text{sim}} &= C_{\text{sim}}(F(R(\mathbf{p})))
+\end{align}
+
+The feature extractor remains shared, so representations are aligned, but classification heads can adapt to domain-specific feature distributions. At test time, only $C$ is used with real data.
+
+\subsubsection{Separate Feature Extractors (Scenario 24)}
+
+Using separate feature extractors $F$ and $F_{\text{sim}}$ allows domain-specific feature learning:
+\begin{align}
+    \mathbf{z}_{\text{real}} &= F(\mathbf{a}) \\
+    \mathbf{z}_{\text{sim}} &= F_{\text{sim}}(R(\mathbf{p}))
+\end{align}
+
+The classifier remains shared, forcing both extractors to produce compatible representations. The similarity loss compares $\mathbf{z}_{\text{real}}$ and $\mathbf{z}_{\text{sim}}$ to encourage alignment despite separate encoders.
+
+\subsection{Auxiliary Pose Data (Scenario 3)}
+\label{sec:scenario-auxiliary}
+
+This variant incorporates NTU RGB+D as a secondary pose-only dataset to test whether additional pose diversity improves generalization:
 \begin{equation}
-    \mathbf{p} \xrightarrow{R} \tilde{\mathbf{a}} \xrightarrow{F} \mathbf{z} \xrightarrow{C} \hat{y}
+    \mathcal{L}_{\text{total}} = \mathcal{L}_{\text{primary}} + \lambda_{\text{aux}} \mathcal{L}_{\text{aux}}
 \end{equation}
 
-At test time, predictions are made using real accelerometer data through the same feature extractor and classifier. This baseline tests whether simulated data alone can train an effective classifier, representing a scenario where real sensor data is unavailable during training.
+Secondary pose sequences pass through the regressor and a dedicated auxiliary classifier $C_{\text{aux}}$. This tests whether leveraging large-scale pose data (without corresponding accelerometer ground truth) can improve the regressor's ability to generate useful simulated signals.
 
-\subsection{Simple Augmentation Baseline}
+\subsection{Adversarial Domain Adaptation}
 
-This baseline augments real accelerometer data with standard signal transformations rather than pose-derived simulation:
-\begin{itemize}
-    \item \textbf{Additive noise:} $\mathbf{a}' = \mathbf{a} + \mathcal{N}(0, \sigma^2)$
-    \item \textbf{Scaling:} $\mathbf{a}' = s \cdot \mathbf{a}$ where $s \sim \text{Uniform}(0.8, 1.2)$
-    \item \textbf{Time warping:} Non-linear temporal distortion
-\end{itemize}
+We explore adversarial approaches to bridge the gap between real and simulated distributions:
 
-Comparing against this baseline isolates the benefit of semantically meaningful pose-derived augmentation versus generic signal perturbations.
+\subsubsection{Feature-level Discriminator (Scenario 4)}
 
-\subsection{Baseline Summary}
+A discriminator $D_F$ operates on feature embeddings, trained to distinguish $\mathbf{z}_{\text{real}}$ from $\mathbf{z}_{\text{sim}}$. Using a Gradient Reversal Layer (GRL), the feature extractor learns to fool the discriminator while maintaining classification performance:
+\begin{equation}
+    \mathcal{L}_{\text{total}} = \mathcal{L}_{\text{baseline}} + \lambda_{\text{adv}} \mathcal{L}_{\text{adv}}
+\end{equation}
 
-\Cref{tab:baselines} summarizes the baseline methods and their key characteristics.
+This encourages domain-invariant feature representations.
+
+\subsubsection{Signal-level Discriminator (Scenario 42)}
+
+A discriminator $D_S$ operates directly on accelerometer signals, distinguishing real $\mathbf{a}$ from simulated $\tilde{\mathbf{a}} = R(\mathbf{p})$. Using WGAN-GP with alternating updates, the regressor learns to produce realistic waveforms:
+\begin{equation}
+    \mathcal{L}_D = \mathbb{E}[D_S(\tilde{\mathbf{a}})] - \mathbb{E}[D_S(\mathbf{a})] + \lambda_{\text{GP}} \cdot \text{GP}
+\end{equation}
+
+This directly improves signal quality rather than relying on the feature extractor to compensate for simulation artifacts. An optional ACGAN variant adds class conditioning to encourage class-specific realism.
+
+\subsection{Scenario Summary}
+
+\Cref{tab:scenarios} summarizes all experimental scenarios and their key modifications relative to the baseline.
 
 \begin{table}[!t]
 \centering
-\caption{Summary of baseline methods.}
-\label{tab:baselines}
-\begin{tabular}{lp{4cm}p{4cm}}
+\caption{Summary of experimental scenarios. All scenarios share the same base architecture; differences are highlighted.}
+\label{tab:scenarios}
+\begin{tabular}{llp{5.5cm}}
 \hline
-\textbf{Baseline} & \textbf{Training Data} & \textbf{Key Limitation} \\
+\textbf{Scenario} & \textbf{Name} & \textbf{Key Modification} \\
 \hline
-Real-only & Real accelerometer only & No data augmentation \\
-Regression-first & Sequential: regressor then classifier & No task feedback to regressor \\
-Pose-only & Simulated accelerometer only & Domain gap at test time \\
-Simple augmentation & Real + noise/warping & Augmentations lack semantic meaning \\
+2 & Baseline & Joint training with all losses ($\alpha, \beta, \gamma > 0$) \\
+22 & No MSE & $\gamma = 0$; regressor learns from task gradients only \\
+25 & No Similarity & $\beta = 0$; no explicit feature alignment \\
+23 & Separate Classifiers & Domain-specific classifiers $C$, $C_{\text{sim}}$ \\
+24 & Separate Extractors & Domain-specific encoders $F$, $F_{\text{sim}}$ \\
+3 & Auxiliary Data & Secondary NTU pose dataset with $C_{\text{aux}}$ \\
+4 & Feature Adversarial & GRL + discriminator on features \\
+42 & Signal Adversarial & WGAN-GP discriminator on signals \\
 \hline
 \end{tabular}
 \end{table}
 
-Our proposed joint training approach addresses these limitations by simultaneously optimizing the regressor for both signal fidelity and task performance, while training the classifier on both real and simulated data to reduce domain gap.
+This ablation-based design allows us to attribute performance differences to specific components rather than implementation variations, providing clear insights into which elements of the proposed method contribute most to improved activity recognition.
