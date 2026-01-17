@@ -52,11 +52,11 @@ A primary objective of this work is to explore whether HAR performance can be im
 
 Another key investigation concerns the role of loss functions in this pipeline. We examine whether relying solely on the classification loss, without enforcing explicit alignment via a mean squared error (MSE) loss between real and synthetic sensor data, affects the classifier’s effectiveness. Understanding the contribution of each loss component is critical for designing efficient HAR models.
 
-Additionally, this thesis explores architectural variants that use separate feature extractors or separate classifiers for real and simulated data paths. These variants test whether domain-specific components improve performance compared to fully shared architectures.
+Additionally, this thesis compares the performance of the joint multimodal framework against modality-specific classifiers trained exclusively on either sensor data or pose data. This comparison will clarify whether integrating synthetic sensor data provides a measurable advantage over specialized, uni-modal classifiers.
 
-We also investigate the potential of leveraging external pose datasets, specifically NTU RGB+D \cite{shahroudy2016ntu}, to supplement the pose-to-sensor data generation process. By incorporating pose data from a broader range of activities, we aim to assess whether cross-dataset augmentation can further enhance IMU-based HAR performance, particularly under low-data regimes.
+We also investigate the potential of leveraging external pose datasets, such as Kinetics-400 and NTURGBD \cite{kay2017kinetics, shahroudy2016ntu}, to supplement the pose-to-sensor data generation process. By incorporating pose data from a broader range of activities, we aim to assess whether cross-dataset augmentation can further enhance IMU-based HAR performance, particularly under low-data regimes.
 
-Finally, we explore the introduction of adversarial components into the training pipeline. We investigate two complementary approaches: (1) feature-level discrimination using a Gradient Reversal Layer (GRL) that encourages the feature extractor to produce domain-invariant representations, and (2) signal-level discrimination using Wasserstein GAN with gradient penalty (WGAN-GP) that trains the regressor to produce realistic accelerometer waveforms through alternating discriminator/generator updates. We analyze the adversarial learning dynamics to understand how the competition between generator and discriminator affects classification accuracy. 
+Finally, we explore the introduction of an adversarial component into the training pipeline. This discriminator is tasked with distinguishing between real and synthetic sensor data, operating alongside the classifier and regressor in a concurrent training setup. In this setup we examine the impact of incorporating secondary datasets that contain activities overlapping with the primary dataset, evaluating whether this adversarial supervision further improves the robustness and accuracy of HAR models. We also analyze the adversarial learning process to answer how is the competition between generator and discriminator is helping the classification accuracy. 
 
 Through these inquiries, this thesis seeks to advance understanding of how synthetic data generation, multi-modal learning, loss function design, and adversarial training interact to address data scarcity and enhance the generalization capabilities of HAR systems.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -66,25 +66,25 @@ Through these inquiries, this thesis seeks to advance understanding of how synth
 The overarching objective of this thesis is to address the data scarcity problem in Human Activity Recognition (HAR) by leveraging multi-modal data and advanced training strategies. To this end, the specific objectives of this research are:
 
 \begin{enumerate}
-    \item To design and implement a unified training pipeline that concurrently trains a pose-to-IMU regressor and an activity classifier, integrating real and synthetic accelerometer data derived from joint pose sequences, evaluated on MM-Fit and UTD-MHAD datasets.
-
-    \item To investigate the effect of different loss function configurations, specifically evaluating the contribution of MSE regression loss and feature similarity loss through systematic ablation studies.
-
-    \item To explore architectural variants including separate feature extractors and separate classifiers for real and simulated data paths, testing whether domain-specific components improve over fully shared architectures.
-
-    \item To augment the pose-to-sensor data generation process with NTU RGB+D as a secondary pose-only dataset, evaluating whether additional pose diversity improves HAR performance.
-
-    \item To integrate adversarial discriminators into the training pipeline using two approaches: feature-level discrimination with gradient reversal for domain-invariant representations, and signal-level discrimination with WGAN-GP for realistic signal synthesis.
+    \item To design and implement a unified training pipeline that concurrently trains a sensor data regressor and an activity classifier, integrating real and synthetic sensor data derived from joint pose sequences from MMFit and UTD-MHAD datasets.
+    
+    \item To investigate the effect of different loss function strategies within this pipeline, specifically evaluating the impact of incorporating mean squared error (MSE) loss alongside classification loss.
+    
+    \item To compare the performance of the proposed multi-modal framework against modality-specific classifiers trained exclusively on either sensor data or pose data.
+    
+    \item To augment the pose-to-sensor data generation process with external pose datasets, such as Kinetics-400, and evaluate their contribution to improving IMU-based HAR performance.
+    
+    \item To integrate an adversarial discriminator into the training pipeline to distinguish between real and synthetic sensor data, and assess its impact on model robustness and accuracy. For this, we will make use of a secondary dataset containing activities that overlap with the primary dataset
 \end{enumerate}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Scope and Limitations
 
-This thesis focuses on addressing the data scarcity problem in Human Activity Recognition (HAR) by leveraging multi-modal data, specifically wrist accelerometer data and upper-limb joint pose data (wrist, elbow, shoulder). The study primarily utilizes publicly available datasets: MM-Fit and UTD-MHAD as primary datasets with synchronized pose and accelerometer data, and NTU RGB+D as a secondary pose-only dataset for auxiliary training experiments.
+This thesis focuses on addressing the data scarcity problem in Human Activity Recognition (HAR) by leveraging multi-modal data, specifically wrist accelerometer data and upper-limb joint pose data (wrist, elbow, shoulder). The study primarily utilizes publicly available datasets such as MMFit and UTD-MHAD, with supplementary pose data sourced from larger datasets like Kinetics-400 where applicable.
 
-The research explores the design and evaluation of a joint training pipeline that concurrently trains a pose-to-IMU regressor and an activity classifier. Eight training scenarios are systematically compared through ablation studies, exploring loss function configurations, architectural variants (shared vs.\ separate components), auxiliary data integration, and adversarial training approaches. Experiments focus on evaluating macro F1 score and accuracy, with subject-disjoint evaluation to assess cross-subject generalization.
+The research explores the design and evaluation of a joint training pipeline that concurrently trains a sensor data regressor and an activity classifier. Additional components such as adversarial discriminators and cross-modal synthetic data generation are investigated to enhance HAR performance. Experiments focus on evaluating classification accuracy, robustness to inter-subject variability, and the impact of various loss functions under limited data scenarios.
 
-However, this research is subject to several limitations. The work is constrained to the selected datasets and may not generalize across all types of HAR data or sensor configurations, such as gyroscope or magnetometer readings. The experiments are conducted in an offline setting without addressing real-time inference constraints or optimization for deployment on resource-constrained devices. The synthetic data generation is activity-specific and may not generalize well to activities not represented in the training datasets. Furthermore, the scope is limited to upper-limb joint poses; comprehensive modeling of full-body activities remains outside the current research focus. The evaluation uses an ablation-based design rather than comparison against external baseline methods.
+However, this research is subject to several limitations. The work is constrained to the selected datasets and may not generalize across all types of HAR data or sensor configurations, such as gyroscope or magnetometer readings. The experiments are conducted in an offline setting without addressing real-time inference constraints or optimization for deployment on resource-constrained devices. The synthetic data generation is activity-specific and may not generalize well to activities not represented in the training datasets. Furthermore, the scope is limited to upper-limb joint poses; comprehensive modeling of full-body activities remains outside the current research focus.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Thesis Structure
@@ -92,19 +92,20 @@ However, this research is subject to several limitations. The work is constraine
 The remainder of this thesis is organized as follows:
 
 \begin{itemize}
-    \item \textbf{Chapter 2: Related Work} reviews relevant literature on Human Activity Recognition, focusing on data scarcity challenges, data augmentation methods, cross-modal synthetic data generation, and adversarial learning for domain adaptation.
+    \item \textbf{Chapter 2: Related Works} \\
+    % This chapter reviews relevant literature on Human Activity Recognition (HAR), with a particular focus on data scarcity challenges, data augmentation methods, multimodal learning approaches, and synthetic data generation techniques. It also discusses previous work on joint training pipelines and adversarial learning within the context of HAR.
 
-    \item \textbf{Chapter 3: Methodology} presents the proposed framework, detailing the system architecture with its three main components (regressor, feature extractor, classifier), the loss function design, and the training scenarios explored.
+    \item \textbf{Chapter 3: Method} \\
+    % This chapter presents the proposed framework for enhancing HAR performance under data-scarce conditions. It details the architecture of the joint training pipeline, including the sensor data regressor, classifier, and adversarial discriminator. The chapter also describes the loss functions employed, the datasets used, and the overall experimental design.
 
-    \item \textbf{Chapter 4: Implementation} describes the neural network architectures, the Hydra-based configuration system, the unified trainer supporting all scenarios, and the multi-pass hyperparameter optimization strategy.
+    \item \textbf{Chapter 4: Experiments} \\
+    % This chapter describes the experimental protocols, including data preprocessing, training configurations, and evaluation metrics. It also provides baseline models and modality-specific classifiers used for comparison.
 
-    \item \textbf{Chapter 5: Experimental Setup} details the datasets (UTD-MHAD, MM-Fit, NTU RGB+D), preprocessing procedures, evaluation protocols, and the eight experimental scenarios used in the ablation-based evaluation.
+    \item \textbf{Chapter 5: Results and Discussion} \\
+    % This chapter presents the experimental results, analyzing the impact of the joint training approach, loss function strategies, adversarial training, and cross-modal data augmentation. The findings are discussed in the context of the research questions and hypotheses outlined earlier.
 
-    \item \textbf{Chapter 6: Results} presents the experimental findings, including performance comparisons across scenarios, ablation study results, and analysis of adversarial training dynamics.
-
-    \item \textbf{Chapter 7: Discussion} interprets the findings, discusses when simulation helps, analyzes the adversarial learning insights, acknowledges limitations, and provides practical recommendations.
-
-    \item \textbf{Chapter 8: Conclusion} summarizes the contributions, answers the research questions, and outlines directions for future work.
+    \item \textbf{Chapter 6: Conclusion and Future Work} \\
+    % This chapter summarizes the key contributions and findings of the thesis. It reflects on the limitations of the current study and proposes potential directions for future research to further advance the field of HAR under data-scarcity constraints.
 \end{itemize}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
