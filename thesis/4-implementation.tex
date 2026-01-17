@@ -159,16 +159,33 @@ The MLP consists of one or more hidden layers with LeakyReLU activation (negativ
 
 \subsubsection{Signal-level Discriminator}
 
-The signal-level discriminator $D_S: \mathbb{R}^{3 \times T} \rightarrow [0, 1]$ operates directly on accelerometer signals:
-\begin{equation}
-    D_S(\mathbf{a}) = \sigma(\text{FC}(\text{Flatten}(\text{CNN}(\text{GRL}(\mathbf{a})))))
-\end{equation}
+The signal-level discriminator $D_S$ operates directly on accelerometer signals, training the regressor to produce realistic waveforms rather than relying on the feature extractor to align representations. Unlike the feature-level discriminator which uses GRL, we employ Wasserstein GAN with gradient penalty (WGAN-GP) \citep{gulrajani2017improved} for more stable training at the signal level.
 
+\paragraph{Architecture.} The discriminator uses a 1D CNN to process temporal signals:
+\begin{equation}
+    D_S(\mathbf{a}) = \text{FC}(\text{Flatten}(\text{CNN}(\mathbf{a})))
+\end{equation}
 The CNN component uses strided 1D convolutions to progressively downsample the temporal dimension while expanding channels. Default configuration uses two convolutional layers with channels $[32, 64]$, kernel size 5, and stride 2.
+
+\paragraph{WGAN-GP Training.} Rather than using GRL with binary cross-entropy, we adopt WGAN-GP which provides better gradient signal when real and simulated distributions have limited overlap. The discriminator loss is:
+\begin{equation}
+    \mathcal{L}_D = \mathbb{E}[D_S(\tilde{\mathbf{a}})] - \mathbb{E}[D_S(\mathbf{a})] + \lambda_{\text{GP}} \cdot \text{GP}
+\end{equation}
+where $\text{GP} = \mathbb{E}[(\|\nabla_{\hat{\mathbf{a}}} D_S(\hat{\mathbf{a}})\|_2 - 1)^2]$ is the gradient penalty computed on interpolated samples $\hat{\mathbf{a}} = \alpha \mathbf{a} + (1-\alpha)\tilde{\mathbf{a}}$. The generator (regressor) loss is simply $\mathcal{L}_G = -\mathbb{E}[D_S(\tilde{\mathbf{a}})]$.
+
+Training proceeds with alternating updates: $n_{\text{critic}}$ discriminator updates per generator update (default $n_{\text{critic}} = 5$), following standard WGAN practice.
+
+\paragraph{ACGAN Variant.} We optionally extend the discriminator with class conditioning following the Auxiliary Classifier GAN (ACGAN) framework \citep{odena2017conditional}. The ACGAN discriminator takes both signal and class label as input:
+\begin{equation}
+    D_S(\mathbf{a}, y) \rightarrow (\hat{p}_{\text{adv}}, \hat{y}_{\text{aux}})
+\end{equation}
+where $\hat{p}_{\text{adv}}$ is the real/fake prediction and $\hat{y}_{\text{aux}}$ is the auxiliary class prediction. Class labels are embedded via a learnable embedding layer and concatenated with CNN features before the classification heads. The auxiliary classifier loss (cross-entropy on activity labels) is added to both discriminator and generator objectives, encouraging class-specific realism---the regressor must produce signals that look like real samples \emph{of the correct activity class}.
+
+\paragraph{Staged Training.} To prevent the regressor from receiving adversarial gradients before learning basic signal structure, we optionally pretrain for $E_{\text{pre}}$ epochs using only MSE loss before enabling adversarial training. This staged approach helps establish reasonable signal quality before the discriminator begins providing feedback.
 
 \subsubsection{Gradient Reversal Layer}
 
-The Gradient Reversal Layer (GRL) \citep{ganin2016domain} enables end-to-end adversarial training by modifying gradient flow:
+For the feature-level discriminator (Scenario 4), we use the Gradient Reversal Layer (GRL) \citep{ganin2016domain} to enable end-to-end adversarial training in a single backward pass. The GRL modifies gradient flow:
 \begin{equation}
     \text{GRL}_\lambda(\mathbf{x}) = \mathbf{x} \quad \text{(forward)}, \quad
     \frac{\partial \text{GRL}_\lambda}{\partial \mathbf{x}} = -\lambda \mathbf{I} \quad \text{(backward)}
@@ -180,12 +197,23 @@ The scaling factor $\lambda$ controls the strength of the adversarial signal. We
 \end{equation}
 where $p = \text{epoch} / \text{total\_epochs} \in [0, 1]$ is the training progress and $\gamma = 10$ controls the schedule steepness. This scheduling starts with weak adversarial gradients, allowing the feature extractor to learn discriminative features before enforcing domain invariance.
 
+Note that the signal-level discriminator (Scenario 42) does not use GRL; instead, it employs WGAN-GP with alternating discriminator/generator updates as described above, which provides more stable training for raw signal discrimination.
+
 \subsubsection{Regularization Techniques}
 
-To stabilize adversarial training, we employ:
+To stabilize adversarial training, we employ different techniques depending on the discriminator type:
+
+\paragraph{Feature-level Discriminator (GRL + BCE).}
 \begin{itemize}
     \item \textbf{Label smoothing}: Replace hard labels $(0, 1)$ with soft labels $(\epsilon, 1-\epsilon)$ where $\epsilon = 0.1$, preventing discriminator overconfidence
     \item \textbf{Feature normalization}: Optionally L2-normalize features before the discriminator to prevent magnitude from dominating the classification decision
+\end{itemize}
+
+\paragraph{Signal-level Discriminator (WGAN-GP).}
+\begin{itemize}
+    \item \textbf{Gradient penalty}: Enforces the Lipschitz constraint on the discriminator (coefficient $\lambda_{\text{GP}} = 10$), replacing weight clipping for stable training
+    \item \textbf{Spectral normalization}: Optionally constrains the spectral norm of weight matrices for additional stability
+    \item \textbf{Staged training}: Pretraining with MSE before adversarial training helps the regressor establish reasonable signal structure
 \end{itemize}
 
 \section{Training Pipeline}
