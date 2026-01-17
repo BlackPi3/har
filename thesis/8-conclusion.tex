@@ -24,13 +24,18 @@ This systematic comparison revealed dataset-dependent optimal configurations, pr
 
 \subsection{Adversarial Domain Adaptation for Sim-to-Real}
 
-We adapted adversarial domain adaptation techniques to bridge the gap between simulated and real accelerometer data. By incorporating a discriminator with gradient reversal layer, the framework learns domain-invariant representations that generalize across the sim-to-real divide.
+We adapted adversarial domain adaptation techniques to bridge the gap between simulated and real accelerometer data, implementing two complementary approaches:
 
-Our analysis of discriminator dynamics, feature space visualization, and ablation studies provides insights into when and how adversarial training benefits HAR:
 \begin{itemize}
-    \item Feature-level discrimination encourages the feature extractor to produce representations indistinguishable between domains
-    \item Signal-level discrimination pressures the regressor to produce realistic accelerometer waveforms
-    \item The GRL lambda schedule is critical for balancing feature learning and domain alignment
+    \item \textbf{Feature-level discrimination (Scenario 4):} A discriminator with Gradient Reversal Layer (GRL) operates on encoder features, encouraging the feature extractor to produce domain-invariant representations
+    \item \textbf{Signal-level discrimination (Scenario 42):} A WGAN-GP discriminator with alternating updates operates directly on accelerometer signals, pressuring the regressor to produce realistic waveforms. An optional ACGAN variant adds class conditioning for activity-specific realism
+\end{itemize}
+
+Our analysis of discriminator dynamics and ablation studies provides insights into when and how adversarial training benefits HAR:
+\begin{itemize}
+    \item Feature-level discrimination with GRL enables end-to-end training in a single backward pass, with lambda scheduling to balance feature learning and domain alignment
+    \item Signal-level discrimination with WGAN-GP provides more stable gradients for raw signal generation, using alternating discriminator/generator updates rather than GRL
+    \item Staged training (pretraining with MSE before adversarial) helps establish signal structure before discriminator feedback
 \end{itemize}
 
 \subsection{Multi-Pass Hyperparameter Optimization Strategy}
@@ -89,11 +94,11 @@ The ablation studies reveal the relative importance of each loss component and a
 
 \textbf{Answer: Partially, with caveats.}
 
-Adversarial training with feature-level discrimination can provide additional benefit beyond explicit feature similarity loss, but requires careful hyperparameter tuning. Key findings include:
+Adversarial training can provide additional benefit beyond explicit feature similarity loss, but requires careful hyperparameter tuning. Key findings include:
 \begin{itemize}
-    \item \textbf{Training stability:} Adversarial training is more sensitive to hyperparameters than non-adversarial approaches
-    \item \textbf{GRL scheduling:} The lambda schedule is critical for balancing feature learning and domain alignment
-    \item \textbf{Feature vs. signal level:} Feature-level discrimination directly improves representations used for classification
+    \item \textbf{Training stability:} Adversarial training is more sensitive to hyperparameters than non-adversarial approaches. WGAN-GP with alternating updates (signal-level) tends to be more stable than GRL-based training (feature-level)
+    \item \textbf{Feature-level (GRL):} The lambda schedule is critical for balancing feature learning and domain alignment; representations become domain-invariant at the cost of some discriminative power
+    \item \textbf{Signal-level (WGAN-GP):} Directly improves regressor output quality; staged training with MSE pretraining before adversarial feedback helps establish reasonable signal structure first
 \end{itemize}
 
 The adversarial approach is most valuable when the domain gap is substantial and when careful hyperparameter tuning is feasible.
