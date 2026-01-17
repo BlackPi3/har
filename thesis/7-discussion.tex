@@ -20,9 +20,9 @@ The three-term objective ($\alpha \mathcal{L}_{\text{cls}} + \beta \mathcal{L}_{
 
 \textbf{Classification loss ($\alpha$).} Essential for task performance. Training on both real and simulated paths exposes the classifier to greater variation, improving robustness. The equal weighting of real and simulated classification losses ensures neither domain dominates optimization.
 
-\textbf{Feature similarity loss ($\beta$).} Provides explicit domain alignment at the representation level. Our results suggest this loss is [more/less] important when using shared versus separate feature extractors. With shared weights, the architecture itself provides implicit alignment; explicit similarity loss provides additional regularization.
+\textbf{Feature similarity loss ($\beta$).} Provides explicit domain alignment at the representation level. The importance of this loss depends on the architecture: with shared feature extractors, the architecture itself provides implicit alignment, making explicit similarity loss a form of additional regularization. With separate feature extractors (Scenario 24), the similarity loss becomes critical for encouraging compatible representations.
 
-\textbf{Regression loss ($\gamma$).} Grounds the simulated signals in physical reality. Interestingly, the ablation with $\gamma = 0$ shows that [acceptable/degraded] classification performance is achievable even without direct signal supervision, suggesting that task gradients alone can guide meaningful simulation. However, including regression loss [improves stability / provides faster convergence / ensures signal interpretability].
+\textbf{Regression loss ($\gamma$).} Grounds the simulated signals in physical reality. The ablation with $\gamma = 0$ (Scenario 22) tests whether task gradients alone can guide meaningful simulation without explicit signal supervision. Including regression loss provides interpretable intermediate outputs and may improve training stability by giving the regressor direct supervision early in training.
 
 \subsection{When Does Simulation Help?}
 
@@ -46,23 +46,27 @@ Conversely, simulation may provide limited benefit or even hurt performance when
 
 \subsection{Generator-Discriminator Dynamics}
 
-Adversarial training introduces a competitive dynamic between the discriminator (seeking to distinguish real from simulated) and the generator components (seeking to fool the discriminator). Successful training requires careful balance:
+Adversarial training introduces a competitive dynamic between the discriminator (seeking to distinguish real from simulated) and the generator components (seeking to fool the discriminator). Successful training requires careful balance, though the dynamics differ between our two adversarial approaches:
 
 \textbf{Discriminator domination.} If the discriminator is too powerful (high capacity, low regularization), it maintains perfect classification throughout training. The generator receives weak gradients and fails to improve. Symptoms include discriminator accuracy remaining near 100\% and no reduction in feature distance.
 
 \textbf{Generator domination.} If the discriminator is too weak, it provides uninformative gradients. The generator has no incentive to produce realistic features. Symptoms include discriminator accuracy immediately dropping to 50\% and features that satisfy the discriminator but fail downstream tasks.
 
-\textbf{Healthy equilibrium.} Proper training shows discriminator accuracy gradually decreasing from near 100\% to approximately 50\%, indicating the generator successfully closes the domain gap. The GRL lambda schedule helps achieve this by starting with weak adversarial gradients (allowing initial feature learning) and increasing strength as training progresses.
+\textbf{Achieving equilibrium.} The two adversarial scenarios use different mechanisms to achieve balance:
+\begin{itemize}
+    \item \textbf{Feature-level (GRL):} The lambda schedule starts with weak adversarial gradients (allowing initial feature learning) and increases strength as training progresses. Healthy training shows discriminator accuracy gradually decreasing from near 100\% to approximately 50\%.
+    \item \textbf{Signal-level (WGAN-GP):} Alternating updates with $n_{\text{critic}}$ discriminator steps per generator step (typically 5) naturally balances the two. The gradient penalty enforces the Lipschitz constraint, preventing discriminator collapse. Staged training with MSE pretraining before adversarial feedback helps establish reasonable signal structure first.
+\end{itemize}
 
 \subsection{Feature-Level vs. Signal-Level Discrimination}
 
-Our experiments compare two discriminator operating points:
+Our experiments compare two discriminator operating points with different training strategies:
 
-\textbf{Feature-level discrimination} operates on embeddings $\mathbf{z}_{\text{real}}$ vs. $\mathbf{z}_{\text{sim}}$. The adversarial gradient flows primarily to the feature extractor $F$, encouraging domain-invariant representations. This approach aligns with domain adaptation methods like DANN \citep{ganin2016domain}.
+\textbf{Feature-level discrimination (Scenario 4)} operates on embeddings $\mathbf{z}_{\text{real}}$ vs. $\mathbf{z}_{\text{sim}}$ using GRL with binary cross-entropy loss. The adversarial gradient flows primarily to the feature extractor $F$, encouraging domain-invariant representations. This approach aligns with domain adaptation methods like DANN \citep{ganin2016domain} and enables end-to-end training in a single backward pass.
 
-\textbf{Signal-level discrimination} operates on raw accelerometer signals $\mathbf{a}$ vs. $\tilde{\mathbf{a}}$. The adversarial gradient flows to the regressor $R$, encouraging realistic signal synthesis. This approach aligns with generative adversarial networks for time series.
+\textbf{Signal-level discrimination (Scenario 42)} operates on raw accelerometer signals $\mathbf{a}$ vs. $\tilde{\mathbf{a}}$ using WGAN-GP with alternating updates. The adversarial gradient flows to the regressor $R$, encouraging realistic signal synthesis. This approach aligns with generative adversarial networks for time series, and the Wasserstein distance provides smoother gradients than BCE when distributions have limited overlap. An optional ACGAN variant adds class conditioning to encourage activity-specific realism.
 
-Our results indicate that [feature-level / signal-level] discrimination provides greater classification benefit. This may be because [feature-level alignment directly improves the representations used for classification / signal-level realism does not guarantee task-relevant features / the feature space is lower-dimensional and easier to align].
+The two approaches target different components: feature-level discrimination directly improves the representations used for classification, while signal-level discrimination improves regressor output quality. These are complementary goals---feature-level alignment may compensate for imperfect simulation, while signal-level realism reduces the burden on the feature extractor to bridge the domain gap.
 
 \subsection{Connection to Domain Adaptation Literature}
 
@@ -74,17 +78,15 @@ Our adversarial training scenarios implement ideas from unsupervised domain adap
 
 The key difference from standard domain adaptation is that we have \emph{paired} data: each pose sequence has a corresponding real accelerometer signal. This enables the regression loss and feature similarity loss, which are unavailable in typical unsupervised domain adaptation settings.
 
-\subsection{Alternative Adversarial Objectives}
+\subsection{Adversarial Loss Function Choice}
 
-While we use the standard binary cross-entropy adversarial loss, alternative formulations may offer benefits:
+Our implementation uses different adversarial objectives for the two scenarios based on their requirements:
 
-\textbf{Wasserstein distance} \citep{arjovsky2017wasserstein} provides smoother gradients and avoids mode collapse, but requires careful enforcement of the Lipschitz constraint.
+\textbf{Binary cross-entropy (feature-level).} For feature discrimination with GRL, BCE provides a straightforward objective that works well when combined with the gradient reversal mechanism. The feature space is relatively low-dimensional, and BCE gradients are sufficient for alignment.
 
-\textbf{Least-squares loss} \citep{mao2017least} replaces BCE with MSE, providing more stable gradients when the discriminator is confident.
+\textbf{Wasserstein distance with gradient penalty (signal-level).} For signal discrimination, we use WGAN-GP \citep{gulrajani2017improved} which provides smoother gradients when real and simulated signal distributions have limited overlap. The gradient penalty ($\lambda_{\text{GP}} = 10$) enforces the Lipschitz constraint without weight clipping, enabling more stable training. This choice is motivated by the high-dimensional, structured nature of accelerometer signals where BCE can suffer from vanishing gradients.
 
-\textbf{Hinge loss} stabilizes training by only penalizing misclassified samples beyond a margin.
-
-Exploring these alternatives remains an avenue for future work.
+Alternative formulations such as least-squares loss \citep{mao2017least} or hinge loss could be explored for either scenario, though our experiments found the BCE/WGAN-GP pairing effective for their respective use cases.
 
 \section{Limitations}
 \label{sec:limitations}
@@ -197,7 +199,7 @@ To obtain reliable performance estimates:
     \item Always use subject-disjoint splits for training, validation, and test sets
     \item Report results as mean $\pm$ std over multiple random seeds (minimum 5, preferably 10)
     \item Use validation set only for model selection; evaluate test set once with final configuration
-    \item Compare against real-only and regression-first baselines to quantify simulation benefit
+    \item Use ablation studies (e.g., $\gamma=0$, $\beta=0$) to isolate the contribution of each loss component
 \end{itemize}
 
 \section{Broader Implications}
