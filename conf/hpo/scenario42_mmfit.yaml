@@ -20,7 +20,7 @@ save_artifacts: true  # Save plots to monitor D_acc and feat_dist
 
 repeat:
   enabled: true
-  count: 5
+  count: 3
 
 hydra:
   sweeper:
@@ -33,7 +33,7 @@ hydra:
       # ============================================================
       trainer.alpha: choice(0.5, 1.0, 2.0)
       trainer.beta: choice(0, 1, 2, 5, 10, 50)    # 0 tests if adversarial alone suffices
-      trainer.gamma: choice(0.5, 1.0)
+      trainer.gamma: choice(0.5, 1.0, 2)
 
       # Adversarial params - KEY for scenario 42 (WGAN-GP with alternating D/G)
       trainer.adversarial.weight: choice(0.3, 0.5, 1.0)
@@ -45,11 +45,11 @@ hydra:
       trainer.adversarial.discriminator.hidden_channels: choice([32, 64, 128], [64, 128, 256], [64, 128])
 
       # ACGAN: class-conditional discrimination (search whether it helps)
-      trainer.adversarial.discriminator.use_acgan: choice(false, true)
+      trainer.adversarial.discriminator.use_acgan: choice(true)
       trainer.adversarial.discriminator.aux_weight: choice(0.5, 1.0, 2.0)
 
-      data.stride_seconds: choice(0.1, 0.2)
-      data.batch_size: choice(32, 64)
+      data.stride_seconds: choice(0.2)
+      data.batch_size: choice(64)
 
       # --- Pass 1 DEFAULTS for Pass 2+3 params ---
       optim.lr: choice(0.0005)

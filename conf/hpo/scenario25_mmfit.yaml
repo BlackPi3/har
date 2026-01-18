@@ -12,14 +12,14 @@ trial: scenario25_mmfit
 
 # HPO-specific overrides (shorter epochs for faster search)
 trainer:
-  epochs: 60
-  patience: 60
+  epochs: 50
+  patience: 50
 
 top_k: 10
 
 repeat:
   enabled: true
-  count: 5
+  count: 3
 
 hydra:
   sweeper:
@@ -30,11 +30,11 @@ hydra:
       # ============================================================
       # PASS 1: Loss weights + Data (ACTIVE)
       # ============================================================
-      trainer.alpha: choice(0.2, 0.5, 1.0, 2.0)
-      # Beta fixed at 0 - this is the point of scenario25
-      trainer.gamma: choice(0.5, 1.0, 2.0)
+      trainer.alpha: choice(0.1, 0.5, 1.0, 2.0, 5, 10)
+      # beta fixed at 0 - this is the point of scenario25
+      trainer.gamma: choice(0.5, 1.0, 2.0, 5, 10, 20, 50)
 
-      data.stride_seconds: choice(0.2)
+      data.stride_seconds: choice(0.15)
       data.batch_size: choice(64)
 
       # --- Pass 1 DEFAULTS for Pass 2+3 params ---

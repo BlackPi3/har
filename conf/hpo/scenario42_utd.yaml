@@ -12,15 +12,15 @@ trial: scenario42_utd
 
 # HPO-specific overrides (shorter epochs for faster search)
 trainer:
-  epochs: 30
-  patience: 30
+  epochs: 50
+  patience: 50
 
 top_k: 10
 save_artifacts: true  # Save plots to monitor D_acc and feat_dist
 
 repeat:
-  enabled: false
-  count: 5
+  enabled: true
+  count: 3
 
 hydra:
   sweeper:
@@ -31,12 +31,12 @@ hydra:
       # ============================================================
       # PASS 1: Loss weights + Adversarial (ACTIVE)
       # ============================================================
-      trainer.alpha: choice(0.1, 0.5, 1, 2.0)
+      trainer.alpha: choice(0.1, 0.5, 1, 2)
       trainer.beta: choice(0, 1, 2, 5, 10, 50)    # 0 tests if adversarial alone suffices
       trainer.gamma: choice(1, 2, 5)
 
       # Adversarial params - KEY for scenario 42 (WGAN-GP with alternating D/G)
-      trainer.adversarial.weight: choice(0.1, 0.2, 0.5, 1.0, 2, 5)
+      trainer.adversarial.weight: choice(0.1, 0.5, 1.0, 2, 5)
       trainer.adversarial.n_critic: choice(1, 3, 5)            # D updates per G update
       trainer.adversarial.pretrain_epochs: choice(0, 10, 15)   # MSE-only warmup
 
@@ -44,7 +44,7 @@ hydra:
       trainer.adversarial.discriminator.hidden_channels: choice([32, 64], [32, 64, 128], [64, 128])
 
       # ACGAN: class-conditional discrimination (search whether it helps)
-      trainer.adversarial.discriminator.use_acgan: choice(false, true)
+      trainer.adversarial.discriminator.use_acgan: choice(true)
       trainer.adversarial.discriminator.aux_weight: choice(0.5, 1.0, 2.0)
 
       data.stride_seconds: choice(0.04) # TODO widen later

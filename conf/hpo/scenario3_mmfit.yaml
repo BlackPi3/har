@@ -19,7 +19,7 @@ top_k: 10
 
 repeat:
   enabled: true
-  count: 5
+  count: 3
 
 hydra:
   sweeper:
@@ -30,67 +30,68 @@ hydra:
       # ============================================================
       # PASS 1: Loss weights + Data + Secondary (ACTIVE)
       # ============================================================
-      trainer.alpha: choice(0.2, 0.5, 1.0, 2.0)
-      trainer.beta: choice(1, 2, 5, 10, 20)
-      trainer.gamma: choice(0.5, 1.0, 2.0)
+      # trainer.alpha: choice(0.2, 0.5, 1.0, 2.0)
+      # trainer.beta: choice(1, 2, 5, 10, 20)
+      # trainer.gamma: choice(0.5, 1.0, 2.0)
       
-      # Primary dataset (MMFit)
-      data.sensor_window_length: choice(250) # Should match NTU's window size
-      data.stride_seconds: choice(0.15)
-      data.batch_size: choice(64)
+      # # Primary dataset (MMFit)
+      # data.sensor_window_length: choice(250) # Should match NTU's window size
+      # data.stride_seconds: choice(0.15)
+      # data.batch_size: choice(64)
       
-      # Secondary dataset (NTU) params
-      trainer.secondary.loss_weight: choice(0.25, 0.5, 1.0, 2.0)
-      trainer.secondary.data: choice(ntu100.yaml)  # Match MMFit 100Hz
-      # Note: To search NTU window/stride, need run_trial to support secondary data overrides
-      # For now, use defaults from ntu100.yaml (window=250, stride=0.2)
+      # # Secondary dataset (NTU) params
+      # trainer.secondary.loss_weight: choice(0.25, 0.5, 1.0, 2.0)
+      # trainer.secondary.data: choice(ntu100.yaml)  # Match MMFit 100Hz
+      # # Note: To search NTU window/stride, need run_trial to support secondary data overrides
+      # # For now, use defaults from ntu100.yaml (window=250, stride=0.2)
       
-      # --- Pass 1 DEFAULTS for Pass 2+3 params ---
-      optim.lr: choice(0.0008)
-      optim.weight_decay: choice(0.00002)
-      optim.warmup_epochs: choice(5)
-      optim.scheduler.patience: choice(15)
-      optim.scheduler.factor: choice(0.1)
-      model.encoder_classifier.feature_extractor.drop_prob: choice(0.2)
-      model.encoder_classifier.classifier.dropout: choice(0.3)
-      trainer.label_smoothing: choice(0.0)
+      # # --- Pass 1 DEFAULTS for Pass 2+3 params ---
+      # optim.lr: choice(0.0008)
+      # optim.weight_decay: choice(0.00002)
+      # optim.warmup_epochs: choice(5)
+      # optim.scheduler.patience: choice(15)
+      # optim.scheduler.factor: choice(0.1)
+      # model.encoder_classifier.feature_extractor.drop_prob: choice(0.2)
+      # model.encoder_classifier.classifier.dropout: choice(0.3)
+      # trainer.label_smoothing: choice(0.0)
       
-      model.encoder_classifier.feature_extractor.kernel_size: choice(11)
-      model.encoder_classifier.feature_extractor.base_filters: choice([9,15,24])
-      model.encoder_classifier.feature_extractor.embedding_dim: choice(100)
-      model.encoder_classifier.classifier.hidden_units: choice([100])
-      model.regressor.joint_hidden_channels: choice([32,32,32,16])
-      model.regressor.temporal_hidden_channels: choice(16)
-
-      # ============================================================
-      # PASS 2: Regularization (UNCOMMENT after Pass 1)
-      # ============================================================
-      # # Fix Pass 1 winners here:
-      # trainer.alpha: choice(WINNER)
-      # trainer.beta: choice(WINNER)
-      # trainer.gamma: choice(WINNER)
-      # data.sensor_window_length: choice(WINNER)
-      # data.stride_seconds: choice(WINNER)
-      # data.batch_size: choice(WINNER)
-      # trainer.secondary.loss_weight: choice(WINNER)
-      #
-      # # Search regularization:
-      # optim.lr: tag(log, interval(3e-4, 2e-3))
-      # optim.weight_decay: tag(log, interval(1e-5, 1e-4))
-      # optim.warmup_epochs: choice(0, 5, 10)
-      # optim.scheduler.patience: choice(10, 15, 20)
-      # optim.scheduler.factor: choice(0.05, 0.1, 0.2)
-      # model.encoder_classifier.feature_extractor.drop_prob: choice(0.1, 0.2, 0.3)
-      # model.encoder_classifier.classifier.dropout: choice(0.2, 0.3, 0.4)
-      # trainer.label_smoothing: choice(0.0, 0.05, 0.1)
-      #
-      # # Keep capacity defaults
       # model.encoder_classifier.feature_extractor.kernel_size: choice(11)
       # model.encoder_classifier.feature_extractor.base_filters: choice([9,15,24])
       # model.encoder_classifier.feature_extractor.embedding_dim: choice(100)
       # model.encoder_classifier.classifier.hidden_units: choice([100])
       # model.regressor.joint_hidden_channels: choice([32,32,32,16])
       # model.regressor.temporal_hidden_channels: choice(16)
+
+      # ============================================================
+      # PASS 2: Regularization (UNCOMMENT after Pass 1)
+      # ============================================================
+      # Fix Pass 1 winners here:
+      trainer.alpha: choice(2)
+      trainer.beta: choice(2)
+      trainer.gamma: choice(2)
+      data.sensor_window_length: choice(250)
+      data.stride_seconds: choice(0.15)
+      data.batch_size: choice(64)
+      trainer.secondary.loss_weight: choice(0.25)
+      trainer.secondary.data: choice(ntu100.yaml)  # Match MMFit 100Hz
+      
+      # Search regularization:
+      optim.lr: tag(log, interval(3e-4, 2e-3))
+      optim.weight_decay: tag(log, interval(1e-5, 1e-4))
+      optim.warmup_epochs: choice(0, 5, 10)
+      optim.scheduler.patience: choice(10, 15, 20)
+      optim.scheduler.factor: choice(0.05, 0.1, 0.2)
+      model.encoder_classifier.feature_extractor.drop_prob: choice(0.1, 0.2, 0.3, 0.4)
+      model.encoder_classifier.classifier.dropout: choice(0.2, 0.3, 0.4, 0.5, 0.6)
+      trainer.label_smoothing: choice(0.05, 0.1)
+      
+      # Keep capacity defaults
+      model.encoder_classifier.feature_extractor.kernel_size: choice(11)
+      model.encoder_classifier.feature_extractor.base_filters: choice([9,15,24])
+      model.encoder_classifier.feature_extractor.embedding_dim: choice(100)
+      model.encoder_classifier.classifier.hidden_units: choice([100])
+      model.regressor.joint_hidden_channels: choice([32,32,32,16])
+      model.regressor.temporal_hidden_channels: choice(16)
 
       # ============================================================
       # PASS 3: Capacity (UNCOMMENT after Pass 2)

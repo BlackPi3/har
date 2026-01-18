@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-#SBATCH -J har-eval
-#SBATCH -p L40S
+#SBATCH -J sc24_utd_p3
+#SBATCH -p RTXA6000
 #SBATCH --gpus=1
 #SBATCH --cpus-per-gpu=8
 #SBATCH --mem=40G
@@ -11,8 +11,8 @@
 ########################################
 # STUDY_NAME: name for this eval run (used for output directory)
 # HPO_NAME: name of the HPO study to evaluate (may differ from STUDY_NAME)
-STUDY_NAME=${STUDY_NAME:-scenario2_utd}
-REPEAT_COUNT=${REPEAT_COUNT:-10}
+STUDY_NAME=${STUDY_NAME:-sc24_utd_p3}
+REPEAT_COUNT=${REPEAT_COUNT:-5}
 
 # Container + project paths
 PROJECT_ROOT=${PROJECT_ROOT:-/home/zolfaghari/har}

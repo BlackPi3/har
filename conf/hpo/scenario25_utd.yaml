@@ -18,8 +18,8 @@ trainer:
 top_k: 10
 
 repeat:
-  enabled: false
-  count: 5
+  enabled: true
+  count: 3
 
 hydra:
   sweeper:
@@ -62,7 +62,7 @@ hydra:
       # trainer.gamma: choice(WINNER)
       # data.stride_seconds: choice(WINNER)
       # data.batch_size: choice(WINNER)
-      #
+      
       # optim.lr: tag(log, interval(5e-4, 2e-3))
       # optim.weight_decay: tag(log, interval(1e-5, 1e-4))
       # optim.warmup_epochs: choice(0, 5, 10)
