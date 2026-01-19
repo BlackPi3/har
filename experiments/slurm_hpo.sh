@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-#SBATCH -J sc42_mmfit_p1
-#SBATCH -p RTXA6000
+#SBATCH -J sc23_mmfit_p2
+#SBATCH -p RTX3090
 #SBATCH --gpus=1
 #SBATCH --cpus-per-gpu=8
 #SBATCH --mem=40G
@@ -10,8 +10,8 @@
 # HPO configuration (study via conf/hpo)
 ########################################
 # Defaults (override via environment variables as needed)
-HPO_SPACE=${HPO_SPACE:-scenario42_mmfit} # scenario23_utd | scenario23_mmfit
-STUDY_NAME=${STUDY_NAME:-sc42_mmfit_p1}  # descriptive study name
+HPO_SPACE=${HPO_SPACE:-scenario23_mmfit} # scenario23_utd | scenario23_mmfit
+STUDY_NAME=${STUDY_NAME:-sc23_mmfit_p2}  # descriptive study name
 N_TRIALS=${N_TRIALS:-100}              # number of HPO trials
 
 # Container + project paths

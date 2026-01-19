@@ -81,17 +81,12 @@ hydra:
       optim.warmup_epochs: choice(0, 5, 10)
       optim.scheduler.patience: choice(10, 15, 20)
       optim.scheduler.factor: choice(0.05, 0.1, 0.2)
+      trainer.label_smoothing: choice(0.05, 0.1)
       model.encoder_classifier.feature_extractor.drop_prob: choice(0.1, 0.2, 0.3, 0.4)
       model.encoder_classifier.classifier.dropout: choice(0.2, 0.3, 0.4, 0.5, 0.6)
-      trainer.label_smoothing: choice(0.05, 0.1)
+      model.regressor.joint_dropouts: choice([0.0, 0.2, 0.2, 0.2], [0.2,0.3,0.3,0.3], [0.3,0.4,0.4,0.4], [0.4,0.5,0.5,0.5])
+      model.regressor.temporal_dropout: choice(0.1, 0.2, 0.3, 0.4)
       
-      # Keep capacity defaults
-      model.encoder_classifier.feature_extractor.kernel_size: choice(11)
-      model.encoder_classifier.feature_extractor.base_filters: choice([9,15,24])
-      model.encoder_classifier.feature_extractor.embedding_dim: choice(100)
-      model.encoder_classifier.classifier.hidden_units: choice([100])
-      model.regressor.joint_hidden_channels: choice([32,32,32,16])
-      model.regressor.temporal_hidden_channels: choice(16)
 
       # ============================================================
       # PASS 3: Capacity (UNCOMMENT after Pass 2)

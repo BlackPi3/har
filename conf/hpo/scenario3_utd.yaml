@@ -96,10 +96,10 @@ hydra:
       # Fix Pass 1+2 winners here:
       trainer.alpha: choice(0.1)
       trainer.beta: choice(5)
-      trainer.gamma: choice(1, 10)
+      trainer.gamma: choice(10)
       data.stride_seconds: choice(0.04)
       data.batch_size: choice(8)
-      trainer.secondary.loss_weight: choice(0.5)
+      trainer.secondary.loss_weight: choice(0.25)
       optim.lr: choice(0.0012973692219373607)
       optim.weight_decay: choice(1.2091794988070006e-05)
       optim.warmup_epochs: choice(5)
@@ -110,12 +110,15 @@ hydra:
       trainer.label_smoothing: choice(0.1)
       
       # Search capacity:
-      model.encoder_classifier.feature_extractor.kernel_size: choice(5, 7, 9)
-      model.encoder_classifier.feature_extractor.base_filters: choice([6,9,12], [8,12,16], [9,15,24])
-      model.encoder_classifier.feature_extractor.embedding_dim: choice(64, 80, 100)
-      model.encoder_classifier.classifier.hidden_units: choice([64], [100], [64,64])
-      model.regressor.joint_hidden_channels: choice([24,24,16,12], [32,32,24,16], [32,32,32,16])
-      model.regressor.temporal_hidden_channels: choice(10, 12, 16)
+      model.encoder_classifier.feature_extractor.kernel_size: choice(5, 7, 9, 11)
+      model.encoder_classifier.feature_extractor.base_filters: choice([4,6,8], [6,9,12], [8,12,16], [9,15,24])
+      model.encoder_classifier.feature_extractor.embedding_dim: choice(60, 80, 100)
+      model.encoder_classifier.classifier.hidden_units: choice([64], [100])
+      model.regressor.joint_hidden_channels: choice([16,16,12,8], [24,24,16,12], [32,32,24,16])
+      model.regressor.temporal_hidden_channels: choice(8, 12, 16)
+      model.regressor.joint_kernel_sizes: choice([3,3,3,1], [5,5,5,1])
+      model.regressor.joint_dropouts: choice([0.0, 0.2, 0.2, 0.2], [0.2,0.3,0.3,0.3], [0.3,0.4,0.4,0.4], [0.4,0.5,0.5,0.5])
+      model.regressor.temporal_dropout: choice(0.1, 0.2, 0.3, 0.4)
 
   sweep:
     dir: "experiments/hpo/${study_name}/trials"
