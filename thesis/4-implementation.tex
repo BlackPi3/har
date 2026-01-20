@@ -11,27 +11,27 @@ Our framework comprises four primary neural network components: the feature extr
 \subsection{Feature Extractor}
 \label{sec:feature-extractor}
 
-The feature extractor $F$ transforms raw accelerometer signals into fixed-dimensional feature representations suitable for classification. We implement a temporal convolutional architecture that captures local patterns in the accelerometer signal while maintaining computational efficiency.
+The feature extractor $F$ transforms raw accelerometer signals into fixed-dimensional feature representations suitable for classification. We adapt the encoder portion of the convolutional autoencoder architecture from MM-Fit \citep{stromback2020mmfit}, using 1D convolutions that operate along the temporal axis while treating the three accelerometer axes as input channels.
 
 \subsubsection{Architecture}
 
-The feature extractor consists of multiple 1D convolutional blocks followed by global pooling and a dense projection layer. Each convolutional block applies:
+The feature extractor consists of multiple 1D convolutional blocks followed by max pooling and a dense projection layer. Each convolutional block applies:
 \begin{enumerate}
-    \item 1D convolution with configurable kernel size and filter count
-    \item Batch normalization for training stability
-    \item LeakyReLU activation (negative slope $= 0.01$)
+    \item Strided 1D convolution with configurable kernel size and filter count
+    \item Batch normalization (optional)
+    \item LeakyReLU activation
     \item Dropout for regularization
-    \item Max pooling with stride 2 for temporal downsampling
+    \item Max pooling for additional temporal downsampling (between layers)
 \end{enumerate}
 
-The architecture processes input accelerometer signals $\mathbf{a} \in \mathbb{R}^{3 \times T}$ (3 axes over $T$ timesteps) through successive convolutional layers that progressively expand the channel dimension while reducing the temporal dimension. After the final convolutional block, global average pooling aggregates temporal information, and a fully-connected layer projects to the embedding dimension $d$.
+The architecture processes input accelerometer signals $\mathbf{a} \in \mathbb{R}^{3 \times T}$ (3 axes over $T$ timesteps) through successive strided convolutional layers that progressively expand the channel dimension while reducing the temporal dimension. After a final max pooling operation, the output is flattened and a fully-connected layer projects to the embedding dimension $d$.
 
 Formally, for a three-layer configuration:
 \begin{align}
-    \mathbf{h}_1 &= \text{Pool}(\text{Dropout}(\text{LeakyReLU}(\text{BN}(\text{Conv}_1(\mathbf{a}))))) \\
-    \mathbf{h}_2 &= \text{Pool}(\text{Dropout}(\text{LeakyReLU}(\text{BN}(\text{Conv}_2(\mathbf{h}_1))))) \\
-    \mathbf{h}_3 &= \text{Pool}(\text{Dropout}(\text{LeakyReLU}(\text{BN}(\text{Conv}_3(\mathbf{h}_2))))) \\
-    \mathbf{z} &= \text{FC}(\text{GlobalPool}(\mathbf{h}_3))
+    \mathbf{h}_1 &= \text{Pool}(\text{Dropout}(\text{LeakyReLU}(\text{BN}(\text{StridedConv}_1(\mathbf{a}))))) \\
+    \mathbf{h}_2 &= \text{Pool}(\text{Dropout}(\text{LeakyReLU}(\text{BN}(\text{StridedConv}_2(\mathbf{h}_1))))) \\
+    \mathbf{h}_3 &= \text{Pool}(\text{Dropout}(\text{LeakyReLU}(\text{BN}(\text{StridedConv}_3(\mathbf{h}_2))))) \\
+    \mathbf{z} &= \text{FC}(\text{Flatten}(\mathbf{h}_3))
 \end{align}
 where $\mathbf{z} \in \mathbb{R}^d$ is the output feature embedding.
 
@@ -47,12 +47,14 @@ where $\mathbf{z} \in \mathbb{R}^d$ is the output feature embedding.
 \hline
 \textbf{Parameter} & \textbf{Default} & \textbf{Description} \\
 \hline
-\texttt{n\_filters} & 9 & Base number of convolutional filters \\
-\texttt{kernel\_size} & 5 & Kernel size for convolutions \\
+\texttt{base\_filters} & $[9, 15, 24]$ & Filter counts per convolutional layer \\
+\texttt{kernel\_size} & 11 & Kernel size for convolutions \\
+\texttt{kernel\_stride} & 2 & Stride for strided convolutions \\
 \texttt{embedding\_dim} & 100 & Output feature dimension $d$ \\
-\texttt{dropout} & 0.3 & Dropout probability \\
-\texttt{pool\_size} & 2 & Max pooling kernel size \\
-\texttt{num\_layers} & 3 & Number of convolutional blocks \\
+\texttt{dropout} & 0.0 & Dropout probability \\
+\texttt{pool\_kernel} & 2 & Max pooling kernel size \\
+\texttt{layers} & 3 & Number of convolutional blocks \\
+\texttt{use\_batch\_norm} & False & Enable batch normalization \\
 \hline
 \end{tabular}
 \end{table}

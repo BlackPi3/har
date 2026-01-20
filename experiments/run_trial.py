@@ -681,19 +681,51 @@ def _build_models(cfg) -> Dict[str, torch.nn.Module]:
                 ).to(cfg.device)
         else:
             # Feature-level discriminator (Scenario 4): operates on encoder features
-            from src.models.discriminator import FeatureDiscriminator
             disc_hidden = getattr(disc_cfg, "hidden_units", [64]) if disc_cfg else [64]
             normalize_features = _to_bool(getattr(disc_cfg, "normalize_features", True)) if disc_cfg else True
-            models["discriminator"] = FeatureDiscriminator(
-                f_in=inferred_f_in,
-                hidden_units=list(disc_hidden) if disc_hidden else [64],
-                dropout=disc_dropout,
-                use_grl=use_grl,
-                grl_lambda=grl_lambda,
-                normalize_features=normalize_features,
-                use_spectral_norm=use_spectral_norm,
-                label_smoothing=label_smoothing,
-            ).to(cfg.device)
+
+            # Check for ACGAN mode (use _to_bool to handle string "False" from CLI)
+            use_acgan = _to_bool(getattr(disc_cfg, "use_acgan", False)) if disc_cfg else False
+
+            if use_acgan:
+                # ACGAN: class-conditional feature discriminator with auxiliary classifier
+                from src.models.discriminator import ACFeatureDiscriminator
+                # Get n_classes from discriminator config or model config
+                disc_n_classes = getattr(disc_cfg, "n_classes", None) if disc_cfg else None
+                if disc_n_classes is None:
+                    model_cfg = getattr(cfg, "model", None)
+                    enc_cls_cfg = getattr(model_cfg, "encoder_classifier", None) if model_cfg else None
+                    disc_n_classes = int(getattr(enc_cls_cfg, "n_classes", 21)) if enc_cls_cfg else 21
+                else:
+                    disc_n_classes = int(disc_n_classes)
+                embed_dim = int(getattr(disc_cfg, "embed_dim", 32)) if disc_cfg else 32
+                aux_weight = float(getattr(disc_cfg, "aux_weight", 1.0)) if disc_cfg else 1.0
+                models["discriminator"] = ACFeatureDiscriminator(
+                    f_in=inferred_f_in,
+                    n_classes=disc_n_classes,
+                    hidden_units=list(disc_hidden) if disc_hidden else [64],
+                    embed_dim=embed_dim,
+                    dropout=disc_dropout,
+                    use_grl=use_grl,
+                    grl_lambda=grl_lambda,
+                    normalize_features=normalize_features,
+                    use_spectral_norm=use_spectral_norm,
+                    label_smoothing=label_smoothing,
+                    aux_weight=aux_weight,
+                ).to(cfg.device)
+            else:
+                # Standard feature discriminator (no class conditioning)
+                from src.models.discriminator import FeatureDiscriminator
+                models["discriminator"] = FeatureDiscriminator(
+                    f_in=inferred_f_in,
+                    hidden_units=list(disc_hidden) if disc_hidden else [64],
+                    dropout=disc_dropout,
+                    use_grl=use_grl,
+                    grl_lambda=grl_lambda,
+                    normalize_features=normalize_features,
+                    use_spectral_norm=use_spectral_norm,
+                    label_smoothing=label_smoothing,
+                ).to(cfg.device)
     return models
 
 

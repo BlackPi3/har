@@ -39,7 +39,14 @@ hydra:
       # Adversarial-specific params
       trainer.adversarial.weight: choice(0, 0.1, 0.2, 0.5)
       trainer.adversarial.grl_lambda: choice(0.5, 1.0)
-      
+      trainer.adversarial.pretrain_epochs: choice(0)  # Search: choice(0, 5, 10)
+      trainer.adversarial.discriminator.hidden_units: choice([64])  # Search: choice([64], [128, 64])
+      trainer.adversarial.discriminator.label_smoothing: choice(0.1)  # Search: choice(0.0, 0.05, 0.1)
+      # ACGAN: class-conditional with auxiliary classifier (search in later passes)
+      trainer.adversarial.discriminator.use_acgan: choice(false)  # Search: choice(false, true)
+      trainer.adversarial.discriminator.aux_weight: choice(1.0)   # Search: choice(0.5, 1.0, 2.0)
+      trainer.adversarial.discriminator.embed_dim: choice(32)     # Search: choice(16, 32, 64)
+
       data.sensor_window_length: choice(400)
       data.stride_seconds: choice(0.2)
       data.batch_size: choice(64)

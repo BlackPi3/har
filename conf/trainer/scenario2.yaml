@@ -43,21 +43,21 @@ secondary:
   data: ntu50.yaml  # name of a config under conf/data (e.g., ntu50.yaml or ntu100.yaml)
   n_classes: 60
 
-# Adversarial training (Scenario 4/42): discriminator with GRL.
-# Scenario 4: feature-level (discriminator.input_type: features)
-# Scenario 42: signal-level (discriminator.input_type: signal)
+# Adversarial training (Scenario 4/42): discriminator with GRL or alternating D/G.
+# Scenario 4: feature-level (discriminator.input_type: features) - uses GRL + BCE
+# Scenario 42: signal-level (discriminator.input_type: signal) - uses WGAN-GP + alternating
 adversarial:
   enabled: false
   weight: 0.1           # weight of adversarial loss in total loss
-  use_grl: true         # use Gradient Reversal Layer (recommended for domain adaptation)
+  use_grl: true         # use Gradient Reversal Layer (recommended for feature-level)
   grl_lambda: 1.0       # GRL strength (fixed or initial value if scheduled)
   schedule_lambda: false  # if true, ramp lambda from 0→1 over training (DANN-style)
   schedule_gamma: 10.0  # steepness of lambda schedule (only used if schedule_lambda=true)
-  # For future extension: alternating D/G updates instead of GRL
-  alternating: false    # NOT YET IMPLEMENTED - use GRL for now
-  n_critic: 1           # D updates per G update (only for alternating mode)
-  # Staged training: pretrain regressor with MSE before adding adversarial loss
-  # This helps stabilize training by giving the regressor a reasonable starting point
+  # Alternating D/G updates (used for signal-level WGAN-GP)
+  alternating: false    # set true for WGAN signal-level (auto-enabled if loss_type=wgan & use_grl=false)
+  n_critic: 5           # D updates per G update (only for alternating mode)
+  # Staged training: pretrain with MSE before adding adversarial loss
+  # Literature recommends pretraining on REAL data only before adversarial
   pretrain_epochs: 0    # epochs to train with MSE only (0 = no pretraining)
   discriminator:
     input_type: features  # "features" (Scenario 4) or "signal" (Scenario 42)
@@ -68,12 +68,13 @@ adversarial:
     use_spectral_norm: false   # Constrain D capacity with spectral normalization
     label_smoothing: 0.1       # Smooth labels for BCE (0.1 → real=0.9, fake=0.1)
     # Loss type: "bce" (vanilla GAN) or "wgan" (Wasserstein with gradient penalty)
-    # WGAN recommended for signal-level discrimination (better gradients for time-series)
-    # NOTE: For WGAN, set use_grl=false and use alternating optimization (not yet implemented)
+    # - Feature-level (Scenario 4): BCE + GRL recommended (domain-adversarial approach)
+    # - Signal-level (Scenario 42): WGAN-GP + alternating recommended (better time-series gradients)
     loss_type: bce
     lambda_gp: 10.0       # Gradient penalty coefficient (only for WGAN)
     # ACGAN: class-conditional discriminator with auxiliary classifier
-    # When enabled, D receives class labels and predicts both real/fake and activity class
+    # When enabled, D receives class labels and predicts both real/fake AND activity class
+    # Works for BOTH feature-level (ACFeatureDiscriminator) and signal-level (ACSignalDiscriminator)
     # This encourages class-specific realism (e.g., "real jumping" vs "fake jumping")
     use_acgan: false      # Enable ACGAN-style class conditioning
     aux_weight: 1.0       # Weight for auxiliary classification loss

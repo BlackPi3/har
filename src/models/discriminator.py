@@ -174,13 +174,196 @@ class FeatureDiscriminator(nn.Module):
     def get_smooth_labels(self, batch_size: int, real: bool, device: torch.device):
         """
         Get smoothed labels for discriminator training.
-        
+
         With label_smoothing=0.1:
             real: 0.9 instead of 1.0
             sim:  0.1 instead of 0.0
-            
+
         This prevents D from becoming overconfident and maintains gradient signal.
         """
+        if real:
+            return torch.full((batch_size, 1), 1.0 - self.label_smoothing, device=device)
+        else:
+            return torch.full((batch_size, 1), self.label_smoothing, device=device)
+
+
+class ACFeatureDiscriminator(nn.Module):
+    """
+    ACGAN-style Feature Discriminator for class-conditional adversarial training.
+
+    Extends FeatureDiscriminator with:
+    1. Class conditioning: D evaluates "is this a real feature OF CLASS Y?"
+    2. Auxiliary classifier: D also predicts activity class
+
+    This encourages class-specific feature alignment - the feature extractor must
+    produce features that are indistinguishable AND preserve class information.
+
+    For feature-level discrimination, this uses GRL (domain-adversarial) training
+    as recommended by literature for feature alignment objectives.
+
+    Reference: Odena et al., "Conditional Image Synthesis with Auxiliary Classifier GANs"
+
+    Args:
+        f_in: Input feature dimension (should match FE embedding_dim)
+        n_classes: Number of activity classes
+        hidden_units: List of hidden layer sizes
+        embed_dim: Dimension of class label embedding
+        dropout: Dropout probability
+        use_grl: Whether to apply gradient reversal internally
+        grl_lambda: Initial GRL lambda value
+        normalize_features: L2 normalize input features for stable training
+        use_spectral_norm: Apply spectral normalization to constrain D
+        label_smoothing: Smooth labels for real/fake (not used for aux classifier)
+        aux_weight: Weight for auxiliary classification loss (relative to real/fake)
+    """
+
+    def __init__(
+        self,
+        f_in: int = 100,
+        n_classes: int = 21,
+        hidden_units: list = None,
+        embed_dim: int = 32,
+        dropout: float = 0.3,
+        use_grl: bool = True,
+        grl_lambda: float = 1.0,
+        normalize_features: bool = True,
+        use_spectral_norm: bool = False,
+        label_smoothing: float = 0.1,
+        aux_weight: float = 1.0,
+    ):
+        super().__init__()
+
+        if hidden_units is None:
+            hidden_units = [64]
+
+        self.use_grl = use_grl
+        self.grl = GradientReversalLayer(grl_lambda) if use_grl else None
+        self._grl_lambda = grl_lambda
+        self.normalize_features = normalize_features
+        self.label_smoothing = label_smoothing
+        self.n_classes = n_classes
+        self.aux_weight = aux_weight
+        self.embed_dim = embed_dim
+        self.f_in = f_in
+
+        # Class embedding for conditioning
+        self.class_embed = nn.Embedding(n_classes, embed_dim)
+
+        # Build MLP: f_in + embed_dim -> hidden -> ... -> shared_dim
+        layers = []
+        prev_dim = f_in + embed_dim  # Concatenate features with class embedding
+
+        for h_dim in hidden_units:
+            linear = nn.Linear(prev_dim, h_dim)
+            if use_spectral_norm:
+                linear = nn.utils.spectral_norm(linear)
+            layers.extend([
+                linear,
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Dropout(dropout),
+            ])
+            prev_dim = h_dim
+
+        self.net = nn.Sequential(*layers)
+
+        # Shared representation size is the last hidden dim
+        shared_dim = hidden_units[-1] if hidden_units else f_in + embed_dim
+
+        # Real/Fake head (discriminator)
+        self.fc_adv = nn.Linear(shared_dim, 1)
+
+        # Auxiliary classifier head (predicts activity class)
+        self.fc_aux = nn.Linear(shared_dim, n_classes)
+
+        self._initialize_weights()
+
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.kaiming_normal_(m.weight, mode='fan_in', nonlinearity='leaky_relu')
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+            elif isinstance(m, nn.Embedding):
+                nn.init.normal_(m.weight, mean=0, std=0.1)
+
+    def set_grl_lambda(self, lambda_: float):
+        """Update GRL lambda (useful for scheduling)."""
+        self._grl_lambda = lambda_
+        if self.grl is not None:
+            self.grl.lambda_ = lambda_
+
+    def forward(
+        self,
+        features: torch.Tensor,
+        labels: torch.Tensor = None,
+        apply_grl: bool = None,
+        grl_lambda: float = None,
+    ):
+        """
+        Forward pass with optional class conditioning.
+
+        Args:
+            features: (B, f_in) feature tensor from FE
+            labels: (B,) class labels for conditioning (optional)
+            apply_grl: Override whether to apply GRL (None = use self.use_grl)
+            grl_lambda: Override GRL lambda value
+
+        Returns:
+            adv_logits: (B, 1) real/fake logits
+            aux_logits: (B, n_classes) activity class logits
+        """
+        x = features
+
+        # L2 normalize features for stable training
+        if self.normalize_features:
+            x = F.normalize(x, p=2, dim=1)
+
+        # Apply GRL if configured
+        should_apply = apply_grl if apply_grl is not None else self.use_grl
+        if should_apply and self.grl is not None:
+            lambda_val = grl_lambda if grl_lambda is not None else self._grl_lambda
+            x = self.grl(x, lambda_val)
+
+        # Class conditioning
+        if labels is not None:
+            class_emb = self.class_embed(labels)  # (B, embed_dim)
+        else:
+            # If no labels, use zero embedding (unconditional)
+            class_emb = torch.zeros(x.size(0), self.embed_dim, device=x.device)
+
+        # Concatenate features with class embedding
+        x = torch.cat([x, class_emb], dim=1)  # (B, f_in + embed_dim)
+
+        # Shared representation through MLP
+        shared = self.net(x)
+
+        # Two heads
+        adv_logits = self.fc_adv(shared)   # (B, 1) - real/fake
+        aux_logits = self.fc_aux(shared)   # (B, n_classes) - activity class
+
+        return adv_logits, aux_logits
+
+    def forward_no_grl(self, features: torch.Tensor, labels: torch.Tensor = None):
+        """Forward pass without GRL (for gradient penalty computation if needed)."""
+        x = features
+        if self.normalize_features:
+            x = F.normalize(x, p=2, dim=1)
+
+        if labels is not None:
+            class_emb = self.class_embed(labels)
+        else:
+            class_emb = torch.zeros(x.size(0), self.embed_dim, device=x.device)
+
+        x = torch.cat([x, class_emb], dim=1)
+        shared = self.net(x)
+
+        adv_logits = self.fc_adv(shared)
+        aux_logits = self.fc_aux(shared)
+
+        return adv_logits, aux_logits
+
+    def get_smooth_labels(self, batch_size: int, real: bool, device: torch.device):
+        """Get smoothed labels for discriminator training (real/fake head only)."""
         if real:
             return torch.full((batch_size, 1), 1.0 - self.label_smoothing, device=device)
         else:
@@ -512,7 +695,7 @@ class ACSignalDiscriminator(nn.Module):
 
 
 def compute_gradient_penalty_acgan(
-    discriminator: "ACSignalDiscriminator",
+    discriminator: nn.Module,
     real_samples: torch.Tensor,
     fake_samples: torch.Tensor,
     labels: torch.Tensor,
@@ -523,10 +706,11 @@ def compute_gradient_penalty_acgan(
     Compute gradient penalty for WGAN-GP with ACGAN discriminator.
 
     Same as compute_gradient_penalty but passes labels through.
+    Works with both ACSignalDiscriminator and ACFeatureDiscriminator.
 
     Args:
-        discriminator: ACSignalDiscriminator instance
-        real_samples: Real data samples (B, C, L)
+        discriminator: ACSignalDiscriminator or ACFeatureDiscriminator instance
+        real_samples: Real data samples (B, C, L) for signal or (B, F) for features
         fake_samples: Generated/simulated samples, same shape as real
         labels: Class labels (B,)
         device: Torch device

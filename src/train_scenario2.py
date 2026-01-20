@@ -28,12 +28,13 @@ except Exception:  # pragma: no cover - fallback path
 # MMD + Contrastive losses for Scenario 5
 from src.models.losses import MMDLoss, ContrastiveLoss
 
-# WGAN-GP for Scenario 42, ACGAN support
+# WGAN-GP for Scenario 42, ACGAN support (signal and feature level)
 from src.models.discriminator import (
     compute_gradient_penalty,
     compute_gradient_penalty_acgan,
     WGANLoss,
     ACSignalDiscriminator,
+    ACFeatureDiscriminator,
 )
 
 def _to_bool(value):
@@ -197,11 +198,13 @@ class Trainer:
                     "adversarial.enabled=true but 'discriminator' model is missing. "
                     "Ensure experiments.run_trial builds it."
                 )
-            # Validate ACGAN discriminator type
-            if self.use_acgan and not isinstance(self.models["discriminator"], ACSignalDiscriminator):
+            # Validate ACGAN discriminator type (signal or feature level)
+            if self.use_acgan and not isinstance(
+                self.models["discriminator"], (ACSignalDiscriminator, ACFeatureDiscriminator)
+            ):
                 raise ValueError(
-                    "use_acgan=true but discriminator is not ACSignalDiscriminator. "
-                    "Ensure experiments.run_trial builds ACSignalDiscriminator when use_acgan is enabled."
+                    "use_acgan=true but discriminator is not ACSignalDiscriminator or ACFeatureDiscriminator. "
+                    "Ensure experiments.run_trial builds the appropriate ACGAN discriminator when use_acgan is enabled."
                 )
             # Loss function based on config
             if self.adv_loss_type == "wgan":

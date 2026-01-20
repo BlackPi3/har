@@ -37,20 +37,20 @@ Researchers have proposed several approaches to mitigate this challenge:
     \item \textbf{Generative models}: GANs and diffusion models synthesize realistic sensor data, introducing richer variability in activity patterns \cite{li2024diffusionhar}.
     \item \textbf{Cross-modal synthetic data generation}:
     \begin{itemize}
-        \item \textit{Video-to-IMU pipelines} (e.g. IMUTube) generate synthetic IMU signals from large-scale video datasets, capturing realistic temporal and kinematic dynamics \cite{li2025imutube}.
-        \item \textit{Language-to-IMU pipelines} (e.g. IMUGPT) convert textual activity descriptions into motion data, producing diverse sensor signals with semantic variety \cite{li2025imutube}.
+        \item \textit{Video-to-IMU pipelines} (e.g. IMUTube) generate synthetic IMU signals from large-scale video datasets, capturing realistic temporal and kinematic dynamics \cite{kwon2020imutube}.
+        \item \textit{Language-to-IMU pipelines} (e.g. IMUGPT) convert textual activity descriptions into motion data, producing diverse sensor signals with semantic variety \cite{leng2024imugpt}.
     \end{itemize}
 \end{itemize}
 
-These advanced methods have demonstrated substantial improvements in HAR performance under limited data regimes, often surpassing traditional augmentation strategies. Nevertheless, challenges persist in ensuring temporal consistency, modality alignment, and generalizability of the generated data, areas that this thesis seeks to explore further.
+These advanced methods have demonstrated substantial improvements in HAR performance under limited data regimes, often surpassing traditional augmentation strategies. Nevertheless, challenges persist in ensuring temporal consistency, modality alignment, and generalizability of the generated data, especially to other subjects, areas that this thesis seeks to explore further.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Research Questions or Hypotheses
-Given the challenges of data scarcity in Human Activity Recognition (HAR) and the opportunities presented by multi-modal data, this thesis investigates several interrelated questions aimed at enhancing HAR performance, on well known datasets such as MMFit and UTD-MHAD \cite{stromback2020mm, chen2015utd}, through novel training pipelines.
+Given the challenges of data scarcity in HAR and the opportunities presented by multi-modal data, this thesis investigates several interrelated questions aimed at enhancing HAR performance, on well known datasets such as MMFit, UTD-MHAD and NTU RGB+D \cite{stromback2020mm, chen2015utd, shahroudy2016ntu}, through novel training pipelines.
 
-A primary objective of this work is to explore whether HAR performance can be improved by integrating a joint training framework that concurrently learns a sensor data regressor and an activity classifier. Specifically, this involves generating synthetic wrist accelerometer data from corresponding joint pose sequences, comprising the wrist, elbow, and shoulder, and utilizing both real and generated sensor data to inform the classifier. This approach differs from prior works where regressors and classifiers were trained separately, and we hypothesize that concurrent optimization may yield more robust activity representations.
+A primary objective of this work is to explore whether HAR performance can be improved by integrating a joint training framework that concurrently learns a sensor data regressor and an activity classifier. Specifically, this involves generating synthetic wrist accelerometer data from corresponding joint pose sequences of an arm, comprising the wrist, elbow, and shoulder, and utilizing both real and generated sensor data to inform the classifier. This approach differs from prior works where regressors and classifiers were trained separately, and we hypothesize that concurrent optimization may yield more robust activity representations.
 
-Another key investigation concerns the role of loss functions in this pipeline. We examine whether relying solely on the classification loss, without enforcing explicit alignment via a mean squared error (MSE) loss between real and synthetic sensor data, affects the classifier’s effectiveness. Understanding the contribution of each loss component is critical for designing efficient HAR models.
+Another key investigation concerns the role of loss functions in this pipeline. We do ablation studies to understand the role of each loss in our pipeline. For instance in one study, we examine whether removing mean squared error (MSE) loss between real and simulated sensor data, affects the classifier’s effectiveness. Understanding the contribution of each loss component is critical for designing efficient HAR models.
 
 Additionally, this thesis explores architectural variants that use separate feature extractors or separate classifiers for real and simulated data paths. These variants test whether domain-specific components improve performance compared to fully shared architectures.
 
@@ -63,7 +63,7 @@ Through these inquiries, this thesis seeks to advance understanding of how synth
 
 % Research Objectives
 
-The overarching objective of this thesis is to address the data scarcity problem in Human Activity Recognition (HAR) by leveraging multi-modal data and advanced training strategies. To this end, the specific objectives of this research are:
+The overarching objective of this thesis is to address the data scarcity problem in HAR by leveraging multi-modal data and advanced training strategies. To this end, the specific objectives of this research are:
 
 \begin{enumerate}
     \item To design and implement a unified training pipeline that concurrently trains a pose-to-IMU regressor and an activity classifier, integrating real and synthetic accelerometer data derived from joint pose sequences, evaluated on MM-Fit and UTD-MHAD datasets.
@@ -80,7 +80,7 @@ The overarching objective of this thesis is to address the data scarcity problem
 
 % Scope and Limitations
 
-This thesis focuses on addressing the data scarcity problem in Human Activity Recognition (HAR) by leveraging multi-modal data, specifically wrist accelerometer data and upper-limb joint pose data (wrist, elbow, shoulder). The study primarily utilizes publicly available datasets: MM-Fit and UTD-MHAD as primary datasets with synchronized pose and accelerometer data, and NTU RGB+D as a secondary pose-only dataset for auxiliary training experiments.
+This thesis focuses on addressing the data scarcity problem in HAR by leveraging multi-modal data, specifically wrist accelerometer data and upper-limb joint pose data (wrist, elbow, shoulder). The study primarily utilizes publicly available datasets: MM-Fit and UTD-MHAD as primary datasets with synchronized pose and accelerometer data, and NTU RGB+D as a secondary pose-only dataset for auxiliary training experiments.
 
 The research explores the design and evaluation of a joint training pipeline that concurrently trains a pose-to-IMU regressor and an activity classifier. Eight training scenarios are systematically compared through ablation studies, exploring loss function configurations, architectural variants (shared vs.\ separate components), auxiliary data integration, and adversarial training approaches. Experiments focus on evaluating macro F1 score and accuracy, with subject-disjoint evaluation to assess cross-subject generalization.
 
