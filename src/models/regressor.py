@@ -1,13 +1,18 @@
 from typing import Optional, Sequence
 
+import torch
 import torch.nn as nn
 import torch.nn.init as init
 
 from .tcn import TCNBlock
 
 
-class Regressor(nn.Module):
-    """Pose-to-accelerometer regressor built from configurable TCN blocks."""
+class SingleChannelRegressor(nn.Module):
+    """Single-channel pose-to-accelerometer regressor (one TCN backbone + FC for 1 output).
+
+    This matches the paper's approach: "We train one regression model per sensor
+    position and channel."
+    """
 
     def __init__(
         self,
@@ -81,21 +86,18 @@ class Regressor(nn.Module):
         )
 
         self.f_in = self.temporal_hidden_channels * self.window_length
-        self.f_out = self.in_ch * self.window_length
+        self.fc_dropout = nn.Dropout(fc_dropout) if fc_dropout > 0.0 else None
 
+        # Single FC head outputting 1 channel (window_length values)
         if self.fc_hidden:
-            fc_layers = [
+            self.fc = nn.Sequential(
                 nn.Linear(self.f_in, self.fc_hidden, bias=True),
                 nn.LeakyReLU(),
-            ]
-            if fc_dropout > 0.0:
-                fc_layers.append(nn.Dropout(fc_dropout))
-            fc_layers.append(nn.Linear(self.fc_hidden, self.f_out, bias=True))
-            self.fc = nn.Sequential(*fc_layers)
-            self.fc_pre_dropout = None
+                nn.Dropout(fc_dropout) if fc_dropout > 0.0 else nn.Identity(),
+                nn.Linear(self.fc_hidden, self.window_length, bias=True),
+            )
         else:
-            self.fc = nn.Linear(self.f_in, self.f_out, bias=True)
-            self.fc_pre_dropout = nn.Dropout(fc_dropout) if fc_dropout > 0.0 else None
+            self.fc = nn.Linear(self.f_in, self.window_length, bias=True)
 
         self._initialize_weights()
 
@@ -115,8 +117,68 @@ class Regressor(nn.Module):
         x = self.temporal_block(x)
 
         x = x.reshape(batch_size, self.f_in)
-        if self.fc_pre_dropout is not None:
-            x = self.fc_pre_dropout(x)
-        x = self.fc(x)
-        x = x.view(batch_size, self.in_ch, self.window_length)
+        if self.fc_dropout is not None:
+            x = self.fc_dropout(x)
+
+        x = self.fc(x)  # (batch, window_length)
         return x
+
+
+class Regressor(nn.Module):
+    """Multi-channel pose-to-accelerometer regressor with separate models per channel.
+
+    This matches the paper's approach: "We train one regression model per sensor
+    position and channel." Each output channel has its own complete TCN backbone
+    and FC head.
+    """
+
+    def __init__(
+        self,
+        in_ch: int,
+        num_joints: int,
+        window_length: int,
+        joint_hidden_channels: Optional[Sequence[int]] = None,
+        joint_kernel_sizes: Optional[Sequence[int]] = None,
+        joint_dilations: Optional[Sequence[int]] = None,
+        joint_dropouts: Optional[Sequence[float]] = None,
+        temporal_hidden_channels: Optional[int] = None,
+        temporal_kernel_size: Optional[int] = None,
+        temporal_dilation: Optional[int] = None,
+        temporal_dropout: Optional[float] = None,
+        fc_hidden: Optional[int] = None,
+        fc_dropout: float = 0.0,
+        use_batch_norm: bool = False,
+        output_channels: Optional[int] = None,
+    ):
+        super().__init__()
+
+        self.in_ch = in_ch
+        self.output_channels = output_channels if output_channels else in_ch
+        self.window_length = window_length
+
+        # Create separate regressor for each output channel
+        self.channel_regressors = nn.ModuleList()
+        for _ in range(self.output_channels):
+            reg = SingleChannelRegressor(
+                in_ch=in_ch,
+                num_joints=num_joints,
+                window_length=window_length,
+                joint_hidden_channels=joint_hidden_channels,
+                joint_kernel_sizes=joint_kernel_sizes,
+                joint_dilations=joint_dilations,
+                joint_dropouts=joint_dropouts,
+                temporal_hidden_channels=temporal_hidden_channels,
+                temporal_kernel_size=temporal_kernel_size,
+                temporal_dilation=temporal_dilation,
+                temporal_dropout=temporal_dropout,
+                fc_hidden=fc_hidden,
+                fc_dropout=fc_dropout,
+                use_batch_norm=use_batch_norm,
+            )
+            self.channel_regressors.append(reg)
+
+    def forward(self, x):
+        # Each regressor outputs (batch, window_length)
+        outputs = [reg(x) for reg in self.channel_regressors]
+        # Stack to (batch, output_channels, window_length)
+        return torch.stack(outputs, dim=1)
