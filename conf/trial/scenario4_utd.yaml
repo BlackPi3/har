@@ -56,7 +56,7 @@ trainer:
       use_spectral_norm: false    # Optional: constrain D capacity
       label_smoothing: 0.05       # Prevent overconfident D
       # ACGAN: class-conditional with auxiliary classifier (disabled by default)
-      use_acgan: false
+      use_acgan: true
       aux_weight: 1.0
       embed_dim: 32
 

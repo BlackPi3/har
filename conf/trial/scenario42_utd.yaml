@@ -67,7 +67,7 @@ trainer:
       loss_type: wgan        # WGAN-GP for better signal-level gradients
       lambda_gp: 10.0        # Gradient penalty coefficient
       # ACGAN: class-conditional discrimination (optional, searchable via HPO)
-      use_acgan: false       # Enable to add class conditioning + aux classifier
+      use_acgan: true       # Enable to add class conditioning + aux classifier
       aux_weight: 1.0        # Weight for aux classification loss
       embed_dim: 32          # Class label embedding dimension
       n_classes: 21          # Must match model.encoder_classifier.n_classes

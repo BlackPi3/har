@@ -17,7 +17,7 @@ data:
 optim:
   name: adam
 
-  lr: 0.0005
+  lr: 0.001
   weight_decay: 0.00002
 
   warmup_epochs: 5
@@ -30,8 +30,8 @@ optim:
 trainer:
   name: scenario2
 
-  alpha: 0.2
-  beta: 5
+  alpha: 1
+  beta: 1
   gamma: 1
 
   epochs: 200

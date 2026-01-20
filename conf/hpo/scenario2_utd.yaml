@@ -14,8 +14,8 @@ trial: scenario2_utd
 # Trainer selection for this HPO space
 trainer:
   name: scenario2
-  epochs: 30       # HPO epochs: ~30% of full training (100 epochs)
-  patience: 30
+  epochs: 40       # HPO epochs: ~30% of full training (100 epochs)
+  patience: 25
 
 # Number of top configs to keep for re-evaluation/reporting
 top_k: 10
@@ -23,7 +23,7 @@ top_k: 10
 # Optional repeats for top-config evaluation
 repeat:
   enabled: true
-  count: 5
+  count: 3
 
 hydra:
   sweeper:
@@ -34,34 +34,12 @@ hydra:
       # ============================================================
       # PASS 1: Loss weights + Data (ACTIVE)
       # ============================================================
-      # trainer.alpha: choice(0.1, 0.5, 1, 5)
-      # trainer.beta: choice(1, 5, 10, 50, 100)
-      # trainer.gamma: choice(1, 5, 10)
+      trainer.alpha: choice(0.1, 0.5, 1, 2)
+      trainer.beta: choice(1, 2, 5, 10, 50, 100)
+      trainer.gamma: choice(0.5, 1, 2, 5)
       
-      # data.stride_seconds: choice(0.02, 0.04, 0.06)
-      # data.batch_size: choice(8, 16, 32)
-      # # Note: UTD sensor_window_length is fixed at 100 (50Hz * 2sec clips)
-
-      # # --- Pass 1 DEFAULTS for Pass 2+3 params ---
-      # # Regularization defaults
-      # optim.lr: choice(0.001)
-      # optim.weight_decay: choice(0.00002)
-      # optim.warmup_epochs: choice(10)
-      # optim.warmup_start_factor: choice(0.02)
-      # optim.scheduler.patience: choice(15)
-      # optim.scheduler.factor: choice(0.1)
-      # model.encoder_classifier.feature_extractor.drop_prob: choice(0.2)
-      # model.encoder_classifier.classifier.dropout: choice(0.3)
-      # trainer.label_smoothing: choice(0.0)
-      
-      # # Capacity defaults
-      # model.encoder_classifier.feature_extractor.kernel_size: choice(9)
-      # model.encoder_classifier.feature_extractor.base_filters: choice([9,15,24])
-      # model.encoder_classifier.feature_extractor.embedding_dim: choice(100)
-      # model.encoder_classifier.classifier.hidden_units: choice([100])
-      # model.regressor.joint_hidden_channels: choice([32,32,32,16])
-      # model.regressor.temporal_hidden_channels: choice(16)
-      # model.regressor.joint_kernel_sizes: choice([5,5,5,1])
+      data.stride_seconds: choice(0.1)
+      data.batch_size: choice(16)
 
       # ============================================================
       # PASS 2: Regularization (UNCOMMENT after Pass 1)
@@ -96,33 +74,33 @@ hydra:
       # ============================================================
       # PASS 3: Capacity (UNCOMMENT after Pass 2)
       # ============================================================
-      # Fix Pass 1+2 winners here:
-      trainer.alpha: choice(1)
-      trainer.beta: choice(5)
-      trainer.gamma: choice(1)
-      data.stride_seconds: choice(0.02)
-      data.batch_size: choice(8)
-      optim.lr: choice(0.0011970640471642504)
-      optim.weight_decay: tag(log, interval(1e-5, 1e-3))
-      optim.warmup_epochs: choice(5)
-      optim.warmup_start_factor: choice(0.1)
-      optim.scheduler.patience: choice(15)
-      optim.scheduler.factor: choice(0.1)
-      model.encoder_classifier.feature_extractor.drop_prob: choice(0.1, 0.2, 0.3, 0.4)
-      model.encoder_classifier.classifier.dropout: choice(0.4, 0.5, 0.6)
-      trainer.label_smoothing: choice(0.1)
+      # # Fix Pass 1+2 winners here:
+      # trainer.alpha: choice(1)
+      # trainer.beta: choice(5)
+      # trainer.gamma: choice(1)
+      # data.stride_seconds: choice(0.02)
+      # data.batch_size: choice(8)
+      # optim.lr: choice(0.0011970640471642504)
+      # optim.weight_decay: tag(log, interval(1e-5, 1e-3))
+      # optim.warmup_epochs: choice(5)
+      # optim.warmup_start_factor: choice(0.1)
+      # optim.scheduler.patience: choice(15)
+      # optim.scheduler.factor: choice(0.1)
+      # model.encoder_classifier.feature_extractor.drop_prob: choice(0.1, 0.2, 0.3, 0.4)
+      # model.encoder_classifier.classifier.dropout: choice(0.4, 0.5, 0.6)
+      # trainer.label_smoothing: choice(0.1)
       
-      # Search capacity:
-      use_batch_norm: choice(true, false)
-      model.encoder_classifier.feature_extractor.kernel_size: choice(5, 7)  # Smaller for UTD (100 samples)
-      model.encoder_classifier.feature_extractor.base_filters: choice([4,6,8], [6,9,12], [8,12,16])
-      model.encoder_classifier.feature_extractor.embedding_dim: choice(32, 48, 64)
-      model.encoder_classifier.classifier.hidden_units: choice([32], [48], [64])
-      model.regressor.joint_dropouts: choice([0.0, 0.2, 0.2, 0.2], [0.2,0.3,0.3,0.3], [0.3,0.4,0.4,0.4], [0.4,0.5,0.5,0.5])
-      model.regressor.temporal_dropout: choice(0.1, 0.2, 0.3, 0.4)
-      model.regressor.joint_hidden_channels: choice([16,16,12,8], [24,24,16,12], [32,32,24,16])
-      model.regressor.temporal_hidden_channels: choice(6, 8, 10)
-      model.regressor.joint_kernel_sizes: choice([3,3,3,1])
+      # # Search capacity:
+      # use_batch_norm: choice(true, false)
+      # model.encoder_classifier.feature_extractor.kernel_size: choice(5, 7)  # Smaller for UTD (100 samples)
+      # model.encoder_classifier.feature_extractor.base_filters: choice([4,6,8], [6,9,12], [8,12,16])
+      # model.encoder_classifier.feature_extractor.embedding_dim: choice(32, 48, 64)
+      # model.encoder_classifier.classifier.hidden_units: choice([32], [48], [64])
+      # model.regressor.joint_dropouts: choice([0.0, 0.2, 0.2, 0.2], [0.2,0.3,0.3,0.3], [0.3,0.4,0.4,0.4], [0.4,0.5,0.5,0.5])
+      # model.regressor.temporal_dropout: choice(0.1, 0.2, 0.3, 0.4)
+      # model.regressor.joint_hidden_channels: choice([16,16,12,8], [24,24,16,12], [32,32,24,16])
+      # model.regressor.temporal_hidden_channels: choice(6, 8, 10)
+      # model.regressor.joint_kernel_sizes: choice([3,3,3,1])
 
   sweep:
     dir: "experiments/hpo/${study_name}/trials"

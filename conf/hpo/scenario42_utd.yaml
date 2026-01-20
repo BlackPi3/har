@@ -13,10 +13,10 @@ trial: scenario42_utd
 # HPO-specific overrides (shorter epochs for faster search)
 trainer:
   epochs: 50
-  patience: 50
+  patience: 25
 
 top_k: 10
-save_artifacts: true  # Save plots to monitor D_acc and feat_dist
+save_artifacts: false  # Save plots to monitor D_acc and feat_dist
 
 repeat:
   enabled: true
@@ -31,58 +31,38 @@ hydra:
       # ============================================================
       # PASS 1: Loss weights + Adversarial (ACTIVE)
       # ============================================================
-      # trainer.alpha: choice(0.1, 0.5, 1, 2)
-      # trainer.beta: choice(0, 1, 2, 5, 10, 50)    # 0 tests if adversarial alone suffices
-      # trainer.gamma: choice(1, 2, 5)
+      trainer.alpha: choice(0.1, 0.5, 1, 2)
+      trainer.beta: choice(1, 2, 5, 10, 50, 100)
+      trainer.gamma: choice(1, 2, 5)
 
-      # # Adversarial params - KEY for scenario 42 (WGAN-GP with alternating D/G)
-      # trainer.adversarial.weight: choice(0.1, 0.5, 1.0, 2, 5)
-      # trainer.adversarial.n_critic: choice(1, 3, 5)            # D updates per G update
-      # trainer.adversarial.pretrain_epochs: choice(0, 10, 15)   # MSE-only warmup
+      trainer.adversarial.weight: choice(0.1, 0.5, 1.0, 2, 5)
+      trainer.adversarial.n_critic: choice(1, 3, 5)            # D updates per G update
+      trainer.adversarial.discriminator.aux_weight: choice(0.5, 1.0, 2.0)
+      trainer.adversarial.pretrain_epochs: choice(0, 5, 10, 15)   # MSE-only warmup
 
-      # # Signal discriminator architecture (1D CNN for temporal data)
+      data.stride_seconds: choice(0.1)
+      data.batch_size: choice(16)
+
+      # Signal discriminator architecture (1D CNN for temporal data)
       # trainer.adversarial.discriminator.hidden_channels: choice([32, 64], [32, 64, 128], [64, 128])
 
-      # # ACGAN: class-conditional discrimination (search whether it helps)
-      # trainer.adversarial.discriminator.use_acgan: choice(true)
-      # trainer.adversarial.discriminator.aux_weight: choice(0.5, 1.0, 2.0)
-
-      # data.stride_seconds: choice(0.04) # TODO widen later
-      # data.batch_size: choice(16) # TODO widen later
-
-      # # --- Pass 1 DEFAULTS for Pass 2+3 params ---
-      # optim.lr: choice(0.001)
-      # optim.weight_decay: choice(0.00002)
-      # optim.warmup_epochs: choice(10)
-      # optim.scheduler.patience: choice(15)
-      # optim.scheduler.factor: choice(0.1)
-      # model.encoder_classifier.feature_extractor.drop_prob: choice(0.2)
-      # model.encoder_classifier.classifier.dropout: choice(0.3)
-      # trainer.label_smoothing: choice(0.0)
-
-      # model.encoder_classifier.feature_extractor.kernel_size: choice(9)
-      # model.encoder_classifier.feature_extractor.base_filters: choice([9,15,24])
-      # model.encoder_classifier.feature_extractor.embedding_dim: choice(100)
-      # model.encoder_classifier.classifier.hidden_units: choice([100])
-      # model.regressor.joint_hidden_channels: choice([32,32,32,16])
-      # model.regressor.temporal_hidden_channels: choice(16)
 
       # ============================================================
       # PASS 2: Regularization (UNCOMMENT after Pass 1)
       # ============================================================
-      # Fix Pass 1 winners, then search regularization
+      # # Fix Pass 1 winners, then search regularization
       
       
-      # Search regularization:
-      optim.lr: choice(0.0011970640471642504) #tag(log, interval(5e-4, 2e-3))
-      optim.weight_decay: tag(log, interval(1e-5, 1e-3))
-      optim.warmup_epochs: choice(5)
-      optim.warmup_start_factor: choice(0.1)
-      optim.scheduler.patience: choice(15)
-      optim.scheduler.factor: choice(0.1)
-      model.encoder_classifier.feature_extractor.drop_prob: choice(0.1, 0.2, 0.3, 0.4)
-      model.encoder_classifier.classifier.dropout: choice(0.4, 0.5, 0.6)
-      trainer.label_smoothing: choice(0.1)
+      # # Search regularization:
+      # optim.lr: choice(0.0011970640471642504) #tag(log, interval(5e-4, 2e-3))
+      # optim.weight_decay: tag(log, interval(1e-5, 1e-3))
+      # optim.warmup_epochs: choice(5)
+      # optim.warmup_start_factor: choice(0.1)
+      # optim.scheduler.patience: choice(15)
+      # optim.scheduler.factor: choice(0.1)
+      # model.encoder_classifier.feature_extractor.drop_prob: choice(0.1, 0.2, 0.3, 0.4)
+      # model.encoder_classifier.classifier.dropout: choice(0.4, 0.5, 0.6)
+      # trainer.label_smoothing: choice(0.1)
 
       # ============================================================
       # PASS 3: Capacity (UNCOMMENT after Pass 2)

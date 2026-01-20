@@ -12,14 +12,14 @@ trial: scenario3_utd  # includes secondary.enabled=true
 
 # HPO-specific overrides (shorter epochs for faster search)
 trainer:
-  epochs: 30
-  patience: 30
+  epochs: 40
+  patience: 25
 
 top_k: 10
 
 repeat:
   enabled: true
-  count: 5
+  count: 3
 
 hydra:
   sweeper:
@@ -30,36 +30,19 @@ hydra:
       # ============================================================
       # PASS 1: Loss weights + Data + Secondary (ACTIVE)
       # ============================================================
-      # trainer.alpha: choice(0.1, 0.5, 1, 5)
-      # trainer.beta: choice(1, 5, 10, 50, 100)
-      # trainer.gamma: choice(1, 5, 10)
+      trainer.alpha: choice(0.1, 0.5, 1, 2)
+      trainer.beta: choice(1, 2, 5, 10, 50, 100)
+      trainer.gamma: choice(1, 2, 5)
       
-      # # Primary Dataset (UTD)
-      # data.stride_seconds: choice(0.02, 0.04, 0.06)
-      # data.batch_size: choice(8)
+      # Primary Dataset (UTD)
+      data.stride_seconds: choice(0.1)
+      data.batch_size: choice(16)
       
-      # # Secondary dataset (NTU) params
-      # trainer.secondary.loss_weight: choice(0.25, 0.5, 1.0, 2.0)
-      # trainer.secondary.data: choice(ntu50.yaml)  # Match UTD 50Hz
-      # # Note: To search NTU window/stride, need run_trial to support secondary data overrides
-      # # For now, use defaults from ntu50.yaml (window=100, stride=0.1)
-      
-      # # --- Pass 1 DEFAULTS for Pass 2+3 params ---
-      # optim.lr: choice(0.001)
-      # optim.weight_decay: choice(0.00002)
-      # optim.warmup_epochs: choice(10)
-      # optim.scheduler.patience: choice(15)
-      # optim.scheduler.factor: choice(0.1)
-      # model.encoder_classifier.feature_extractor.drop_prob: choice(0.2)
-      # model.encoder_classifier.classifier.dropout: choice(0.3)
-      # trainer.label_smoothing: choice(0.0)
-      
-      # model.encoder_classifier.feature_extractor.kernel_size: choice(9)
-      # model.encoder_classifier.feature_extractor.base_filters: choice([9,15,24])
-      # model.encoder_classifier.feature_extractor.embedding_dim: choice(100)
-      # model.encoder_classifier.classifier.hidden_units: choice([100])
-      # model.regressor.joint_hidden_channels: choice([32,32,32,16])
-      # model.regressor.temporal_hidden_channels: choice(16)
+      # Secondary dataset (NTU) params
+      trainer.secondary.loss_weight: choice(0.25, 0.5, 1.0, 2.0)
+      trainer.secondary.data: choice(ntu50.yaml)  # Match UTD 50Hz
+      # Note: To search NTU window/stride, need run_trial to support secondary data overrides
+      # For now, use defaults from ntu50.yaml (window=100, stride=0.1)
 
       # ============================================================
       # PASS 2: Regularization (UNCOMMENT after Pass 1)
@@ -93,32 +76,32 @@ hydra:
       # ============================================================
       # PASS 3: Capacity (UNCOMMENT after Pass 2)
       # ============================================================
-      # Fix Pass 1+2 winners here:
-      trainer.alpha: choice(0.1)
-      trainer.beta: choice(5)
-      trainer.gamma: choice(10)
-      data.stride_seconds: choice(0.04)
-      data.batch_size: choice(8)
-      trainer.secondary.loss_weight: choice(0.25)
-      optim.lr: choice(0.0012973692219373607)
-      optim.weight_decay: choice(1.2091794988070006e-05)
-      optim.warmup_epochs: choice(5)
-      optim.scheduler.patience: choice(10)
-      optim.scheduler.factor: choice(0.1)
-      model.encoder_classifier.feature_extractor.drop_prob: choice(0.1)
-      model.encoder_classifier.classifier.dropout: choice(0.4)
-      trainer.label_smoothing: choice(0.1)
+      # # Fix Pass 1+2 winners here:
+      # trainer.alpha: choice(0.1)
+      # trainer.beta: choice(5)
+      # trainer.gamma: choice(10)
+      # data.stride_seconds: choice(0.04)
+      # data.batch_size: choice(8)
+      # trainer.secondary.loss_weight: choice(0.25)
+      # optim.lr: choice(0.0012973692219373607)
+      # optim.weight_decay: choice(1.2091794988070006e-05)
+      # optim.warmup_epochs: choice(5)
+      # optim.scheduler.patience: choice(10)
+      # optim.scheduler.factor: choice(0.1)
+      # model.encoder_classifier.feature_extractor.drop_prob: choice(0.1)
+      # model.encoder_classifier.classifier.dropout: choice(0.4)
+      # trainer.label_smoothing: choice(0.1)
       
-      # Search capacity:
-      model.encoder_classifier.feature_extractor.kernel_size: choice(5, 7, 9, 11)
-      model.encoder_classifier.feature_extractor.base_filters: choice([4,6,8], [6,9,12], [8,12,16], [9,15,24])
-      model.encoder_classifier.feature_extractor.embedding_dim: choice(60, 80, 100)
-      model.encoder_classifier.classifier.hidden_units: choice([64], [100])
-      model.regressor.joint_hidden_channels: choice([16,16,12,8], [24,24,16,12], [32,32,24,16])
-      model.regressor.temporal_hidden_channels: choice(8, 12, 16)
-      model.regressor.joint_kernel_sizes: choice([3,3,3,1], [5,5,5,1])
-      model.regressor.joint_dropouts: choice([0.0, 0.2, 0.2, 0.2], [0.2,0.3,0.3,0.3], [0.3,0.4,0.4,0.4], [0.4,0.5,0.5,0.5])
-      model.regressor.temporal_dropout: choice(0.1, 0.2, 0.3, 0.4)
+      # # Search capacity:
+      # model.encoder_classifier.feature_extractor.kernel_size: choice(5, 7, 9, 11)
+      # model.encoder_classifier.feature_extractor.base_filters: choice([4,6,8], [6,9,12], [8,12,16], [9,15,24])
+      # model.encoder_classifier.feature_extractor.embedding_dim: choice(60, 80, 100)
+      # model.encoder_classifier.classifier.hidden_units: choice([64], [100])
+      # model.regressor.joint_hidden_channels: choice([16,16,12,8], [24,24,16,12], [32,32,24,16])
+      # model.regressor.temporal_hidden_channels: choice(8, 12, 16)
+      # model.regressor.joint_kernel_sizes: choice([3,3,3,1], [5,5,5,1])
+      # model.regressor.joint_dropouts: choice([0.0, 0.2, 0.2, 0.2], [0.2,0.3,0.3,0.3], [0.3,0.4,0.4,0.4], [0.4,0.5,0.5,0.5])
+      # model.regressor.temporal_dropout: choice(0.1, 0.2, 0.3, 0.4)
 
   sweep:
     dir: "experiments/hpo/${study_name}/trials"
