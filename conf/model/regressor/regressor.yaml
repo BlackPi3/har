@@ -1,4 +1,4 @@
-## Regressor model legacy LEGACY configuration
+## Regressor model configuration
 type: tcn_regressor
 input_channels: 3
 num_joints: 3
@@ -14,3 +14,7 @@ temporal_dropout: 0.1
 fc_hidden: 0
 fc_dropout: 0
 use_batch_norm: true
+# Whether to use separate TCN backbone per output channel (paper's approach)
+# false = shared backbone (more efficient, learns cross-channel correlations)
+# true = separate backbone per channel (matches paper exactly)
+separate_channel: false
