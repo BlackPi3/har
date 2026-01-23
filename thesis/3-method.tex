@@ -52,7 +52,7 @@ To achieve this, we define three learned components:
 
 \textbf{Activity Classifier.} A mapping $C: \mathbb{R}^{d} \rightarrow \mathbb{R}^{K}$ that predicts activity classes from feature representations:
 \begin{equation}
-    \hat{y} = \arg\max_k \, [C(\mathbf{z})]_k
+    \hat{y} = \arg\max_k \, [C(\mathbf{z})]
 \end{equation}
 
 \subsection{Two-Step Training}
@@ -75,16 +75,23 @@ Once trained, the regressor can generate synthetic accelerometer data $\tilde{\m
 \end{equation}
 Since both $\mathbf{a}$ and $\tilde{\mathbf{a}}$ share the same label $y$, the classifier effectively trains on an augmented dataset. The training objective in this step combines a classification loss on both paths and optionally a feature similarity loss to encourage domain alignment:
 \begin{equation}
-    \mathcal{L}_{\text{cls}} = \text{CE}(\hat{y}_{\text{real}}, y) + \text{CE}(\hat{y}_{\text{sim}}, y)
+    \mathcal{L}_{\text{similarity}} = 1 - \cos(\mathbf{z}_{\text{real}}, \mathbf{z}_{\text{sim}})
 \end{equation}
 \begin{equation}
-    \mathcal{L}_{\text{similarity}} = 1 - \cos(\mathbf{z}_{\text{real}}, \mathbf{z}_{\text{sim}})
+    \mathcal{L}_{\text{cls}} = \text{CE}(\hat{y}_{\text{real}}, y) + \text{CE}(\hat{y}_{\text{sim}}, y)
 \end{equation}
 where CE denotes cross-entropy loss and $\cos(\cdot, \cdot)$ denotes cosine similarity. The similarity loss encourages $F$ to produce similar representations for corresponding real and simulated samples, reducing the domain gap.
 
 This sequential approach treats pose-to-IMU regression and activity classification as independent tasks.
 
-\subsection{Joint Training (Baseline)}
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.85\textwidth]{Thesis_Template_DE_EN/BA_MA_English/Figures/arch-baseline.pdf}
+  \caption{Baseline architecture with shared feature extractor $F$ and classifier $C$. Real accelerometer data $\mathbf{a}$ and simulated data $\tilde{\mathbf{a}}$ (from regressor $R$) pass through the same network. Three losses guide training: classification loss $\mathcal{L}_{\text{cls}}$ (weighted by $\alpha$), feature similarity loss $\mathcal{L}_{\text{sim}}$ (weighted by $\beta$), and regression loss $\mathcal{L}_{\text{reg}}$ (weighted by $\gamma$).}
+  \label{fig:baseline}
+\end{figure}
+
+\subsection{Joint Training (Scenario 1.0)}
 \label{sec:joint-training}
 \label{sec:baseline}
 
@@ -95,63 +102,15 @@ Zolfaghari \textit{et al.}~\cite{zolfaghari2024sensor} showed that combining the
 \end{equation}
 where $\alpha$, $\beta$, $\gamma$ are hyperparameters controlling the contribution of each loss term.
 
-The key advantage is that all losses backpropagate through the entire pipeline. In particular, the classification loss now reaches the regressor, meaning $R$ learns to produce signals that are not just realistic-looking, but \emph{useful for classification}---preserving activity-discriminative information rather than merely mimicking the statistical properties of real accelerometer data.
-
-We refer to this configuration as the \textbf{Baseline} scenario. As illustrated in \Cref{fig:baseline}, both the real and simulated paths share the same feature extractor $F$ and classifier $C$, with all three loss terms active ($\alpha, \beta, \gamma > 0$). This serves as the foundation for all experimental variants explored in this thesis.
-
-\subsection{Evaluation Protocol}
-
-Critically, at inference time only the real accelerometer branch is used:
+At inference time only the real accelerometer branch is used:
 \begin{equation}
-    \hat{y} = \arg\max_k \, [C(F(\mathbf{a}_{\text{real}}))]_k
+    \hat{y} = \arg\max_k \, [C(F(\mathbf{a}_{\text{real}}))]
 \end{equation}
-The simulated data path ($R$, and optionally separate $F_{\text{sim}}$, $C_{\text{sim}}$) serves purely as a training-time augmentation mechanism. This ensures that evaluation metrics reflect real-world deployment performance where only physical sensor data is available.
+The simulated data path serves purely as a training-time augmentation mechanism. This ensures that evaluation metrics reflect real-world deployment performance where only physical sensor data is available.
 
-\section{System Architecture}
-\label{sec:architecture}
+The key advantage is that all losses backpropagate through the entire pipeline. In particular, the classification loss now reaches the regressor, meaning $R$ learns to produce signals that are not just realistic-looking, but \emph{useful for classification}, preserving activity-discriminative information rather than merely mimicking the statistical properties of real accelerometer data.
 
-Our framework employs a two-stream architecture that processes both real and simulated accelerometer data during training. This section describes the baseline configuration, which serves as the foundation for all experimental variants explored in this work.
-
-All real accelerometer signals $\mathbf{a}$ and pose sequences $\mathbf{p}$ undergo preprocessing (normalization and standardization) as described in \Cref{chap:implementation}.  
-Simulated accelerometer signals $\tilde{\mathbf{a}}$ are generated by the regressor $R$ in this normalized space and are not subject to additional preprocessing.
-
-\subsection{Two-Stream Design}
-
-The architecture comprises three core components that operate on parallel data streams during training:
-
-\begin{enumerate}
-    \item \textbf{Pose-to-IMU Regressor} ($R$): Transforms skeleton pose sequences into simulated accelerometer signals
-    \item \textbf{Feature Extractor} ($F$): Encodes accelerometer signals (real or simulated) into fixed-dimensional feature representations
-    \item \textbf{Activity Classifier} ($C$): Maps feature representations to activity class predictions
-\end{enumerate}
-
-\Cref{fig:baseline} illustrates the baseline architecture. During each training iteration, a batch contains synchronized triplets $(\mathbf{p}, \mathbf{a}, y)$ of pose sequences, real accelerometer data, and activity labels. The data flows through two parallel paths:
-
-\textbf{Real Path:}
-\begin{equation}
-    \mathbf{a} \xrightarrow{F} \mathbf{z}_{\text{real}} \xrightarrow{C} \hat{y}_{\text{real}}
-\end{equation}
-
-\textbf{Simulated Path:}
-\begin{equation}
-    \mathbf{p} \xrightarrow{R} \tilde{\mathbf{a}} \xrightarrow{F} \mathbf{z}_{\text{sim}} \xrightarrow{C} \hat{y}_{\text{sim}}
-\end{equation}
-
-where $\mathbf{z}_{\text{real}}, \mathbf{z}_{\text{sim}} \in \mathbb{R}^{d}$ are the $d$-dimensional feature embeddings extracted by $F$.
-
-In the baseline configuration, both paths share the same feature extractor $F$ and classifier $C$. This weight sharing encourages the network to learn domain-invariant representations that perform well regardless of whether the input is real or simulated accelerometer data.
-
-\subsection{Component Interactions}
-
-The three components interact through multiple loss signals that provide complementary supervision:
-
-\begin{itemize}
-    \item The \textbf{regressor} $R$ receives gradients from the regression loss (comparing $\tilde{\mathbf{a}}$ to $\mathbf{a}$) and, through backpropagation, from downstream classification losses
-    \item The \textbf{feature extractor} $F$ receives gradients from both classification paths and optionally from a feature similarity loss that encourages $\mathbf{z}_{\text{real}} \approx \mathbf{z}_{\text{sim}}$
-    \item The \textbf{classifier} $C$ receives supervision from activity labels on both real and simulated features
-\end{itemize}
-
-This joint optimization allows each component to benefit from the others: the regressor learns to produce signals that are not only similar to real data but also activity-discriminative, while the feature extractor learns representations robust to the domain gap between real and simulated inputs.
+We refer to this baseline configuration as the \textbf{Scenario 1.0}. As illustrated in \Cref{fig:baseline}, both the real and simulated paths share the same feature extractor $F$ and classifier $C$, with all three loss terms active ($\alpha, \beta, \gamma > 0$). This serves as the foundation for all experimental variants explored in this thesis.
 
 \section{Loss Function Design}
 \label{sec:losses}
@@ -162,9 +121,9 @@ The training objective combines multiple loss terms that guide different aspects
 
 The primary objective is accurate activity recognition. We apply cross-entropy loss on both the real and simulated accelerometer paths:
 \begin{equation}
-    \mathcal{L}_{\text{cls}} = -\sum_{i=1}^{N} \sum_{k=1}^{K} w_k \, y_{i,k} \left( \log \hat{y}_{i,k}^{\text{real}} + \log \hat{y}_{i,k}^{\text{sim}} \right)
+    \mathcal{L}_{\text{cls}} = \text{CE}(\hat{y}_{\text{real}}, y) + \text{CE}(\hat{y}_{\text{sim}}, y)
 \end{equation}
-where $y_{i,k}$ is the one-hot encoded ground truth, $\hat{y}_{i,k}^{\text{real}} = [C(F(\mathbf{a}_i))]_k$ and $\hat{y}_{i,k}^{\text{sim}} = [C(F(\tilde{\mathbf{a}}_i))]_k$ are the predicted probabilities from the real and simulated paths respectively, and $w_k$ are optional class weights to handle imbalanced datasets. By training on both paths with the same labels, the classifier learns to produce correct predictions regardless of whether the input originates from real or simulated accelerometer data. This loss is weighted by coefficient $\alpha$.
+where $\text{CE}$ denotes cross-entropy loss, $y$ is the ground truth label, and $\hat{y}_{\text{real}} = C(F(\mathbf{a}))$, $\hat{y}_{\text{sim}} = C(F(\tilde{\mathbf{a}}))$ are the predicted class distributions from the real and simulated paths respectively. By training on both paths with the same labels, the classifier learns to produce correct predictions regardless of whether the input originates from real or simulated accelerometer data. This loss is weighted by coefficient $\alpha$.
 
 \subsection{Feature Similarity Loss}
 
@@ -172,7 +131,7 @@ To encourage domain-invariant representations, we minimize the distance between 
 \begin{equation}
     \mathcal{L}_{\text{similarity}} = 1 - \frac{1}{N} \sum_{i=1}^{N} \cos(\mathbf{z}_{\text{real},i}, \mathbf{z}_{\text{sim},i})
 \end{equation}
-where $\cos(\cdot, \cdot)$ denotes cosine similarity. This loss operates at the feature level, pushing the feature extractor to produce similar representations for corresponding real and simulated samples. This loss is weighted by coefficient $\beta$.
+where $\cos(\cdot, \cdot)$ denotes cosine similarity. Crucially, $\mathbf{z}_{\text{real},i}$ and $\mathbf{z}_{\text{sim},i}$ correspond to the same time window: they originate from synchronized pose and accelerometer recordings of the same activity instance. This pairing is essential---if we compared features from unrelated samples, the loss would push the feature extractor toward a degenerate solution where all inputs map to similar representations regardless of the underlying activity. By enforcing similarity only between corresponding pairs, the loss encourages the feature extractor to produce consistent representations for the same motion captured through different modalities, while preserving discriminative information across different activities. This loss is weighted by coefficient $\beta$.
 
 \subsection{Regression Loss}
 
@@ -224,13 +183,6 @@ Signal Discriminator & Adversarial discriminator on raw accelerometer signals \\
 \label{sec:scenario-baseline}
 
 The baseline configuration uses shared weights for both the feature extractor and classifier across real and simulated paths. All three loss terms are active: classification ($\alpha > 0$), feature similarity ($\beta > 0$), and regression ($\gamma > 0$). This represents the simplest form of joint training where the network must learn domain-invariant representations through weight sharing alone.
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\textwidth]{Thesis_Template_DE_EN/BA_MA_English/Figures/arch-baseline.pdf}
-  \caption{Baseline architecture with shared feature extractor $F$ and classifier $C$. Real accelerometer data $\mathbf{a}$ and simulated data $\tilde{\mathbf{a}}$ (from regressor $R$) pass through the same network. Three losses guide training: classification loss $\mathcal{L}_{\text{cls}}$ (weighted by $\alpha$), feature similarity loss $\mathcal{L}_{\text{sim}}$ (weighted by $\beta$), and regression loss $\mathcal{L}_{\text{reg}}$ (weighted by $\gamma$).}
-  \label{fig:baseline}
-\end{figure}
 
 \subsection{Ablation: Effect of MSE Loss}
 \label{sec:scenario-mse-ablation}
