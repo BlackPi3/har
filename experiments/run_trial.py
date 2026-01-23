@@ -865,6 +865,7 @@ def _write_results(
                     pass
         out["objective"] = meta
     results_path = run_dir / "results.json"
+    run_dir.mkdir(parents=True, exist_ok=True)
     results_path.write_text(json.dumps(out, indent=2))
     print(f"[run_trial] Results saved to: {results_path}")
 
