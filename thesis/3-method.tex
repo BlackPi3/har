@@ -7,48 +7,97 @@ While most other methods consider sensor data simulation and training a HAR clas
 \section{Problem Formulation}
 \label{sec:problem}
 
-We address the challenge of improving HAR by leveraging simulated IMU data derived from skeletal pose sequences. This section formally defines the problem and our approach.
+We address the challenge of improving HAR by leveraging simulated IMU data derived from skeletal pose sequences. This section first describes how the input data is acquired, then formally defines the problem and our approach.
+
+\subsection{Data Acquisition}
+\label{sec:data-acquisition}
+
+In this thesis we require synchronized pairs of skeletal pose sequences and accelerometer signals that are labeled with activity classes. These data streams originate from different sensor modalities and undergo preprocessing before use.
+
+\textbf{Accelerometer Data} is a component of Inertial Measurement Units (IMUs) embedded in smartphones, smartwatches, or dedicated wearable devices capture tri-axial acceleration at fixed sampling rates (typically 50--100\,Hz). 
+
+\textbf{Pose Sequences} is extracted from visual sensors, RGB cameras, depth sensors (RGB-D), or multi-view camera arrays (Fig. \ref{fig:3dpose-extraction}). Vision-based pose estimation pipelines first detect 2D keypoints in each frame using convolutional detectors, then lift these to 3D joint coordinates through volumetric representations, using various methods such as triangulation from multiple views, or learned regressors.
+
+\textbf{Synchronization} of multi-sensor recordings require temporal alignment so that each pose frame corresponds to the concurrent accelerometer sample. Datasets such as MM-Fit provide time-synchronized streams, enabling direct pairing of pose and accelerometer windows for the same activity instance \cite{stromback2020mm}. This synchronization is essential for learning the pose-to-accelerometer mapping, as the regressor must observe corresponding motion patterns in both modalities.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\textwidth]{Thesis_Template_DE_EN/BA_MA_English/Figures/3d-pose-extraction.pdf}
+  \caption{Steps in which 3D pose sequence is extracted from frames}
+  \label{fig:3dpose-extraction}
+\end{figure}
 
 \subsection{Task Definition}
 
-Let $\mathcal{D}_{\text{real}} = \{(\mathbf{p}_i, \mathbf{a}_i, y_i)\}_{i=1}^{N}$ denote a dataset where each sample consists of:
+Let $\mathcal{D} = \{(\mathbf{p}_i, \mathbf{a}_i, y_i)\}_{i=1}^{N}$ denote a dataset of synchronized triplets:
 \begin{itemize}
     \item $\mathbf{p}_i \in \mathbb{R}^{T \times J \times 3}$: a pose sequence of $T$ timesteps with $J$ skeletal joints in 3D space
     \item $\mathbf{a}_i \in \mathbb{R}^{T \times 3}$: corresponding real accelerometer signal (3-axis)
     \item $y_i \in \{1, \ldots, K\}$: activity class label from $K$ possible activities
-    \item $\mathbf{p}_i$ and $\mathbf{a}_i$ are synchronized unless explicitly stated
 \end{itemize}
 
-The core task comprises two coupled sub-problems:
+Our task is to use the pose data $\mathbf{p}$ to generate synthetic accelerometer signals $\tilde{\mathbf{a}}$. Since each pose sequence $\mathbf{p}_i$ is synchronized with its corresponding real accelerometer $\mathbf{a}_i$, they share the same activity label $y_i$. Therefore, the synthetic signal $\tilde{\mathbf{a}}_i$ also inherits this label, effectively augmenting the training set with additional labeled samples. This augmented data can then be used to train a more robust activity classifier.
 
-\textbf{Pose-to-IMU Regression.} Learn a mapping $R: \mathbb{R}^{T \times J \times 3} \rightarrow \mathbb{R}^{T \times 3}$ that transforms skeleton pose sequences into simulated accelerometer signals:
+To achieve this, we define three learned components:
+
+\textbf{Pose-to-IMU Regressor.} A mapping $R: \mathbb{R}^{T \times J \times 3} \rightarrow \mathbb{R}^{T \times 3}$ that transforms pose sequences into simulated accelerometer signals:
 \begin{equation}
     \tilde{\mathbf{a}} = R(\mathbf{p})
 \end{equation}
-where $\tilde{\mathbf{a}}$ approximates the characteristics of real accelerometer data $\mathbf{a}$.
 
-\textbf{Activity Classification.} Learn a classifier $C \circ F: \mathbb{R}^{T \times 3} \rightarrow \mathbb{R}^{K}$ composed of a feature extractor $F$ and classification head $C$, such that for a real accelerometer input $\mathbf{a}$:
+\textbf{Feature Extractor.} A mapping $F: \mathbb{R}^{T \times 3} \rightarrow \mathbb{R}^{d}$ that encodes accelerometer signals into $d$-dimensional feature embeddings:
 \begin{equation}
-    \hat{y} = \arg\max_k \, [C(F(\mathbf{a}))]_k
+    \mathbf{z} = F(\mathbf{a})
 \end{equation}
 
-We assume that pose sequences $\mathbf{p}$ and accelerometer signals $\mathbf{a}$ are temporally synchronized and correspond to the same activity instance.
-
-\subsection{Joint Training Objective}
-
-Rather than treating pose-to-IMU regression and HAR as independent tasks, we use an end-to-end framework optimizes both simultaneously \cite{zolfaghari2024sensor}. The key insight is that the regressor $R$, feature extractor $F$, and classifier $C$ can mutually benefit from joint training:
-
-\begin{enumerate}
-    \item The classifier provides supervision that guides the regressor to produce activity-discriminative simulated signals
-    \item The simulated data augments training, exposing the feature extractor to greater variation
-    \item Feature-level losses encourage domain alignment between real and simulated representations
-\end{enumerate}
-
-The general training objective takes the form:
+\textbf{Activity Classifier.} A mapping $C: \mathbb{R}^{d} \rightarrow \mathbb{R}^{K}$ that predicts activity classes from feature representations:
 \begin{equation}
-    \mathcal{L}_{\text{total}} = \alpha \mathcal{L}_{\text{cls}} + \beta \mathcal{L}_{\text{similarity}} + \gamma \mathcal{L}_{\text{regression}} + \mathcal{L}_{\text{auxiliary}}
+    \hat{y} = \arg\max_k \, [C(\mathbf{z})]_k
 \end{equation}
-where $\alpha$, $\beta$, $\gamma$ are loss weights controlling the contribution of classification, consistency, and regression objectives respectively, and $\mathcal{L}_{\text{auxiliary}}$ encompasses additional terms such as adversarial or secondary dataset losses depending on the training scenario.
+
+\subsection{Two-Step Training}
+\label{sec:two-step}
+
+The most intuitive way to use simulated data for HAR is a two-step process:
+
+\textbf{Step 1: Train the Regressor.} First, train $R$ to produce realistic simulated accelerometer signals by minimizing the reconstruction error between $\tilde{\mathbf{a}}$ and $\mathbf{a}$:
+\begin{equation}
+    \mathcal{L}_{\text{regression}} = \frac{1}{N} \sum_{i=1}^{N} \lVert \mathbf{a}_i - R(\mathbf{p}_i) \rVert^{2}
+\end{equation}
+Once trained, the regressor can generate synthetic accelerometer data $\tilde{\mathbf{a}}_i$ for any pose sequence $\mathbf{p}_i$.
+
+\textbf{Step 2: Train HAR with Augmented Data.} Freeze $R$ and use it to generate synthetic accelerometer signals. Then train $F$ and $C$ on both real and simulated data:
+\begin{equation}
+    \mathbf{z}_{\text{real}} = F(\mathbf{a}), \quad \mathbf{z}_{\text{sim}} = F(\tilde{\mathbf{a}})
+\end{equation}
+\begin{equation}
+    \hat{y}_{\text{real}} = \arg\max_k [C(\mathbf{z}_{\text{real}})], \quad \hat{y}_{\text{sim}} = \arg\max_k [C(\mathbf{z}_{\text{sim}})]
+\end{equation}
+Since both $\mathbf{a}$ and $\tilde{\mathbf{a}}$ share the same label $y$, the classifier effectively trains on an augmented dataset. The training objective in this step combines a classification loss on both paths and optionally a feature similarity loss to encourage domain alignment:
+\begin{equation}
+    \mathcal{L}_{\text{cls}} = \text{CE}(\hat{y}_{\text{real}}, y) + \text{CE}(\hat{y}_{\text{sim}}, y)
+\end{equation}
+\begin{equation}
+    \mathcal{L}_{\text{similarity}} = 1 - \cos(\mathbf{z}_{\text{real}}, \mathbf{z}_{\text{sim}})
+\end{equation}
+where CE denotes cross-entropy loss and $\cos(\cdot, \cdot)$ denotes cosine similarity. The similarity loss encourages $F$ to produce similar representations for corresponding real and simulated samples, reducing the domain gap.
+
+This sequential approach treats pose-to-IMU regression and activity classification as independent tasks.
+
+\subsection{Joint Training (Baseline)}
+\label{sec:joint-training}
+\label{sec:baseline}
+
+Zolfaghari \textit{et al.}~\cite{zolfaghari2024sensor} showed that combining these two steps into a single end-to-end training process yields better HAR performance. Rather than freezing the regressor after Step 1, joint training optimizes all three components ($R$, $F$, $C$) simultaneously using a combined objective:
+\begin{equation}
+    \mathcal{L}_{\text{total}} = \alpha \mathcal{L}_{\text{cls}} + \beta \mathcal{L}_{\text{similarity}} + \gamma \mathcal{L}_{\text{regression}}
+    \label{eq:total_loss}
+\end{equation}
+where $\alpha$, $\beta$, $\gamma$ are hyperparameters controlling the contribution of each loss term.
+
+The key advantage is that all losses backpropagate through the entire pipeline. In particular, the classification loss now reaches the regressor, meaning $R$ learns to produce signals that are not just realistic-looking, but \emph{useful for classification}---preserving activity-discriminative information rather than merely mimicking the statistical properties of real accelerometer data.
+
+We refer to this configuration as the \textbf{Baseline} scenario. As illustrated in \Cref{fig:baseline}, both the real and simulated paths share the same feature extractor $F$ and classifier $C$, with all three loss terms active ($\alpha, \beta, \gamma > 0$). This serves as the foundation for all experimental variants explored in this thesis.
 
 \subsection{Evaluation Protocol}
 
