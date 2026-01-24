@@ -83,12 +83,12 @@ def build_mmfit_datasets(cfg):
                 dtype=getattr(cfg, 'dtype', None) or torch.float32,
             )
             
-            # Add to appropriate split
+            # Add to appropriate split (allow overlap between val/test)
             if w_id in train_ids:
                 train.append(dataset)
-            elif w_id in val_ids:
+            if w_id in val_ids:
                 val.append(dataset)
-            elif w_id in test_ids:
+            if w_id in test_ids:
                 test.append(dataset)
                 
         except (FileNotFoundError, ValueError) as e:

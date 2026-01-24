@@ -55,7 +55,7 @@ To achieve this, we define three learned components:
     \hat{y} = \arg\max_k \, [C(\mathbf{z})]
 \end{equation}
 
-\subsection{Two-Step Training}
+\subsection{Scenario 1: Two-Step Training}
 \label{sec:two-step}
 
 The most intuitive way to use simulated data for HAR is a two-step process:
@@ -82,16 +82,16 @@ Since both $\mathbf{a}$ and $\tilde{\mathbf{a}}$ share the same label $y$, the c
 \end{equation}
 where CE denotes cross-entropy loss and $\cos(\cdot, \cdot)$ denotes cosine similarity. The similarity loss encourages $F$ to produce similar representations for corresponding real and simulated samples, reducing the domain gap.
 
-This sequential approach treats pose-to-IMU regression and activity classification as independent tasks.
+This sequential approach treats pose-to-IMU regression and activity classification as independent tasks and we refer to it as \textbf{Scenario 1}
 
 \begin{figure}[t]
   \centering
   \includegraphics[width=0.85\textwidth]{Thesis_Template_DE_EN/BA_MA_English/Figures/arch-baseline.pdf}
-  \caption{Baseline architecture with shared feature extractor $F$ and classifier $C$. Real accelerometer data $\mathbf{a}$ and simulated data $\tilde{\mathbf{a}}$ (from regressor $R$) pass through the same network. Three losses guide training: classification loss $\mathcal{L}_{\text{cls}}$ (weighted by $\alpha$), feature similarity loss $\mathcal{L}_{\text{sim}}$ (weighted by $\beta$), and regression loss $\mathcal{L}_{\text{reg}}$ (weighted by $\gamma$).}
+  \caption{Baseline architecture (Scenario 2.1) with shared feature extractor $F$ and classifier $C$. Real accelerometer data $\mathbf{a}$ and simulated data $\tilde{\mathbf{a}}$ (from regressor $R$) pass through the same network. Three losses guide training: classification loss $\mathcal{L}_{\text{cls}}$ (weighted by $\alpha$), feature similarity loss $\mathcal{L}_{\text{sim}}$ (weighted by $\beta$), and regression loss $\mathcal{L}_{\text{reg}}$ (weighted by $\gamma$).}
   \label{fig:baseline}
 \end{figure}
 
-\subsection{Joint Training (Scenario 1.0)}
+\subsection{Joint Training (Scenario 2.1)}
 \label{sec:joint-training}
 \label{sec:baseline}
 
@@ -110,7 +110,7 @@ The simulated data path serves purely as a training-time augmentation mechanism.
 
 The key advantage is that all losses backpropagate through the entire pipeline. In particular, the classification loss now reaches the regressor, meaning $R$ learns to produce signals that are not just realistic-looking, but \emph{useful for classification}, preserving activity-discriminative information rather than merely mimicking the statistical properties of real accelerometer data.
 
-We refer to this baseline configuration as the \textbf{Scenario 1.0}. As illustrated in \Cref{fig:baseline}, both the real and simulated paths share the same feature extractor $F$ and classifier $C$, with all three loss terms active ($\alpha, \beta, \gamma > 0$). This serves as the foundation for all experimental variants explored in this thesis.
+We refer to this baseline configuration as the \textbf{Scenario 2.1}. As illustrated in \Cref{fig:baseline}, both the real and simulated paths share the same feature extractor $F$ and classifier $C$, with all three loss terms active ($\alpha, \beta, \gamma > 0$). This serves as the foundation for all experimental variants explored in this thesis.
 
 \section{Loss Function Design}
 \label{sec:losses}
@@ -131,7 +131,7 @@ To encourage domain-invariant representations, we minimize the distance between 
 \begin{equation}
     \mathcal{L}_{\text{similarity}} = 1 - \frac{1}{N} \sum_{i=1}^{N} \cos(\mathbf{z}_{\text{real},i}, \mathbf{z}_{\text{sim},i})
 \end{equation}
-where $\cos(\cdot, \cdot)$ denotes cosine similarity. Crucially, $\mathbf{z}_{\text{real},i}$ and $\mathbf{z}_{\text{sim},i}$ correspond to the same time window: they originate from synchronized pose and accelerometer recordings of the same activity instance. This pairing is essential---if we compared features from unrelated samples, the loss would push the feature extractor toward a degenerate solution where all inputs map to similar representations regardless of the underlying activity. By enforcing similarity only between corresponding pairs, the loss encourages the feature extractor to produce consistent representations for the same motion captured through different modalities, while preserving discriminative information across different activities. This loss is weighted by coefficient $\beta$.
+where $\cos(\cdot, \cdot)$ denotes cosine similarity. Crucially, $\mathbf{z}_{\text{real},i}$ and $\mathbf{z}_{\text{sim},i}$ correspond to the same time window: they originate from synchronized pose and accelerometer recordings of the same activity instance. This pairing is essential. If we compared features from unrelated samples, the loss would push the feature extractor toward a solution where all inputs map to similar representations regardless of the underlying activity. By enforcing similarity only between corresponding pairs, the loss encourages the feature extractor to produce consistent representations for the same motion captured through different modalities, while preserving discriminative information across different activities. This loss is weighted by coefficient $\beta$.
 
 \subsection{Regression Loss}
 
@@ -150,14 +150,14 @@ The baseline training objective combines these three losses:
 \end{equation}
 where $\alpha$, $\beta$, and $\gamma$ are hyperparameters controlling the contribution of each term. Different experimental configurations selectively enable or disable these terms to study their individual contributions, as detailed in \Cref{sec:scenarios}.
 
-All loss weights ($\alpha, \beta, \gamma, \lambda_{\text{aux}}, \lambda_{\text{adv}}$) and optimization details are specified in \Cref{chap:implementation}.
+All loss weights ($\alpha, \beta, \gamma$) and optimization details are specified in \Cref{chap:implementation}.
 
 \section{Training Scenarios}
 \label{sec:scenarios}
 
-To systematically investigate the contributions of different architectural choices and loss components, we define eight training scenarios. Each scenario modifies the baseline configuration in a specific way, enabling controlled ablation studies and architectural comparisons.
+In this thesis we look for methods to increase performance of HAR and will investigate different architectural choices and loss components. We define eight training scenarios. Each scenario modifies the baseline configuration in a specific way, enabling controlled ablation studies and architectural comparisons.
 
-\Cref{tab:scenarios} summarizes all scenarios. The following subsections describe each variant in detail.
+\Cref{tab:scenarios} summarizes all scenarios. We have already introduced Scenario 1 and Scenario 2.1 and in the following subsections, we describe each variant in detail.
 
 \begin{table}[!t]
 \centering
@@ -167,24 +167,19 @@ To systematically investigate the contributions of different architectural choic
 \hline
 \textbf{Scenario} & \textbf{Description} \\
 \hline
-Baseline & Shared $F$ and $C$; all losses enabled ($\alpha, \beta, \gamma > 0$) \\
-Ablation: MSE & Baseline with $\gamma = 0$ (no regression loss) \\
-Ablation: Similarity & Baseline with $\beta = 0$ (no feature similarity loss) \\
-Shared rep. \& Sep. Cls. & Separate classifiers $C$ and $C_{\text{sim}}$ for real and simulated paths \\
-Sep. rep. \& Shared Cls. & Separate feature extractors $F$ and $F_{\text{sim}}$ for real and simulated paths \\
-Auxiliary Pose & Additional pose-only dataset (NTU) with secondary classifier \\
-Feature Discriminator & Adversarial discriminator on feature embeddings \\
-Signal Discriminator & Adversarial discriminator on raw accelerometer signals \\
+Scenario 2.1: Baseline & Shared $F$ and $C$; all losses enabled ($\alpha, \beta, \gamma > 0$) \\
+Scenario 2.2: MSE Ablation & Baseline with $\gamma = 0$ (no regression loss) \\
+Scenario 2.3: Similarity Ablation & Baseline with $\beta = 0$ (no feature similarity loss) \\
+Scenario 24: Shared rep. \& Sep. Cls. & Separate classifiers $C$ and $C_{\text{sim}}$ for real and simulated paths \\
+Scenario 25: Sep. rep. \& Shared Cls. & Separate feature extractors $F$ and $F_{\text{sim}}$ for real and simulated paths \\
+Scenario 3: Auxiliary Pose & Additional pose-only dataset (NTU) with secondary classifier \\
+Scenario 4.1: Feature Discriminator & Adversarial discriminator on feature embeddings \\
+Scenario 4.2: Signal Discriminator & Adversarial discriminator on raw accelerometer signals \\
 \hline
 \end{tabular}
 \end{table}
 
-\subsection{Baseline}
-\label{sec:scenario-baseline}
-
-The baseline configuration uses shared weights for both the feature extractor and classifier across real and simulated paths. All three loss terms are active: classification ($\alpha > 0$), feature similarity ($\beta > 0$), and regression ($\gamma > 0$). This represents the simplest form of joint training where the network must learn domain-invariant representations through weight sharing alone.
-
-\subsection{Ablation: Effect of MSE Loss}
+\subsection{Scenario 2.2: Effect of MSE Loss}
 \label{sec:scenario-mse-ablation}
 
 This ablation sets $\gamma = 0$, removing the regression loss entirely. The regressor still produces simulated accelerometer signals, but receives no direct signal-level supervision. Instead, it relies solely on gradients backpropagated from the classification and similarity losses. This tests whether explicit signal matching is necessary, or whether task-driven gradients suffice.
@@ -196,7 +191,7 @@ This ablation sets $\gamma = 0$, removing the regression loss entirely. The regr
   \label{fig:ablation-mse}
 \end{figure}
 
-\subsection{Ablation: Effect of Similarity Loss}
+\subsection{Scenario 2.2: Effect of Similarity Loss}
 \label{sec:scenario-sim-ablation}
 
 This ablation sets $\beta = 0$, removing the feature similarity loss. The feature extractor no longer receives explicit pressure to align real and simulated representations. This tests whether the shared architecture alone provides sufficient domain alignment, or whether explicit feature matching is beneficial.
@@ -208,7 +203,7 @@ This ablation sets $\beta = 0$, removing the feature similarity loss. The featur
   \label{fig:ablation-sim}
 \end{figure}
 
-\subsection{Shared Representation, Separate Classifiers}
+\subsection{Scenario 2.4: Shared Representation, Separate Classifiers}
 \label{sec:scenario-dual-classifier}
 
 This variant introduces a second classifier $C_{\text{sim}}$ dedicated to the simulated path:
@@ -224,7 +219,7 @@ while the real path continues to use the original classifier $C$. Both classifie
   \label{fig:dual-classifier}
 \end{figure}
 
-\subsection{Separate Representations, Shared Classifier}
+\subsection{Scenario 2.5: Separate Representations, Shared Classifier}
 \label{sec:scenario-dual-encoder}
 
 This variant introduces a second feature extractor $F_{\text{sim}}$ dedicated to the simulated path:
@@ -240,7 +235,7 @@ while the real path uses the original $F$. Both feature extractors feed into the
   \label{fig:dual-encoder}
 \end{figure}
 
-\subsection{Auxiliary Pose Data}
+\subsection{Scenario 3: Auxiliary Pose Data}
 \label{sec:scenario-auxiliary}
 
 Compared to the baseline, this scenario introduces an additional pose-only dataset and a secondary classifier, while keeping the main real/sim architecture unchanged.
@@ -262,37 +257,65 @@ This tests whether additional pose diversity improves the regressor's generaliza
   \label{fig:auxiliary-pose}
 \end{figure}
 
-\subsection{Feature-level Discriminator}
+\subsection{Scenario 4.1: Feature-level Discriminator}
 \label{sec:scenario-disc-feature}
 
-This scenario extends the baseline by adding an adversarial discriminator on feature embeddings. Additionally, this scenario employs separate feature extractors ($F$ for real, $F_{\text{sim}}$ for simulated) and separate classifiers ($C$ for real, $C_{\text{sim}}$ for simulated) to allow each path to specialize while the discriminator enforces domain alignment at the feature level.
+Scenario 4.1 extends the baseline by adding an adversarial discriminator on feature embeddings. The goal is to explicitly reduce the sim-to-real domain gap by encouraging feature representations extracted from real and simulated accelerometer signals to be indistinguishable.
 
-The discriminator $D$ operates on feature embeddings and attempts to distinguish real features $\mathbf{z}_{\text{real}}$ from simulated features $\mathbf{z}_{\text{sim}}$:
+Given a synchronized training window, the regressor produces simulated accelerometer signals $\tilde{\mathbf{a}} = R(\mathbf{p})$ and the feature extractor encodes both domains:
 \begin{equation}
-    D: \mathbb{R}^d \rightarrow [0, 1]
+    \mathbf{z}_{\text{real}} = F(\mathbf{a}), \qquad \mathbf{z}_{\text{sim}} = F(\tilde{\mathbf{a}})
 \end{equation}
-where output near 1 indicates ``real'' and near 0 indicates ``simulated.''
+In our experiments, $F$ is shared between the real and simulated paths, and only the discriminator is added on top of the baseline architecture.
 
-A Gradient Reversal Layer (GRL) enables end-to-end training: during the forward pass, GRL acts as identity; during backpropagation, it negates gradients by a factor $\lambda_{\text{adv}}$. This creates an adversarial signal that pushes the feature extractor to produce domain-invariant features that fool the discriminator.
+\paragraph{Discriminator module.}
+We introduce a feature discriminator $D_F$ that maps embeddings to a real/fake logit:
+\begin{equation}
+    d = D_F(\mathbf{z}) \in \mathbb{R}
+\end{equation}
+Real embeddings are assigned target $t=1$ and simulated embeddings target $t=0$. The discriminator is trained using binary cross-entropy with logits:
+\begin{equation}
+    \mathcal{L}_{\text{adv}} =
+    \text{BCE}(D_F(\mathbf{z}_{\text{real}}), 1)
+    + \text{BCE}(D_F(\mathbf{z}_{\text{sim}}), 0)
+\end{equation}
+We optionally apply label smoothing for the discriminator targets to prevent overconfident domain predictions and to maintain a usable gradient signal throughout training.
 
-The adversarial loss follows the standard binary cross-entropy formulation:
+\paragraph{ACGAN auxiliary classifier.}
+In all our experiments, we use an ACGAN-style discriminator that is class-conditional and includes an auxiliary activity classifier head. Concretely, $D_F$ receives the activity label $y$ (embedded and concatenated to $\mathbf{z}$) and outputs both a real/fake logit and activity logits:
 \begin{equation}
-    \mathcal{L}_{\text{adv}} = -\mathbb{E}[\log D(\mathbf{z}_{\text{real}})] - \mathbb{E}[\log(1 - D(\mathbf{z}_{\text{sim}}))]
+    (d, \hat{\mathbf{y}}_{D}) = D_F(\mathbf{z}, y), \qquad \hat{\mathbf{y}}_{D} \in \mathbb{R}^{K}
 \end{equation}
-The discriminator $D$ is trained to minimize this loss (correctly classifying domains), while the GRL causes the feature extractor to maximize it (producing indistinguishable features). The total training objective becomes:
+The auxiliary loss is cross-entropy on both real and simulated embeddings:
 \begin{equation}
-    \mathcal{L}_{\text{total}} = \alpha \mathcal{L}_{\text{cls}} + \beta \mathcal{L}_{\text{similarity}} + \gamma \mathcal{L}_{\text{regression}} - \lambda_{\text{adv}} \mathcal{L}_{\text{adv}}
+    \mathcal{L}_{\text{ac}} =
+    \text{CE}(\hat{\mathbf{y}}_{D,\text{real}}, y)
+    + \text{CE}(\hat{\mathbf{y}}_{D,\text{sim}}, y)
 \end{equation}
-where the negative sign reflects the adversarial nature: the main network minimizes $\mathcal{L}_{\text{total}}$ while effectively maximizing $\mathcal{L}_{\text{adv}}$ through the GRL.
+This auxiliary head stabilizes adversarial training and encourages class-aware alignment, i.e., matching the two domains not only globally but also within each activity class.
+
+\paragraph{Gradient Reversal Layer (GRL).}
+To enable end-to-end adversarial learning in a single forward/backward pass, we place a Gradient Reversal Layer (GRL) between the feature extractor and the discriminator. The GRL is the identity function in the forward pass, but multiplies the gradient by $-\lambda_{\text{grl}}$ during backpropagation. As a result, $D_F$ is optimized to minimize $\mathcal{L}_{\text{adv}}$ (and $\mathcal{L}_{\text{ac}}$), while the feature extractor receives an adversarial signal from $\mathcal{L}_{\text{adv}}$ that pushes $\mathbf{z}_{\text{real}}$ and $\mathbf{z}_{\text{sim}}$ toward domain-invariant representations. In our implementation, $\lambda_{\text{grl}}$ can be kept fixed or scheduled over training.
+
+The overall objective augments the baseline losses with the adversarial and ACGAN auxiliary terms:
+\begin{equation}
+    \mathcal{L}_{\text{total}} =
+    \alpha \mathcal{L}_{\text{cls}}
+    + \beta \mathcal{L}_{\text{similarity}}
+    + \gamma \mathcal{L}_{\text{regression}}
+    + \lambda_{\text{adv}} \mathcal{L}_{\text{adv}}
+    + \lambda_{\text{ac}} \mathcal{L}_{\text{ac}}
+\end{equation}
+At inference time, the discriminator is not used and predictions are produced from the real-accelerometer branch only.
 
 \begin{figure}[t]
   \centering
   \includegraphics[width=\textwidth]{Thesis_Template_DE_EN/BA_MA_English/Figures/arch-featdisc.pdf}
-  \caption{Feature-level discriminator with Gradient Reversal Layer (GRL). The discriminator $D$ classifies features as real or simulated. During backpropagation, the GRL negates gradients (multiplies by $-\lambda$), creating an adversarial signal that encourages $F$ to produce domain-invariant features that fool $D$.}
+  \caption{Feature-level discriminator (Scenario 4.1) with Gradient Reversal Layer (GRL). The discriminator $D_F$ operates on encoder features and predicts a real/fake logit; in our ACGAN setting it additionally predicts the activity class via an auxiliary head. The GRL reverses gradients flowing back to the feature extractor, encouraging domain-invariant representations.}
   \label{fig:disc-feature}
 \end{figure}
 
-\subsection{Signal-level Discriminator}
+\subsection{Scenario 4.2: Signal-level Discriminator}
 \label{sec:scenario-disc-signal}
 
 In contrast to feature-level discrimination, this variant applies adversarial supervision directly at the signal level, primarily affecting the regressor. Like the feature-level variant, this scenario also employs separate feature extractors ($F$ for real, $F_{\text{sim}}$ for simulated) and separate classifiers ($C$ for real, $C_{\text{sim}}$ for simulated).

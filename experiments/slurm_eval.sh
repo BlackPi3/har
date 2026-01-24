@@ -44,6 +44,9 @@ RUN_CMD="python -u -m experiments.run_eval --study-name \"$STUDY_NAME\" --env \"
 if [[ -n "$EPOCHS" ]]; then
   RUN_CMD+=" --epochs \"$EPOCHS\""
 fi
+if [[ "${NO_RESUME:-}" == "1" ]]; then
+  RUN_CMD+=" --no-resume"
+fi
 
 srun \
   --container-image="$CONTAINER_IMAGE" \

@@ -10,9 +10,10 @@
 - `src/` contains the backbone Python code: PyTorch datasets/dataloaders, preprocessing pipelines, training logic (`train_scenario2.py`), models (`classifier.py`, `discriminator.py`, `regressor`)
 - Cluster launchers (`experiments/slurm_trial.sh`, `experiments/slurm_hpo.sh`, `experiments/slurm_eval.sh`) wrap the same entrypoints for SLURM environments.
 - For local runs/tests, activate the `har` conda env first (`conda activate har`).
-- There are multiple training pipelines that go under the names: `scneario2`, `scenario22`, `scenario23`, `scenario24`, `scneario25`, `scenario3`, `scenario4`, `scenairo42`. All these pipeline's have the same goal of improving macro F1 and accuracy metrics on unseen data in HAR tasks. the general idea in all these pipellines is that we train our models using real and simulated accelerometer data. the simulated accelerometer data come from pose sequence. 
-- for each scenairo we have a dedicated config under `conf/trial/` and `conf/hpo/`. 
-- we do our hyperparameters optimization (HPO) in 3 passes (`conf/hpo/`). each pass optimizes a subset of parameters, which are loss weights + dataset-specific, regularization and model capacity params.
+- There are multiple training pipelines that go under the names: `scenario2`, `scenario22`, `scenario23`, `scenario24`, `scenario25`, `scenario3`, `scenario4`, `scenario42`. All these pipelines have the same goal of improving macro F1 and accuracy metrics on unseen data in HAR tasks. The general idea in all these pipelines is that we train our models using real and simulated accelerometer data. The simulated accelerometer data come from pose sequences.
+- For each scenario we have a dedicated config under `conf/trial/` and `conf/hpo/`.
+- We do hyperparameter optimization (HPO) in 3 passes (`conf/hpo/`). Each pass optimizes a subset of parameters: loss weights + dataset-specific, regularization, and model capacity params.
+- **Scenario naming note (thesis vs code):** in the thesis text, the main set is numbered for narrative flow as Scenario 2.1--2.5, while the code/config names remain `scenario*`: `2.1→scenario2`, `2.2→scenario22`, `2.3→scenario25`, `2.4→scenario23`, `2.5→scenario24` (and `4.1→scenario4`, `4.2→scenario42`).
 
 ## experiments architectures
 

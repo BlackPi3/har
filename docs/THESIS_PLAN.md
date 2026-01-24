@@ -41,6 +41,8 @@ This thesis investigates using simulated accelerometer signals derived from skel
 | Feature-level Discriminator | scenario4 | Adversarial on features with GRL |
 | Signal-level Discriminator | scenario42 | Adversarial on raw accelerometer |
 
+> Note (naming): in the thesis text, these are referred to as Scenario 2.1--2.5 for narrative order: `2.1→scenario2`, `2.2→scenario22`, `2.3→scenario25`, `2.4→scenario23`, `2.5→scenario24` (and `4.1→scenario4`, `4.2→scenario42`).
+
 ### 3.5 Adversarial Learning (Feature & Signal Discriminators) ✓
 - Gradient Reversal Layer (GRL) for end-to-end training
 - Feature-level: D operates on z_real vs z_sim (affects F)
