@@ -1,7 +1,7 @@
 \chapter{Method}
 \label{chap:method}
 
-This section describes our method to enhance HAR which focuses on the efficient use of available real and simulated sensor data.
+This chapter describes our method to enhance HAR which focuses on the efficient use of available real and simulated sensor data.
 While most other methods consider sensor data simulation and training a HAR classifier as different, independent steps, ours performs both in an end-to-end fashion.
 
 \section{Problem Formulation}
@@ -149,7 +149,6 @@ This signal-level supervision ensures the regressor learns the mapping from pose
 The baseline training objective combines these three losses:
 \begin{equation}
     \mathcal{L}_{\text{total}} = \alpha \mathcal{L}_{\text{cls}} + \beta \mathcal{L}_{\text{similarity}} + \gamma \mathcal{L}_{\text{regression}}
-    \label{eq:total_loss}
 \end{equation}
 where $\alpha$, $\beta$, and $\gamma$ are hyperparameters controlling the contribution of each term. Different experimental configurations selectively enable or disable these terms to study their individual contributions, as detailed in \Cref{sec:scenarios}.
 
@@ -173,8 +172,8 @@ In this thesis we look for methods to increase performance of HAR and will inves
 Scenario 2.1: Baseline & Shared $F$ and $C$; all losses enabled ($\alpha, \beta, \gamma > 0$) \\
 Scenario 2.2: MSE Ablation & Baseline with $\gamma = 0$ (no regression loss) \\
 Scenario 2.3: Similarity Ablation & Baseline with $\beta = 0$ (no feature similarity loss) \\
-Scenario 24: Shared rep. \& Sep. Cls. & Separate classifiers $C$ and $C_{\text{sim}}$ for real and simulated paths \\
-Scenario 25: Sep. rep. \& Shared Cls. & Separate feature extractors $F$ and $F_{\text{sim}}$ for real and simulated paths \\
+Scenario 2.4: Shared rep. \& Sep. Cls. & Separate classifiers $C$ and $C_{\text{sim}}$ for real and simulated paths \\
+Scenario 2.5: Sep. rep. \& Shared Cls. & Separate feature extractors $F$ and $F_{\text{sim}}$ for real and simulated paths \\
 Scenario 3: Auxiliary Pose & Additional pose-only dataset (NTU) with secondary classifier \\
 Scenario 4.1: Feature Discriminator & Adversarial discriminator on feature embeddings \\
 Scenario 4.2: Signal Discriminator & Adversarial discriminator on raw accelerometer signals \\
@@ -194,7 +193,7 @@ This ablation sets $\gamma = 0$, removing the regression loss entirely. The regr
   \label{fig:ablation-mse}
 \end{figure}
 
-\subsection{Scenario 2.2: Effect of Similarity Loss}
+\subsection{Scenario 2.3: Effect of Similarity Loss}
 \label{sec:scenario-sim-ablation}
 
 This ablation sets $\beta = 0$, removing the feature similarity loss. The feature extractor no longer receives explicit pressure to align real and simulated representations. This tests whether the shared architecture alone provides sufficient domain alignment, or whether explicit feature matching is beneficial.
@@ -256,7 +255,7 @@ This tests whether additional pose diversity improves the regressor's generaliza
 \begin{figure}[t]
   \centering
   \includegraphics[width=\textwidth]{Thesis_Template_DE_EN/BA_MA_English/Figures/arch-aux.pdf}
-  \caption{Auxiliary pose data scenario. A secondary pose-only dataset (NTU RGB+D) augments training. Secondary poses flow through the regressor $R$ and feature extractor $F_{\text{sim}}$ to a dedicated classifier $C_{\text{aux}}$. The auxiliary loss $\mathcal{L}_{\text{aux}}$ (weighted by $\lambda_{\text{aux}}$) provides additional supervision to improve regressor generalization.}
+  \caption{Auxiliary pose data scenario. A secondary pose-only dataset (NTU RGB+D) augments training. Secondary poses flow through the regressor $R$ and feature extractor $F$ to a dedicated classifier $C_{\text{aux}}$. The auxiliary loss $\mathcal{L}_{\text{aux}}$ (weighted by $\lambda_{\text{aux}}$) provides additional supervision to improve regressor generalization.}
   \label{fig:auxiliary-pose}
 \end{figure}
 
@@ -298,7 +297,7 @@ We use an ACGAN-style auxiliary classification head to keep adversarial alignmen
 \paragraph{Gradient Reversal Layer (GRL).}
 To enable end-to-end adversarial learning in a single forward/backward pass, we place a Gradient Reversal Layer (GRL) between the feature extractor and the discriminator \cite{ganin2016domain}. The GRL is the identity function in the forward pass, but multiplies the gradient by $-\lambda_{\text{grl}}$ during backpropagation. As a result, $D_F$ is optimized to minimize $\mathcal{L}_{\text{adv}}$ (and $\mathcal{L}_{\text{ac}}$), while the feature extractor receives an adversarial signal from $\mathcal{L}_{\text{adv}}$ that pushes $\mathbf{z}_{\text{real}}$ and $\mathbf{z}_{\text{sim}}$ toward domain-invariant representations. In our implementation, $\lambda_{\text{grl}}$ can be kept fixed or scheduled over training.
 
-Without GRL, training typically requires alternating min–max updates between the discriminator and feature extractor, which is more sensitive to imbalance and can lead to unstable dynamics (e.g., discriminator domination) and weaker alignment.
+Unlike explicit min--max training, GRL lets us update the discriminator and feature extractor jointly in each iteration (single backward pass), avoiding alternating optimization. Without GRL, training typically requires alternating updates between the discriminator and feature extractor, which is more sensitive to imbalance and can lead to unstable dynamics (e.g., discriminator domination) and weaker alignment.
 
 The overall objective augments the baseline losses with the adversarial and ACGAN auxiliary terms:
 \begin{equation}
@@ -321,28 +320,60 @@ At inference time, the discriminator is not used and predictions are produced fr
 \subsection{Scenario 4.2: Signal-level Discriminator}
 \label{sec:scenario-disc-signal}
 
-In contrast to feature-level discrimination, this variant applies adversarial supervision directly at the signal level, primarily affecting the regressor. Like the feature-level variant, this scenario also employs separate feature extractors ($F$ for real, $F_{\text{sim}}$ for simulated) and separate classifiers ($C$ for real, $C_{\text{sim}}$ for simulated).
+Scenario 4.2 extends the baseline by adding an adversarial discriminator directly on raw accelerometer signals. Instead of aligning real and simulated distributions only in feature space, this variant applies adversarial pressure at the signal level, encouraging the regressor to generate realistic accelerometer waveforms. Figure~\ref{fig:disc-signal} shows the training pipeline, and in the following we discuss the new components of this scenario.
 
-The discriminator operates on raw accelerometer signals rather than features:
+\paragraph{Signal discriminator (critic).}
+Let $D_S$ be a 1D convolutional critic that maps a window of accelerometer samples to a scalar score. By placing the discriminator at the signal level, we directly penalize unrealistic temporal structure in $\tilde{\mathbf{a}}=R(\mathbf{p})$ and encourage the regressor to match the real sensor distribution, rather than relying on the feature extractor to suppress simulation artifacts.
 \begin{equation}
-    D: \mathbb{R}^{T \times 3} \rightarrow [0, 1]
+    s = D_S(\mathbf{a}) \in \mathbb{R}
 \end{equation}
-The discriminator distinguishes real accelerometer data $\mathbf{a}$ from simulated data $\tilde{\mathbf{a}}$ produced by the regressor. This directly pressures the regressor to produce realistic-looking signals, complementing the MSE loss.
+where higher scores indicate ``more real''. The critic is trained to assign higher scores to real signals $\mathbf{a}$ than to simulated signals $\tilde{\mathbf{a}}$:
+\begin{equation}
+    \mathcal{L}_D =
+    \mathbb{E}[D_S(\tilde{\mathbf{a}})]
+    - \mathbb{E}[D_S(\mathbf{a})]
+    + \lambda_{\text{gp}} \, \mathcal{L}_{\text{gp}}
+\end{equation}
+where $\mathcal{L}_{\text{gp}}$ is the gradient penalty term enforcing the 1-Lipschitz constraint in WGAN-GP \cite{gulrajani2017improved}. We use the Wasserstein formulation because it provides more stable, non-saturating gradients for high-dimensional continuous time series than BCE-based adversarial objectives when the real and simulated distributions have limited overlap \cite{arjovsky2017wasserstein,gulrajani2017improved}. Unlike Scenario 4.1, we do not use GRL here; WGAN-GP is trained with alternating critic and generator updates.
 
-The adversarial loss mirrors the feature-level formulation:
+\paragraph{ACGAN auxiliary classifier.}
+As in Scenario 4.1, we use an ACGAN-style discriminator with an auxiliary activity classifier head \cite{odena2017conditional}. The critic is conditioned on the activity label and outputs both a realness score and activity logits:
 \begin{equation}
-    \mathcal{L}_{\text{adv}} = -\mathbb{E}[\log D(\mathbf{a})] - \mathbb{E}[\log(1 - D(\tilde{\mathbf{a}}))]
+    (s, \hat{\mathbf{y}}_{D}) = D_S(\mathbf{a}, y), \qquad \hat{\mathbf{y}}_{D} \in \mathbb{R}^{K}
 \end{equation}
-and the total objective follows the same structure:
+We define an auxiliary classification loss for the critic on both real and simulated signals:
 \begin{equation}
-    \mathcal{L}_{\text{total}} = \alpha \mathcal{L}_{\text{cls}} + \beta \mathcal{L}_{\text{similarity}} + \gamma \mathcal{L}_{\text{regression}} - \lambda_{\text{adv}} \mathcal{L}_{\text{adv}}
+    \mathcal{L}_{\text{ac}}^{D} =
+    \text{CE}(\hat{\mathbf{y}}_{D,\text{real}}, y)
+    + \text{CE}(\hat{\mathbf{y}}_{D,\text{sim}}, y)
 \end{equation}
+and a corresponding auxiliary term for the regressor on simulated signals:
+\begin{equation}
+    \mathcal{L}_{\text{ac}}^{G} = \text{CE}(\hat{\mathbf{y}}_{D,\text{sim}}, y)
+\end{equation}
+During critic updates, we minimize $\mathcal{L}_D + \lambda_{\text{ac}}\mathcal{L}_{\text{ac}}^{D}$; during regressor updates, we include $\lambda_{\text{ac}}\mathcal{L}_{\text{ac}}^{G}$ to encourage label-consistent synthesis. This auxiliary head encourages class-conditional realism, helping prevent the regressor from producing signals that appear plausible in the aggregate but are ambiguous with respect to activity labels.
 
-The key difference from feature-level discrimination is where the adversarial gradient flows: here it primarily affects the regressor $R$, encouraging it to generate signals indistinguishable from real sensor data, while feature-level discrimination primarily affects the feature extractor $F$.
+\paragraph{Generator loss and optimization.}
+The regressor is trained to increase the critic score of generated signals:
+\begin{equation}
+    \mathcal{L}_{\text{adv}} = -\mathbb{E}[D_S(\tilde{\mathbf{a}})]
+\end{equation}
+In addition, we include the auxiliary classification term $\mathcal{L}_{\text{ac}}^{G}$ on simulated samples to encourage label-consistent synthesis. We optimize WGAN-GP with alternating updates: for each batch, the critic is updated for $n_{\text{critic}}$ steps while keeping the regressor fixed, and then the regressor is updated for one step while keeping the critic fixed. This alternating scheme is standard for WGAN-GP and avoids the unstable dynamics that can occur when directly reversing gradients at the raw-signal level. In addition, we use staged training by pretraining the regressor with the MSE loss for several epochs before enabling adversarial training to improve stability and avoid early critic domination.
+
+The overall objective for the main network augments the baseline losses with the signal-level adversarial terms:
+\begin{equation}
+    \mathcal{L}_{\text{total}} =
+    \alpha \mathcal{L}_{\text{cls}}
+    + \beta \mathcal{L}_{\text{similarity}}
+    + \gamma \mathcal{L}_{\text{regression}}
+    + \lambda_{\text{adv}} \mathcal{L}_{\text{adv}}
+    + \lambda_{\text{ac}} \mathcal{L}_{\text{ac}}^{G}
+\end{equation}
+At evaluation time, the discriminator is not used and predictions are produced from the real-accelerometer branch only.
 
 \begin{figure}[t]
   \centering
   \includegraphics[width=\textwidth]{Thesis_Template_DE_EN/BA_MA_English/Figures/arch-signaldisc.pdf}
-  \caption{Signal-level discriminator. Unlike feature-level discrimination, $D$ operates on raw accelerometer signals $\mathbf{a}$ vs.\ $\tilde{\mathbf{a}}$. The GRL reverses gradients to the regressor $R$, directly pressuring it to produce realistic accelerometer waveforms indistinguishable from real sensor data.}
+  \caption{Signal-level discriminator (Scenario 4.2). The critic $D_S$ operates on raw accelerometer windows and is trained with WGAN-GP to assign higher scores to real signals than to simulated signals $\tilde{\mathbf{a}} = R(\mathbf{p})$. Using alternating critic/generator updates and an ACGAN auxiliary head, this directly pressures the regressor to generate realistic accelerometer waveforms.}
   \label{fig:disc-signal}
 \end{figure}

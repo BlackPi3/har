@@ -42,7 +42,7 @@ trainer:
   name: scenario2
 
   alpha: 1.0           # Activity classification weight
-  beta: 0              # No cosine sim - adversarial on signal replaces it
+  beta: 1.0            # Feature similarity weight (cosine)
   gamma: 1.0           # MSE loss weight
 
   epochs: 100
