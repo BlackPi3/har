@@ -43,6 +43,7 @@ To achieve this, we define three learned components:
 \textbf{Pose-to-IMU Regressor.} A mapping $R: \mathbb{R}^{T \times J \times 3} \rightarrow \mathbb{R}^{T \times 3}$ that transforms pose sequences into simulated accelerometer signals:
 \begin{equation}
     \tilde{\mathbf{a}} = R(\mathbf{p})
+    \label{eq:R}
 \end{equation}
 
 \textbf{Feature Extractor.} A mapping $F: \mathbb{R}^{T \times 3} \rightarrow \mathbb{R}^{d}$ that encodes accelerometer signals into $d$-dimensional feature embeddings:
@@ -53,6 +54,7 @@ To achieve this, we define three learned components:
 \textbf{Activity Classifier.} A mapping $C: \mathbb{R}^{d} \rightarrow \mathbb{R}^{K}$ that predicts activity classes from feature representations:
 \begin{equation}
     \hat{y} = \arg\max_k \, [C(\mathbf{z})]
+    \label{eq:C}
 \end{equation}
 
 \subsection{Scenario 1: Two-Step Training}
@@ -69,6 +71,7 @@ Once trained, the regressor can generate synthetic accelerometer data $\tilde{\m
 \textbf{Step 2: Train HAR with Augmented Data.} Freeze $R$ and use it to generate synthetic accelerometer signals. Then train $F$ and $C$ on both real and simulated data:
 \begin{equation}
     \mathbf{z}_{\text{real}} = F(\mathbf{a}), \quad \mathbf{z}_{\text{sim}} = F(\tilde{\mathbf{a}})
+    \label{eq:F}
 \end{equation}
 \begin{equation}
     \hat{y}_{\text{real}} = \arg\max_k [C(\mathbf{z}_{\text{real}})], \quad \hat{y}_{\text{sim}} = \arg\max_k [C(\mathbf{z}_{\text{sim}})]
@@ -242,7 +245,7 @@ Compared to the baseline, this scenario introduces an additional pose-only datas
 
 This scenario augments training with a secondary pose-only dataset (NTU RGB+D) that lacks corresponding real accelerometer data. Although NTU RGB+D contains different activity classes than the primary dataset, we select the same subset of skeletal joints across both datasets to ensure the regressor $R$ receives consistently structured pose inputs. The secondary data flows through the regressor and feature extractor, then to a dedicated secondary classifier $C_{\text{aux}}$:
 \begin{equation}
-    \mathbf{p}_{\text{aux}} \xrightarrow{R} \tilde{\mathbf{a}}_{\text{aux}} \xrightarrow{F_{\text{sim}}} \mathbf{z}_{\text{aux}} \xrightarrow{C_{\text{aux}}} \hat{y}_{\text{aux}}
+    \mathbf{p}_{\text{aux}} \xrightarrow{R} \tilde{\mathbf{a}}_{\text{aux}} \xrightarrow{F} \mathbf{z}_{\text{aux}} \xrightarrow{C_{\text{aux}}} \hat{y}_{\text{aux}}
 \end{equation}
 The secondary classification loss is weighted by a separate coefficient $\lambda_{\text{aux}}$:
 \begin{equation}
@@ -260,18 +263,13 @@ This tests whether additional pose diversity improves the regressor's generaliza
 \subsection{Scenario 4.1: Feature-level Discriminator}
 \label{sec:scenario-disc-feature}
 
-Scenario 4.1 extends the baseline by adding an adversarial discriminator on feature embeddings. The goal is to explicitly reduce the sim-to-real domain gap by encouraging feature representations extracted from real and simulated accelerometer signals to be indistinguishable.
-
-Given a synchronized training window, the regressor produces simulated accelerometer signals $\tilde{\mathbf{a}} = R(\mathbf{p})$ and the feature extractor encodes both domains:
-\begin{equation}
-    \mathbf{z}_{\text{real}} = F(\mathbf{a}), \qquad \mathbf{z}_{\text{sim}} = F(\tilde{\mathbf{a}})
-\end{equation}
-In our experiments, $F$ is shared between the real and simulated paths, and only the discriminator is added on top of the baseline architecture.
+Scenario 4.1 extends the baseline by adding an adversarial discriminator on feature embeddings, whose architecture is shown in Figure~\ref{fig:disc-feature}. The goal is to explicitly reduce the sim-to-real domain gap by encouraging feature representations extracted from real and simulated accelerometer signals to be indistinguishable. In the following we will define the new components and explain why they can improve HAR task.
 
 \paragraph{Discriminator module.}
 We introduce a feature discriminator $D_F$ that maps embeddings to a real/fake logit:
 \begin{equation}
     d = D_F(\mathbf{z}) \in \mathbb{R}
+    \label{eq:Df}
 \end{equation}
 Real embeddings are assigned target $t=1$ and simulated embeddings target $t=0$. The discriminator is trained using binary cross-entropy with logits:
 \begin{equation}
@@ -281,8 +279,11 @@ Real embeddings are assigned target $t=1$ and simulated embeddings target $t=0$.
 \end{equation}
 We optionally apply label smoothing for the discriminator targets to prevent overconfident domain predictions and to maintain a usable gradient signal throughout training.
 
+We add a discriminator on the learned embeddings to explicitly reduce the sim-to-real domain gap in the representation space used for recognition. By making real and simulated features hard to distinguish, we discourage the classifier from relying on simulation-specific artifacts and promote representations that transfer to real-sensor evaluation.
+
+
 \paragraph{ACGAN auxiliary classifier.}
-In all our experiments, we use an ACGAN-style discriminator that is class-conditional and includes an auxiliary activity classifier head. Concretely, $D_F$ receives the activity label $y$ (embedded and concatenated to $\mathbf{z}$) and outputs both a real/fake logit and activity logits:
+In all our experiments, we use an ACGAN-style discriminator that is class-conditional and includes an auxiliary activity classifier head \cite{odena2017conditional}. Concretely, $D_F$ receives the activity label $y$ (embedded and concatenated to $\mathbf{z}$) and outputs both a real/fake logit and activity logits:
 \begin{equation}
     (d, \hat{\mathbf{y}}_{D}) = D_F(\mathbf{z}, y), \qquad \hat{\mathbf{y}}_{D} \in \mathbb{R}^{K}
 \end{equation}
@@ -292,10 +293,12 @@ The auxiliary loss is cross-entropy on both real and simulated embeddings:
     \text{CE}(\hat{\mathbf{y}}_{D,\text{real}}, y)
     + \text{CE}(\hat{\mathbf{y}}_{D,\text{sim}}, y)
 \end{equation}
-This auxiliary head stabilizes adversarial training and encourages class-aware alignment, i.e., matching the two domains not only globally but also within each activity class.
+We use an ACGAN-style auxiliary classification head to keep adversarial alignment class-discriminative. Without the auxiliary head, feature alignment can become class-agnostic and collapse activity structure, producing domain-invariant but less separable embeddings that could degrade macro F1.
 
 \paragraph{Gradient Reversal Layer (GRL).}
-To enable end-to-end adversarial learning in a single forward/backward pass, we place a Gradient Reversal Layer (GRL) between the feature extractor and the discriminator. The GRL is the identity function in the forward pass, but multiplies the gradient by $-\lambda_{\text{grl}}$ during backpropagation. As a result, $D_F$ is optimized to minimize $\mathcal{L}_{\text{adv}}$ (and $\mathcal{L}_{\text{ac}}$), while the feature extractor receives an adversarial signal from $\mathcal{L}_{\text{adv}}$ that pushes $\mathbf{z}_{\text{real}}$ and $\mathbf{z}_{\text{sim}}$ toward domain-invariant representations. In our implementation, $\lambda_{\text{grl}}$ can be kept fixed or scheduled over training.
+To enable end-to-end adversarial learning in a single forward/backward pass, we place a Gradient Reversal Layer (GRL) between the feature extractor and the discriminator \cite{ganin2016domain}. The GRL is the identity function in the forward pass, but multiplies the gradient by $-\lambda_{\text{grl}}$ during backpropagation. As a result, $D_F$ is optimized to minimize $\mathcal{L}_{\text{adv}}$ (and $\mathcal{L}_{\text{ac}}$), while the feature extractor receives an adversarial signal from $\mathcal{L}_{\text{adv}}$ that pushes $\mathbf{z}_{\text{real}}$ and $\mathbf{z}_{\text{sim}}$ toward domain-invariant representations. In our implementation, $\lambda_{\text{grl}}$ can be kept fixed or scheduled over training.
+
+Without GRL, training typically requires alternating min–max updates between the discriminator and feature extractor, which is more sensitive to imbalance and can lead to unstable dynamics (e.g., discriminator domination) and weaker alignment.
 
 The overall objective augments the baseline losses with the adversarial and ACGAN auxiliary terms:
 \begin{equation}
