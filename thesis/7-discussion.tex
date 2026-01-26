@@ -62,9 +62,9 @@ Adversarial training introduces a competitive dynamic between the discriminator 
 
 Our experiments compare two discriminator operating points with different training strategies:
 
-\textbf{Feature-level discrimination (Scenario 4)} operates on embeddings $\mathbf{z}_{\text{real}}$ vs. $\mathbf{z}_{\text{sim}}$ using GRL with binary cross-entropy loss. The adversarial gradient flows primarily to the feature extractor $F$, encouraging domain-invariant representations. This approach aligns with domain adaptation methods like DANN \citep{ganin2016domain} and enables end-to-end training in a single backward pass.
+\textbf{Feature-level discrimination (Scenario 4.1)} operates on embeddings $\mathbf{z}_{\text{real}}$ vs. $\mathbf{z}_{\text{sim}}$ using GRL with binary cross-entropy loss. The adversarial gradient flows primarily to the feature extractor $F$, encouraging domain-invariant representations. This approach aligns with domain adaptation methods like DANN \cite{ganin2016domain} and enables end-to-end training in a single backward pass.
 
-\textbf{Signal-level discrimination (Scenario 42)} operates on raw accelerometer signals $\mathbf{a}$ vs. $\tilde{\mathbf{a}}$ using WGAN-GP with alternating updates. The adversarial gradient flows to the regressor $R$, encouraging realistic signal synthesis. This approach aligns with generative adversarial networks for time series, and the Wasserstein distance provides smoother gradients than BCE when distributions have limited overlap. An optional ACGAN variant adds class conditioning to encourage activity-specific realism.
+\textbf{Signal-level discrimination (Scenario 4.2)} operates on raw accelerometer signals $\mathbf{a}$ vs. $\tilde{\mathbf{a}}$ using WGAN-GP with alternating updates. The adversarial gradient flows to the regressor $R$, encouraging realistic signal synthesis. This approach aligns with generative adversarial networks for time series, and the Wasserstein distance provides smoother gradients than BCE when distributions have limited overlap. An optional ACGAN variant adds class conditioning to encourage activity-specific realism.
 
 The two approaches target different components: feature-level discrimination directly improves the representations used for classification, while signal-level discrimination improves regressor output quality. These are complementary goals---feature-level alignment may compensate for imperfect simulation, while signal-level realism reduces the burden on the feature extractor to bridge the domain gap.
 
@@ -72,9 +72,9 @@ The two approaches target different components: feature-level discrimination dir
 
 Our adversarial training scenarios implement ideas from unsupervised domain adaptation, applied to the sim-to-real gap:
 
-\textbf{Domain-Adversarial Neural Networks (DANN)} \citep{ganin2016domain} introduced the gradient reversal layer for end-to-end domain adaptation. Our feature-level discriminator scenario directly implements this approach, treating real accelerometer data as the target domain and simulated data as the source domain.
+\textbf{Domain-Adversarial Neural Networks (DANN)} \cite{ganin2016domain} introduced the gradient reversal layer for end-to-end domain adaptation. Our feature-level discriminator scenario directly implements this approach, treating real accelerometer data as the target domain and simulated data as the source domain.
 
-\textbf{Adversarial Discriminative Domain Adaptation (ADDA)} \citep{tzeng2017adversarial} uses separate encoders for source and target domains with adversarial alignment. Our separate feature extractor scenario ($F$ and $F_{\text{sim}}$) combined with adversarial training approximates this approach.
+\textbf{Adversarial Discriminative Domain Adaptation (ADDA)} \cite{tzeng2017adversarial} uses separate encoders for source and target domains with adversarial alignment. Our separate feature extractor scenario ($F$ and $F_{\text{sim}}$) combined with adversarial training approximates this approach.
 
 The key difference from standard domain adaptation is that we have \emph{paired} data: each pose sequence has a corresponding real accelerometer signal. This enables the regression loss and feature similarity loss, which are unavailable in typical unsupervised domain adaptation settings.
 
@@ -84,9 +84,9 @@ Our implementation uses different adversarial objectives for the two scenarios b
 
 \textbf{Binary cross-entropy (feature-level).} For feature discrimination with GRL, BCE provides a straightforward objective that works well when combined with the gradient reversal mechanism. The feature space is relatively low-dimensional, and BCE gradients are sufficient for alignment.
 
-\textbf{Wasserstein distance with gradient penalty (signal-level).} For signal discrimination, we use WGAN-GP \citep{gulrajani2017improved} which provides smoother gradients when real and simulated signal distributions have limited overlap. The gradient penalty ($\lambda_{\text{GP}} = 10$) enforces the Lipschitz constraint without weight clipping, enabling more stable training. This choice is motivated by the high-dimensional, structured nature of accelerometer signals where BCE can suffer from vanishing gradients.
+\textbf{Wasserstein distance with gradient penalty (signal-level).} For signal discrimination, we use WGAN-GP \cite{gulrajani2017improved} which provides smoother gradients when real and simulated signal distributions have limited overlap. The gradient penalty ($\lambda_{\text{GP}} = 10$) enforces the Lipschitz constraint without weight clipping, enabling more stable training. This choice is motivated by the high-dimensional, structured nature of accelerometer signals where BCE can suffer from vanishing gradients.
 
-Alternative formulations such as least-squares loss \citep{mao2017least} or hinge loss could be explored for either scenario, though our experiments found the BCE/WGAN-GP pairing effective for their respective use cases.
+Alternative formulations such as least-squares loss \cite{mao2017least} or hinge loss could be explored for either scenario, though our experiments found the BCE/WGAN-GP pairing effective for their respective use cases.
 
 \section{Limitations}
 \label{sec:limitations}

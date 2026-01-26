@@ -11,7 +11,7 @@ We evaluate our method on two primary datasets that provide synchronized skeleto
 \subsection{UTD-MHAD}
 \label{sec:utd-dataset}
 
-The University of Texas at Dallas Multimodal Human Action Dataset (UTD-MHAD) \citep{chen2015utd} is a benchmark dataset for multimodal action recognition. It captures human activities using both a Microsoft Kinect sensor and a wearable inertial sensor.
+The University of Texas at Dallas Multimodal Human Action Dataset (UTD-MHAD) \cite{chen2015utd} is a benchmark dataset for multimodal action recognition. It captures human activities using both a Microsoft Kinect sensor and a wearable inertial sensor.
 
 \subsubsection{Dataset Statistics}
 
@@ -39,7 +39,7 @@ This split ensures that models are evaluated on subjects never seen during train
 \subsection{MM-Fit}
 \label{sec:mmfit-dataset}
 
-The MM-Fit dataset \citep{stromback2020mm} captures fitness activities in a gym setting, providing synchronized video and wearable sensor data from multiple body locations.
+The MM-Fit dataset \cite{stromback2020mm} captures fitness activities in a gym setting, providing synchronized video and wearable sensor data from multiple body locations.
 
 \subsubsection{Dataset Statistics}
 
@@ -66,7 +66,7 @@ One subject (w12) is excluded due to data quality issues. The splits follow the 
 \subsection{NTU RGB+D}
 \label{sec:ntu-dataset}
 
-The NTU RGB+D dataset \citep{shahroudy2016ntu} is a large-scale action recognition benchmark captured with Microsoft Kinect v2 sensors. We use it as a secondary dataset for auxiliary pose training experiments.
+The NTU RGB+D dataset \cite{shahroudy2016ntu} is a large-scale action recognition benchmark captured with Microsoft Kinect v2 sensors. We use it as a secondary dataset for auxiliary pose training experiments.
 
 \subsubsection{Dataset Statistics}
 
@@ -331,7 +331,7 @@ Secondary pose sequences pass through the regressor and a dedicated auxiliary cl
 
 We explore adversarial approaches to bridge the gap between real and simulated distributions:
 
-\subsubsection{Feature-level Discriminator (Scenario 4)}
+\subsubsection{Feature-level Discriminator (Scenario 4.1)}
 
 A discriminator $D_F$ operates on feature embeddings, trained to distinguish $\mathbf{z}_{\text{real}}$ from $\mathbf{z}_{\text{sim}}$. Using a Gradient Reversal Layer (GRL), the feature extractor learns to fool the discriminator while maintaining classification performance:
 \begin{equation}
@@ -340,7 +340,7 @@ A discriminator $D_F$ operates on feature embeddings, trained to distinguish $\m
 
 This encourages domain-invariant feature representations.
 
-\subsubsection{Signal-level Discriminator (Scenario 42)}
+\subsubsection{Signal-level Discriminator (Scenario 4.2)}
 
 A discriminator $D_S$ operates directly on accelerometer signals, distinguishing real $\mathbf{a}$ from simulated $\tilde{\mathbf{a}} = R(\mathbf{p})$. Using WGAN-GP with alternating updates, the regressor learns to produce realistic waveforms:
 \begin{equation}

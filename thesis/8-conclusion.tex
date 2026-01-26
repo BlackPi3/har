@@ -27,8 +27,8 @@ This systematic comparison revealed dataset-dependent optimal configurations, pr
 We adapted adversarial domain adaptation techniques to bridge the gap between simulated and real accelerometer data, implementing two complementary approaches:
 
 \begin{itemize}
-    \item \textbf{Feature-level discrimination (Scenario 4):} A discriminator with Gradient Reversal Layer (GRL) operates on encoder features, encouraging the feature extractor to produce domain-invariant representations
-    \item \textbf{Signal-level discrimination (Scenario 42):} A WGAN-GP discriminator with alternating updates operates directly on accelerometer signals, pressuring the regressor to produce realistic waveforms. An optional ACGAN variant adds class conditioning for activity-specific realism
+    \item \textbf{Feature-level discrimination (Scenario 4.1):} A discriminator with Gradient Reversal Layer (GRL) operates on encoder features, encouraging the feature extractor to produce domain-invariant representations
+    \item \textbf{Signal-level discrimination (Scenario 4.2):} A WGAN-GP discriminator with alternating updates operates directly on accelerometer signals, pressuring the regressor to produce realistic waveforms. An optional ACGAN variant adds class conditioning for activity-specific realism
 \end{itemize}
 
 Our analysis of discriminator dynamics and ablation studies provides insights into when and how adversarial training benefits HAR:
