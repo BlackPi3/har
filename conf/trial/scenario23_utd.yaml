@@ -7,39 +7,40 @@ defaults:
 trial_name: scenario23_utd
 
 # Artifact control
-save_artifacts: false      # Save history to JSON + generate plots
-save_checkpoints: false    # Save model weights
+save_artifacts: true      # Save history to JSON + generate plots
+save_checkpoints: true    # Save model weights
 
 data:
   name: utd
 
   sensor_window_length: 100
   stride_seconds: 0.1
-  batch_size: 32
+  batch_size: 16
 
 optim:
   name: adam
 
-  lr: 0.001
-  weight_decay: 0.00002
+  lr: 0.0015395657556690132
+  weight_decay: 1.0228908413040461e-05
 
-  warmup_epochs: 10
+  warmup_epochs: 5
   warmup_start_factor: 0.02
 
   scheduler:
     patience: 15
-    factor: 0.05
+    factor: 0.1
 
 trainer:
   name: scenario2
 
-  alpha: 0.2
-  beta: 2
+  alpha: 5
+  beta: 50
   gamma: 1
 
   epochs: 100
-  patience: 35
+  patience: 25
   gradient_clip: 1.0
+  label_smoothing: 0.05
 
   # Scenario 23 specific: separate classifiers for real vs sim
   separate_classifiers: true
@@ -47,6 +48,16 @@ trainer:
 model:
   regressor:
     name: regressor
+    joint_hidden_channels: [32, 32, 32, 32]
+    temporal_hidden_channels: 16
   encoder_classifier:
     name: mmfit
     n_classes: 21
+    feature_extractor:
+      kernel_size: 7
+      base_filters: [8, 12, 16]
+      embedding_dim: 100
+      drop_prob: 0.1
+    classifier:
+      hidden_units: [64, 64]
+      dropout: 0.4
