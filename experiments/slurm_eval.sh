@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-#SBATCH -J sc24_utd_p3
-#SBATCH -p RTXA6000
+#SBATCH -J sc2_mmfit_p1
+#SBATCH -p RTX3090
 #SBATCH --gpus=1
 #SBATCH --cpus-per-gpu=8
 #SBATCH --mem=40G
@@ -11,7 +11,7 @@
 ########################################
 # STUDY_NAME: name for this eval run (used for output directory)
 # HPO_NAME: name of the HPO study to evaluate (may differ from STUDY_NAME)
-STUDY_NAME=${STUDY_NAME:-sc24_utd_p3}
+STUDY_NAME=${STUDY_NAME:-sc2_mmfit_p1}
 REPEAT_COUNT=${REPEAT_COUNT:-5}
 
 # Container + project paths
@@ -43,9 +43,6 @@ export HYDRA_FULL_ERROR=1
 RUN_CMD="python -u -m experiments.run_eval --study-name \"$STUDY_NAME\" --env \"$ENV_NAME\" --repeat-count \"$REPEAT_COUNT\" --hpo-root \"$HPO_ROOT\" --output-root \"$OUTPUT_ROOT\""
 if [[ -n "$EPOCHS" ]]; then
   RUN_CMD+=" --epochs \"$EPOCHS\""
-fi
-if [[ "${NO_RESUME:-}" == "1" ]]; then
-  RUN_CMD+=" --no-resume"
 fi
 
 srun \

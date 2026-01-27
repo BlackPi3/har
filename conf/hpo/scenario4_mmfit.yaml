@@ -21,7 +21,7 @@ repeat:
   enabled: true
   count: 3
 
-save_artifacts: false  # Save plots/history for each trial
+save_artifacts: true  # Save plots/history for each trial
 
 hydra:
   sweeper:
@@ -35,7 +35,9 @@ hydra:
       trainer.alpha: choice(0.1, 0.5, 1.0, 2.0)
       trainer.beta: choice(1, 2, 5, 10, 50, 100)
       trainer.gamma: choice(0.5, 1.0, 2.0)
-      trainer.adversarial.weight: choice(0, 0.1, 0.2, 0.5, 1)
+      
+      trainer.adversarial.weight: choice(0.1, 0.5, 1.0, 2, 5)
+      trainer.adversarial.discriminator.aux_weight: choice(0.5, 1.0, 2.0)
       
       data.sensor_window_length: choice(300, 400, 500)
       data.stride_seconds: choice(0.2)

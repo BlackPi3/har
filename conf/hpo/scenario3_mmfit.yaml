@@ -30,20 +30,20 @@ hydra:
       # ============================================================
       # PASS 1: Loss weights + Data + Secondary (ACTIVE)
       # ============================================================
-      trainer.alpha: choice(0.1, 0.5, 1.0, 2.0)
-      trainer.beta: choice(1, 2, 5, 10, 50, 100)
-      trainer.gamma: choice(0.5, 1.0, 2.0)
+      # trainer.alpha: choice(0.1, 0.5, 1.0, 2.0)
+      # trainer.beta: choice(1, 2, 5, 10, 50, 100)
+      # trainer.gamma: choice(0.5, 1.0, 2.0)
       
-      # Primary dataset (MMFit)
-      data.sensor_window_length: choice(250) # Should match NTU's window size
-      data.stride_seconds: choice(0.2)
-      data.batch_size: choice(64)
+      # # Primary dataset (MMFit)
+      # data.sensor_window_length: choice(250) # Should match NTU's window size
+      # data.stride_seconds: choice(0.2)
+      # data.batch_size: choice(64)
       
-      # Secondary dataset (NTU) params
-      trainer.secondary.loss_weight: choice(0.25, 0.5, 1.0, 2.0)
-      trainer.secondary.data: choice(ntu100.yaml)  # Match MMFit 100Hz
-      # Note: To search NTU window/stride, need run_trial to support secondary data overrides
-      # For now, use defaults from ntu100.yaml (window=250, stride=0.2)
+      # # Secondary dataset (NTU) params
+      # trainer.secondary.loss_weight: choice(0.25, 0.5, 1.0, 2.0)
+      # trainer.secondary.data: choice(ntu100.yaml)  # Match MMFit 100Hz
+      # # Note: To search NTU window/stride, need run_trial to support secondary data overrides
+      # # For now, use defaults from ntu100.yaml (window=250, stride=0.2)
 
       # ============================================================
       # PASS 2: Regularization (UNCOMMENT after Pass 1)
@@ -53,7 +53,7 @@ hydra:
       # trainer.beta: choice(2)
       # trainer.gamma: choice(2)
       # data.sensor_window_length: choice(250)
-      # data.stride_seconds: choice(0.15)
+      # data.stride_seconds: choice(0.2)
       # data.batch_size: choice(64)
       # trainer.secondary.loss_weight: choice(0.25)
       # trainer.secondary.data: choice(ntu100.yaml)  # Match MMFit 100Hz
@@ -70,34 +70,37 @@ hydra:
       # model.regressor.joint_dropouts: choice([0.0, 0.2, 0.2, 0.2], [0.2,0.3,0.3,0.3], [0.3,0.4,0.4,0.4], [0.4,0.5,0.5,0.5])
       # model.regressor.temporal_dropout: choice(0.1, 0.2, 0.3, 0.4)
       
-
       # ============================================================
       # PASS 3: Capacity (UNCOMMENT after Pass 2)
       # ============================================================
-      # # Fix Pass 1+2 winners here:
-      # trainer.alpha: choice(WINNER)
-      # trainer.beta: choice(WINNER)
-      # trainer.gamma: choice(WINNER)
-      # data.sensor_window_length: choice(WINNER)
-      # data.stride_seconds: choice(WINNER)
-      # data.batch_size: choice(WINNER)
-      # trainer.secondary.loss_weight: choice(WINNER)
-      # optim.lr: choice(WINNER)
-      # optim.weight_decay: choice(WINNER)
-      # optim.warmup_epochs: choice(WINNER)
-      # optim.scheduler.patience: choice(WINNER)
-      # optim.scheduler.factor: choice(WINNER)
-      # model.encoder_classifier.feature_extractor.drop_prob: choice(WINNER)
-      # model.encoder_classifier.classifier.dropout: choice(WINNER)
-      # trainer.label_smoothing: choice(WINNER)
-      #
-      # # Search capacity:
-      # model.encoder_classifier.feature_extractor.kernel_size: choice(7, 9, 11)
-      # model.encoder_classifier.feature_extractor.base_filters: choice([6,9,12], [9,15,24], [12,18,30])
-      # model.encoder_classifier.feature_extractor.embedding_dim: choice(64, 100, 128)
-      # model.encoder_classifier.classifier.hidden_units: choice([64], [100], [100,64])
-      # model.regressor.joint_hidden_channels: choice([24,24,16,12], [32,32,24,16], [32,32,32,16])
-      # model.regressor.temporal_hidden_channels: choice(16)
+      # Fix Pass 1+2 winners here:
+      trainer.alpha: choice(2)
+      trainer.beta: choice(2)
+      trainer.gamma: choice(2)
+      data.sensor_window_length: choice(250)
+      data.stride_seconds: choice(0.2)
+      data.batch_size: choice(64)
+      trainer.secondary.loss_weight: choice(0.25)
+      trainer.secondary.data: choice(ntu100.yaml)  # Match MMFit 100Hz
+      optim.lr: choice(0.00039830659264117427)
+      optim.weight_decay: choice(1.4756599212344335e-05)
+      optim.warmup_epochs: choice(0)
+      optim.scheduler.patience: choice(10)
+      optim.scheduler.factor: choice(0.2)
+      trainer.label_smoothing: choice(0.05)
+      model.encoder_classifier.feature_extractor.drop_prob: choice(0.2)
+      model.encoder_classifier.classifier.dropout: choice(0.2)
+      model.regressor.joint_dropouts: choice([0.0, 0.2, 0.2, 0.2])
+      model.regressor.temporal_dropout: choice(0.3)
+      
+      # Search capacity:
+      model.encoder_classifier.feature_extractor.kernel_size: choice(7, 9, 11)
+      model.encoder_classifier.feature_extractor.base_filters: choice([6,9,12], [8,12,16], [9,15,24])
+      model.encoder_classifier.feature_extractor.embedding_dim: choice(80, 100, 120)
+      model.encoder_classifier.classifier.hidden_units: choice([64], [100], [128])
+      model.regressor.joint_hidden_channels: choice([16, 16, 16, 16], [24, 24, 24, 24], [32, 32, 32, 32])
+      model.regressor.temporal_hidden_channels: choice(8, 12, 16)
+      model.regressor.joint_kernel_sizes: choice([3,3,3,3], [5,5,5,5])
 
   sweep:
     dir: "experiments/hpo/${study_name}/trials"
