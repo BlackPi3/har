@@ -1,55 +1,71 @@
 # Scenario 3: Secondary pose-only dataset (UTD + NTU)
 # Extends scenario2_utd with secondary pose stream from NTU
+# Best params from HPO pass 3
 defaults:
   - _self_
 
 trial_name: scenario3_utd
 
 # Artifact control
-save_artifacts: false      # Save history to JSON + generate plots
-save_checkpoints: false    # Save model weights
+save_artifacts: true      # Save history to JSON + generate plots
+save_checkpoints: true    # Save model weights
 
 data:
   name: utd
 
   sensor_window_length: 100
   stride_seconds: 0.1
-  batch_size: 32
+  batch_size: 16
 
 optim:
   name: adam
 
-  lr: 0.001
-  weight_decay: 0.00002
+  lr: 0.0015956231024100555
+  weight_decay: 1.095369159209657e-05
 
   warmup_epochs: 10
   warmup_start_factor: 0.02
 
   scheduler:
     patience: 15
-    factor: 0.05
+    factor: 0.2
 
 trainer:
   name: scenario2
 
-  alpha: 0.2
-  beta: 2
-  gamma: 1
+  alpha: 0.1
+  beta: 5
+  gamma: 10
 
   epochs: 100
   patience: 35
   gradient_clip: 1.0
+  label_smoothing: 0.1
 
   # Scenario 3 specific: enable secondary dataset
   secondary:
     enabled: true
     data: ntu50.yaml  # 50Hz to match UTD sampling rate
     n_classes: 60
-    loss_weight: 1.0
+    loss_weight: 0.25
 
 model:
   regressor:
     name: regressor
+    joint_hidden_channels: [32, 32, 32, 32]
+    temporal_hidden_channels: 16
+    joint_kernel_sizes: [3, 3, 3, 3]
+    joint_dropouts: [0.0, 0.2, 0.2, 0.2]
+    temporal_dropout: 0.2
+
   encoder_classifier:
     name: mmfit
     n_classes: 21
+    feature_extractor:
+      kernel_size: 7
+      base_filters: [6, 9, 12]
+      embedding_dim: 120
+      drop_prob: 0.1
+    classifier:
+      hidden_units: [128]
+      dropout: 0.5

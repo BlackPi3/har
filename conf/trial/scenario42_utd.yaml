@@ -8,73 +8,82 @@
 #
 # This directly trains the regressor (pose2imu) to produce realistic
 # accelerometer signals, rather than relying on the encoder to align features.
+# Best params from HPO pass 2
 defaults:
   - _self_
 
 trial_name: scenario42_utd
 
 # Artifact control
-save_artifacts: true       # Save history to JSON + generate plots
-save_checkpoints: false    # Save model weights
+save_artifacts: true      # Save history to JSON + generate plots
+save_checkpoints: true    # Save model weights
 
 data:
   name: utd
 
   sensor_window_length: 100
   n_channels: 3            # Accelerometer channels (x, y, z)
-  stride_seconds: 0.02
-  batch_size: 8
+  stride_seconds: 0.1
+  batch_size: 16
 
 optim:
   name: adam
 
-  lr: 0.001
-  weight_decay: 0.00002
+  lr: 0.00046285956125273193
+  weight_decay: 1.1475981059945094e-05
 
-  warmup_epochs: 10
+  warmup_epochs: 0
   warmup_start_factor: 0.02
 
   scheduler:
     patience: 15
-    factor: 0.05
+    factor: 0.2
 
 trainer:
   name: scenario2
 
-  alpha: 1.0           # Activity classification weight
-  beta: 1.0            # Feature similarity weight (cosine)
-  gamma: 1.0           # MSE loss weight
+  alpha: 0.5           # Activity classification weight
+  beta: 10             # Feature similarity weight (cosine)
+  gamma: 2             # MSE loss weight
 
   epochs: 100
-  patience: 35
+  patience: 25
   gradient_clip: 1.0
+  label_smoothing: 0.05
 
   # Scenario 42 specific: adversarial on raw accelerometer with WGAN-GP
   # Uses alternating D/G updates (proper WGAN training, not GRL)
   adversarial:
     enabled: true
-    weight: 0.5              # Adversarial weight for G loss
+    weight: 1                # Adversarial weight for G loss
     use_grl: false           # WGAN uses alternating updates, not GRL
     alternating: true        # Enable alternating D/G optimization
     n_critic: 5              # D updates per G update (standard for WGAN-GP)
-    pretrain_epochs: 15      # Train regressor with MSE for 15 epochs first
+    pretrain_epochs: 10      # Train regressor with MSE first
     discriminator:
       input_type: signal     # KEY: D operates on raw acc, not features
       hidden_channels: [32, 64]  # 1D CNN channels for signal processing
-      dropout: 0.3
+      dropout: 0.1
       use_spectral_norm: false
-      label_smoothing: 0.0   # Not used for WGAN
+      label_smoothing: 0.1
       loss_type: wgan        # WGAN-GP for better signal-level gradients
       lambda_gp: 10.0        # Gradient penalty coefficient
-      # ACGAN: class-conditional discrimination (optional, searchable via HPO)
-      use_acgan: true       # Enable to add class conditioning + aux classifier
-      aux_weight: 1.0        # Weight for aux classification loss
+      # ACGAN: class-conditional discrimination
+      use_acgan: true
+      aux_weight: 1
       embed_dim: 32          # Class label embedding dimension
       n_classes: 21          # Must match model.encoder_classifier.n_classes
 
 model:
   regressor:
     name: regressor
+    joint_dropouts: [0.0, 0.2, 0.2, 0.2]
+    temporal_dropout: 0.4
+
   encoder_classifier:
     name: mmfit
     n_classes: 21
+    feature_extractor:
+      drop_prob: 0.1
+    classifier:
+      dropout: 0.5

@@ -7,14 +7,14 @@ trial_name: scenario4_utd
 
 # Artifact control
 save_artifacts: true      # Save history to JSON + generate plots
-save_checkpoints: false    # Save model weights
+save_checkpoints: true    # Save model weights
 
 data:
   name: utd
 
   sensor_window_length: 100
-  stride_seconds: 0.02
-  batch_size: 8
+  stride_seconds: 0.1
+  batch_size: 16
 
 optim:
   name: adam
@@ -32,18 +32,18 @@ optim:
 trainer:
   name: scenario2
 
-  alpha: 0.2
-  beta: 2
+  alpha: 1
+  beta: 5
   gamma: 1
 
   epochs: 100
-  patience: 35
+  patience: 25
   gradient_clip: 1.0
 
   # Scenario 4 specific: enable adversarial training with feature-level GRL
   adversarial:
     enabled: true
-    weight: 0.1
+    weight: 5
     use_grl: true
     grl_lambda: 1.0
     schedule_lambda: true  # Enable DANN-style scheduling
@@ -57,7 +57,7 @@ trainer:
       label_smoothing: 0.05       # Prevent overconfident D
       # ACGAN: class-conditional with auxiliary classifier (disabled by default)
       use_acgan: true
-      aux_weight: 1.0
+      aux_weight: 0.5
       embed_dim: 32
 
 model:
