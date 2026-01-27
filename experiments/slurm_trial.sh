@@ -10,6 +10,7 @@
 # Trial configuration (override via env)
 ########################################
 TRIAL_NAME=${TRIAL_NAME:-scenario2_utd}
+EPOCHS=${EPOCHS:-}  # Optional: override trainer.epochs
 
 # Container + project paths
 PROJECT_ROOT=${PROJECT_ROOT:-/home/zolfaghari/har}
@@ -42,6 +43,9 @@ BASE_OVERRIDES=(
   "save_artifacts=true"
   "save_checkpoints=true"
 )
+
+# Optional overrides
+[[ -n "$EPOCHS" ]] && BASE_OVERRIDES+=("trainer.epochs=$EPOCHS")
 
 RUN_COMMAND="python -u -m experiments.run_trial"
 for arg in "${BASE_OVERRIDES[@]}"; do
