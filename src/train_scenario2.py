@@ -20,6 +20,8 @@ except Exception:  # pragma: no cover - fallback path
             precision = tp / (tp + fp + 1e-8)
             recall = tp / (tp + fn + 1e-8)
             f1s.append(2 * precision * recall / (precision + recall + 1e-8))
+        if average is None:
+            return _np.array(f1s)  # Return per-class F1 scores
         return float(_np.mean(f1s))
 
     def silhouette_score(features, labels):
@@ -292,40 +294,79 @@ class Trainer:
             logits_real = self.models[self.real_classifier_key](real_feat)
             act_loss_real = self.ce(logits_real, labels)
             d_acc = 0.0
-            if self.use_adversarial:
+            adv_loss_val = 0.0
+            mse_val = 0.0
+            sim_loss_val = 0.0
+            logits_sim = None
+
+            # Compute sim path for scenarios that need it (23, 24, 4, 42)
+            need_sim_path = (
+                self.use_adversarial
+                or self.dual_classifiers
+                or self.dual_feature_extractors
+            )
+
+            if need_sim_path:
                 sim_acc = self.models["pose2imu"](pose)
-                D = self.models["discriminator"]
+                # Compute MSE for scenario 42 (R vs D competition on validation)
+                mse_val = float(torch.nn.functional.mse_loss(sim_acc, acc).detach().cpu())
+
                 if self.adv_signal_input:
+                    # Scenario 42: D on signals
                     d_input_real = acc
                     d_input_sim = sim_acc
+                    sim_feat = self.models[self.sim_fe_key](sim_acc)
                 else:
+                    # Scenario 4: D on features
                     sim_feat = self.models[self.sim_fe_key](sim_acc)
                     d_input_real = real_feat
                     d_input_sim = sim_feat
-                if self.use_acgan:
-                    d_real_out = D(d_input_real, labels=labels, apply_grl=False)
-                    d_sim_out = D(d_input_sim, labels=labels, apply_grl=False)
-                    d_real_logits, _ = d_real_out
-                    d_sim_logits, _ = d_sim_out
-                else:
-                    d_real_logits = D(d_input_real, apply_grl=False)
-                    d_sim_logits = D(d_input_sim, apply_grl=False)
-                # D accuracy: for WGAN use sign, for BCE use sigmoid
-                if self.adv_loss_type == "wgan":
-                    d_pred_real = (d_real_logits > 0).float()
-                    d_pred_sim = (d_sim_logits < 0).float()
-                else:
-                    d_pred_real = (torch.sigmoid(d_real_logits) > 0.5).float()
-                    d_pred_sim = (torch.sigmoid(d_sim_logits) < 0.5).float()
-                d_acc = float((d_pred_real.mean() + d_pred_sim.mean()) / 2)
-            # Return activity loss as total; zeros for training-only losses
+
+                # Compute similarity loss for scenario 4 (feature alignment)
+                sim_loss_val = float(self._cosine(sim_feat, real_feat).detach().cpu())
+
+                # Compute logits_sim for scenario 23/24
+                logits_sim = self.models[self.sim_classifier_key](sim_feat)
+
+                if self.use_adversarial:
+                    D = self.models["discriminator"]
+                    batch_size = real_feat.size(0)
+
+                    if self.use_acgan:
+                        d_real_out = D(d_input_real, labels=labels, apply_grl=False)
+                        d_sim_out = D(d_input_sim, labels=labels, apply_grl=False)
+                        d_real_logits, _ = d_real_out
+                        d_sim_logits, _ = d_sim_out
+                    else:
+                        d_real_logits = D(d_input_real, apply_grl=False)
+                        d_sim_logits = D(d_input_sim, apply_grl=False)
+
+                    # D accuracy: for WGAN use sign, for BCE use sigmoid
+                    if self.adv_loss_type == "wgan":
+                        d_pred_real = (d_real_logits > 0).float()
+                        d_pred_sim = (d_sim_logits < 0).float()
+                        # WGAN loss: D(real) - D(fake) (Wasserstein distance estimate)
+                        adv_loss_val = float((d_real_logits.mean() - d_sim_logits.mean()).detach().cpu())
+                    else:
+                        d_pred_real = (torch.sigmoid(d_real_logits) > 0.5).float()
+                        d_pred_sim = (torch.sigmoid(d_sim_logits) < 0.5).float()
+                        # BCE loss for discriminator
+                        real_labels_d = torch.ones(batch_size, 1, device=self.device)
+                        sim_labels_d = torch.zeros(batch_size, 1, device=self.device)
+                        adv_loss_val = float((
+                            F.binary_cross_entropy_with_logits(d_real_logits, real_labels_d) +
+                            F.binary_cross_entropy_with_logits(d_sim_logits, sim_labels_d)
+                        ).detach().cpu())
+                    d_acc = float((d_pred_real.mean() + d_pred_sim.mean()) / 2)
+
+            # Return activity loss as total; compute validation metrics for scenarios
             return (
                 act_loss_real,  # total loss = activity loss on real branch
-                0.0,            # mse (not computed in eval)
-                0.0,            # sim_loss (not computed in eval)
+                mse_val,        # mse (for scenario 4/42)
+                sim_loss_val,   # sim_loss (feature similarity for scenario 4)
                 float(act_loss_real.detach().cpu()),  # act_loss (real only)
                 0.0,            # sec_act_loss (not computed in eval)
-                0.0,            # adv_loss (not computed in eval)
+                adv_loss_val,   # adv_loss (for scenario 4/42)
                 d_acc,          # d_acc (computed for eval diagnostics)
                 0.0,            # feat_dist (not computed in eval)
                 0.0,            # mmd_loss (not computed in eval)
@@ -335,6 +376,7 @@ class Trainer:
                 0.0,            # aux_acc (not computed in eval)
                 logits_real,
                 labels,
+                logits_sim,     # logits_sim (for scenario 23/24)
             )
         
         # Training path: compute all branches
@@ -581,6 +623,7 @@ class Trainer:
             aux_acc,
             logits_real,
             labels,
+            logits_sim,     # logits_sim (for scenario 23/24)
         )
 
     def _apply_lr_warmup(self, epoch: int) -> None:
@@ -827,6 +870,7 @@ class Trainer:
             aux_acc,
             logits_real,
             labels,
+            logits_sim,     # logits_sim (for scenario 23/24)
         )
 
     def _run_epoch(self, split="train"):
@@ -857,6 +901,9 @@ class Trainer:
         mmd_acc, con_acc, sil_acc = 0.0, 0.0, 0.0  # MMD + Contrastive diagnostics
         aux_loss_acc, aux_acc_acc = 0.0, 0.0  # ACGAN diagnostics
         preds, trues = [], []
+        preds_sim = []  # For scenario 23: separate classifier predictions
+        conf_real_acc, conf_sim_acc = 0.0, 0.0  # For scenario 24: confidence metrics
+        conf_count = 0  # Count batches with confidence computed
         with torch.set_grad_enabled(is_train):
             for batch in self.dl[split]:
                 sec_batch = None
@@ -869,14 +916,14 @@ class Trainer:
                 if use_alternating:
                     # Use alternating D/G updates for WGAN
                     (total_loss, mse_l, sim_l, act_l, sec_l, adv_l, d_acc_l, feat_dist_l,
-                     mmd_l, con_l, sil_l, aux_l, aux_acc_l, logits, labels) = self._alternating_step(
+                     mmd_l, con_l, sil_l, aux_l, aux_acc_l, logits, labels, logits_sim) = self._alternating_step(
                         batch, sec_batch
                     )
                     # No separate backward/step needed - done in _alternating_step
                 else:
                     # Standard training (GRL or non-adversarial)
                     (total_loss, mse_l, sim_l, act_l, sec_l, adv_l, d_acc_l, feat_dist_l,
-                     mmd_l, con_l, sil_l, aux_l, aux_acc_l, logits, labels) = self._forward_losses(
+                     mmd_l, con_l, sil_l, aux_l, aux_acc_l, logits, labels, logits_sim) = self._forward_losses(
                         batch, sec_batch, eval_only=eval_only
                     )
                     if is_train:
@@ -906,6 +953,16 @@ class Trainer:
                 preds.extend(p)
                 trues.extend(labels.cpu().numpy())
 
+                # Scenario 23/24: track sim classifier predictions and confidence
+                if logits_sim is not None:
+                    p_sim = torch.argmax(logits_sim, dim=1).cpu().numpy()
+                    preds_sim.extend(p_sim)
+                    # Confidence: mean of max softmax probability
+                    with torch.no_grad():
+                        conf_real_acc += float(F.softmax(logits, dim=1).max(dim=1)[0].mean().cpu())
+                        conf_sim_acc += float(F.softmax(logits_sim, dim=1).max(dim=1)[0].mean().cpu())
+                        conf_count += 1
+
         denom = max(len(self.dl[split]), 1)
         avg_loss = total / denom
         mse_avg = mse_acc / denom
@@ -921,25 +978,39 @@ class Trainer:
         aux_loss_avg = aux_loss_acc / denom
         aux_acc_avg = aux_acc_acc / denom
 
+        # Compute F1 and accuracy metrics
+        f1, acc, f1_sim, f1_per_class = 0.0, 0.0, 0.0, []
         if trues:
             trues_arr = np.asarray(trues)
             preds_arr = np.asarray(preds)
             acc = float((preds_arr == trues_arr).mean())
             f1 = float(f1_score(trues_arr, preds_arr, average="macro"))
-        else:
-            acc = 0.0
-            f1 = 0.0
+            # Per-class F1 for scenario 2 & 3
+            f1_per_class = f1_score(trues_arr, preds_arr, average=None).tolist()
 
-        return avg_loss, f1, mse_avg, sim_avg, act_avg, sec_avg, adv_avg, d_acc_avg, feat_dist_avg, mmd_avg, con_avg, sil_avg, aux_loss_avg, aux_acc_avg, acc
+        # Scenario 23: F1 for sim classifier
+        if preds_sim and trues:
+            preds_sim_arr = np.asarray(preds_sim)
+            f1_sim = float(f1_score(trues_arr, preds_sim_arr, average="macro"))
+
+        # Scenario 24: average confidence
+        conf_real_avg = conf_real_acc / max(conf_count, 1) if conf_count > 0 else 0.0
+        conf_sim_avg = conf_sim_acc / max(conf_count, 1) if conf_count > 0 else 0.0
+
+        return (avg_loss, f1, mse_avg, sim_avg, act_avg, sec_avg, adv_avg, d_acc_avg,
+                feat_dist_avg, mmd_avg, con_avg, sil_avg, aux_loss_avg, aux_acc_avg, acc,
+                f1_sim, conf_real_avg, conf_sim_avg, f1_per_class)
 
     def fit(self, epochs):
         valid_metrics = (
             "train_loss", "val_loss", "train_f1", "val_f1", "train_acc", "val_acc",
             "train_mse", "val_mse", "train_sim_loss", "val_sim_loss",
             "train_act_loss", "val_act_loss", "train_sec_loss",
-            "train_adv_loss", "train_d_acc", "val_d_acc", "train_feat_dist", "train_signal_dist",
+            "train_adv_loss", "val_adv_loss", "train_d_acc", "val_d_acc",
+            "train_feat_dist", "train_signal_dist",
             "train_mmd_loss", "train_contrastive_loss", "train_silhouette",
             "train_aux_loss", "train_aux_acc",  # ACGAN metrics
+            "val_f1_ac_sim", "val_conf_real", "val_conf_sim",  # Scenario 23/24 metrics
         )
         if self.objective_metric not in valid_metrics:
             raise KeyError(
@@ -961,12 +1032,19 @@ class Trainer:
             "train_sim_loss": [], "val_sim_loss": [],
             "train_act_loss": [], "val_act_loss": [],
             "train_sec_loss": [],
-            "train_adv_loss": [], "train_d_acc": [], "val_d_acc": [],
+            "train_adv_loss": [], "val_adv_loss": [],  # Scenario 4/42: D loss on validation
+            "train_d_acc": [], "val_d_acc": [],
             "train_feat_dist": [], "train_signal_dist": [],
             "train_grl_lambda": [],
             "train_mmd_loss": [], "train_contrastive_loss": [], "train_silhouette": [],
             "train_aux_loss": [], "train_aux_acc": [],  # ACGAN metrics
             "val_aux_loss": [], "val_aux_acc": [],  # ACGAN validation metrics
+            # Scenario 23: separate classifier F1
+            "val_f1_ac_sim": [],
+            # Scenario 24: classifier confidence
+            "val_conf_real": [], "val_conf_sim": [],
+            # Scenario 2 & 3: per-class F1
+            "val_f1_per_class": [],
         }
 
         # Print training mode
@@ -1020,16 +1098,20 @@ class Trainer:
                     self._current_grl_lambda = self.adv_grl_lambda
 
             (tr_loss, tr_f1, tr_mse, tr_sim, tr_act, tr_sec, tr_adv, tr_d_acc,
-             tr_feat_dist, tr_mmd, tr_con, tr_sil, tr_aux_loss, tr_aux_acc, tr_acc) = self._run_epoch("train")
+             tr_feat_dist, tr_mmd, tr_con, tr_sil, tr_aux_loss, tr_aux_acc, tr_acc,
+             tr_f1_sim, tr_conf_real, tr_conf_sim, tr_f1_per_class) = self._run_epoch("train")
             if self.skip_val:
                 (val_loss, val_f1, val_mse, val_sim, val_act, val_sec, val_adv, val_d_acc,
-                 val_feat_dist, val_mmd, val_con, val_sil, val_aux_loss, val_aux_acc, val_acc) = (
+                 val_feat_dist, val_mmd, val_con, val_sil, val_aux_loss, val_aux_acc, val_acc,
+                 val_f1_sim, val_conf_real, val_conf_sim, val_f1_per_class) = (
                     tr_loss, tr_f1, tr_mse, tr_sim, tr_act, tr_sec, tr_adv, tr_d_acc,
-                    tr_feat_dist, tr_mmd, tr_con, tr_sil, tr_aux_loss, tr_aux_acc, tr_acc
+                    tr_feat_dist, tr_mmd, tr_con, tr_sil, tr_aux_loss, tr_aux_acc, tr_acc,
+                    tr_f1_sim, tr_conf_real, tr_conf_sim, tr_f1_per_class
                 )
             else:
                 (val_loss, val_f1, val_mse, val_sim, val_act, val_sec, val_adv, val_d_acc,
-                 val_feat_dist, val_mmd, val_con, val_sil, val_aux_loss, val_aux_acc, val_acc) = self._run_epoch("val")
+                 val_feat_dist, val_mmd, val_con, val_sil, val_aux_loss, val_aux_acc, val_acc,
+                 val_f1_sim, val_conf_real, val_conf_sim, val_f1_per_class) = self._run_epoch("val")
             current_lr = self.optimizer.param_groups[0]["lr"]
 
             history["train_loss"].append(tr_loss)
@@ -1046,6 +1128,7 @@ class Trainer:
             history["val_act_loss"].append(val_act)
             history["train_sec_loss"].append(tr_sec)
             history["train_adv_loss"].append(tr_adv)
+            history["val_adv_loss"].append(val_adv)  # Scenario 4/42: D loss on validation
             history["train_d_acc"].append(tr_d_acc)
             history["val_d_acc"].append(val_d_acc)
             history["train_feat_dist"].append(tr_feat_dist)
@@ -1061,6 +1144,13 @@ class Trainer:
             history["train_aux_acc"].append(tr_aux_acc)
             history["val_aux_loss"].append(val_aux_loss)
             history["val_aux_acc"].append(val_aux_acc)
+            # Scenario 23: separate classifier F1
+            history["val_f1_ac_sim"].append(val_f1_sim)
+            # Scenario 24: classifier confidence
+            history["val_conf_real"].append(val_conf_real)
+            history["val_conf_sim"].append(val_conf_sim)
+            # Scenario 2 & 3: per-class F1
+            history["val_f1_per_class"].append(val_f1_per_class)
 
             # Print epoch progress (with scenario-specific diagnostics)
             if self.use_mmd or self.use_contrastive:

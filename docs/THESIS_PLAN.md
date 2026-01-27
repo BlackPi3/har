@@ -192,6 +192,49 @@ This thesis investigates using simulated accelerometer signals derived from skel
 
 ## Chapter 7: Discussion
 
+### 7.0 Evidence Plan for Discussion
+
+Each scenario requires specific plots/evidence beyond F1 scores to support the discussion arguments.
+
+#### Evidence Summary Table
+
+| Scenario | Code | Plot Type | Data Source | Comparison | What it shows |
+|----------|------|-----------|-------------|------------|---------------|
+| **No MSE** | scenario22 | Waveform: `real_acc` vs `sim_acc` | Validation | Baseline vs scenario22 | Without MSE loss, regressor output drifts — signals don't match real accelerometer |
+| **Separate Classifiers** | scenario23 | Bar chart: Val F1 per classifier | Validation | `ac` (on real) vs `ac_sim` (on sim) | Are both paths learning effectively? Shows if sim path provides useful training signal |
+| **Separate FEs** | scenario24 | Bar chart: Classifier confidence | Validation | Real features vs sim features | Whether shared classifier sees compatible features from both `F` and `F_sim` |
+| **Auxiliary NTU** | scenario3 | Grouped bar: Per-class F1 | Validation | Baseline vs scenario3 | Which action classes benefit (or suffer) from extra pose diversity |
+| **Feature Discriminator** | scenario4 | Line plot: D accuracy over epochs | Train + Val | Training progression | D accuracy drops toward 50% — feature extractor successfully fools discriminator |
+| **Signal Discriminator** | scenario42 | Dual-axis line: D acc + D loss vs R loss | Train + Val / Train | Training progression | D being fooled + push-pull dynamics showing adversarial "dance" between D and R |
+
+#### Data Requirements
+
+**From checkpoints (generate post-hoc):**
+- scenario2 (baseline): `sim_acc` outputs, features (`z_real`, `z_sim`), predictions for per-class F1
+- scenario22: `sim_acc` outputs (to compare waveforms with baseline)
+- scenario24: Classifier softmax outputs on real vs sim features
+
+**Logged during training:**
+- scenario4: `train_d_acc`, `val_d_acc` per epoch (already logged in history)
+- scenario42: `train_d_acc`, `val_d_acc`, `train_adv_loss` (D loss proxy), regressor loss per epoch
+
+**Computed from predictions:**
+- scenario3: Per-class F1 (from `classification_report`)
+- scenario23: Separate F1 for `ac` path and `ac_sim` path
+
+#### Arguments Each Plot Supports
+
+| Scenario | Discussion Argument |
+|----------|---------------------|
+| scenario22 | "MSE loss is essential — without it, the regressor has no supervision and produces meaningless signals" |
+| scenario23 | "Separate classifiers allow each path to specialize; effectiveness depends on whether sim path learns comparable representations" |
+| scenario24 | "Separate feature extractors can optimize for their inputs, but the shared classifier needs compatible features to work" |
+| scenario3 | "Additional pose data helps/hurts specific action types depending on similarity to primary dataset activities" |
+| scenario4 | "Adversarial training on features works — the discriminator is fooled, indicating domain-invariant features are learned" |
+| scenario42 | "Adversarial training on signals shows healthy competition — regressor and discriminator push each other toward equilibrium" |
+
+---
+
 ### 7.1 Key Findings
 - Summarize which scenario works best and why
 - Role of each loss component
