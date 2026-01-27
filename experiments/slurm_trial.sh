@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-#SBATCH -J har-trial
-#SBATCH -p RTXA6000
+#SBATCH -J scenario2_utd
+#SBATCH -p L40S
 #SBATCH --gpus=1
 #SBATCH --cpus-per-gpu=8
 #SBATCH --mem=40G
-#SBATCH -t 06:00:00
+#SBATCH -t 24:00:00
 
 ########################################
 # Trial configuration (override via env)
 ########################################
 TRIAL_NAME=${TRIAL_NAME:-scenario2_utd}
-EPOCHS=${EPOCHS:-}  # Optional: override trainer.epochs
+EPOCHS=${EPOCHS:-2}  # Optional: override trainer.epochs
 
 # Container + project paths
 PROJECT_ROOT=${PROJECT_ROOT:-/home/zolfaghari/har}

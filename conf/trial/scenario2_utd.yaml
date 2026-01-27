@@ -12,37 +12,45 @@ data:
 
   sensor_window_length: 100
   stride_seconds: 0.1
-  batch_size: 32
+  batch_size: 16
 
 optim:
   name: adam
 
-  lr: 0.001
-  weight_decay: 0.00002
+  lr: 0.0011970640471642504
+  weight_decay: 1.5328178838429993e-05
 
-  warmup_epochs: 10
+  warmup_epochs: 5
   warmup_start_factor: 0.02
 
   scheduler:
     patience: 15
-    factor: 0.05
+    factor: 0.1
 
 trainer:
   name: scenario2
 
   alpha: 1
-  beta: 1
+  beta: 5
   gamma: 1
 
   epochs: 100
   patience: 25
   gradient_clip: 1.0
 
-
-
 model:
   regressor:
     name: regressor
+    temporal_dropout: 0.3
+
   encoder_classifier:
     name: mmfit
     n_classes: 21
+
+    feature_extractor:
+      name: mmfit_encoder
+      drop_prob: 0.1
+
+    classifier:
+      name: mlp_classifier
+      dropout: 0.4
