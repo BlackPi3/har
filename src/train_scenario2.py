@@ -288,86 +288,69 @@ class Trainer:
         pose, acc, labels = pose.to(self.device), acc.to(self.device), labels.to(self.device)
         zero = torch.zeros((), device=self.device, dtype=pose.dtype)
         
-        # For validation/test: only use real accelerometer through real branch
+        # For validation/test: compute all paths for consistent metrics across scenarios
         if eval_only:
+            # Real path (always computed)
             real_feat = self.models["fe"](acc)
             logits_real = self.models[self.real_classifier_key](real_feat)
             act_loss_real = self.ce(logits_real, labels)
+
+            # Sim path (always computed for consistent val_mse, val_sim_loss across all scenarios)
+            sim_acc = self.models["pose2imu"](pose)
+            mse_val = float(torch.nn.functional.mse_loss(sim_acc, acc).detach().cpu())
+            sim_feat = self.models[self.sim_fe_key](sim_acc)
+            sim_loss_val = float(self._cosine(sim_feat, real_feat).detach().cpu())
+            logits_sim = self.models[self.sim_classifier_key](sim_feat)
+
+            # Adversarial metrics (only for scenario 4/42, otherwise 0)
             d_acc = 0.0
             adv_loss_val = 0.0
-            mse_val = 0.0
-            sim_loss_val = 0.0
-            logits_sim = None
+            if self.use_adversarial:
+                D = self.models["discriminator"]
+                batch_size = real_feat.size(0)
 
-            # Compute sim path for scenarios that need it (23, 24, 4, 42)
-            need_sim_path = (
-                self.use_adversarial
-                or self.dual_classifiers
-                or self.dual_feature_extractors
-            )
-
-            if need_sim_path:
-                sim_acc = self.models["pose2imu"](pose)
-                # Compute MSE for scenario 42 (R vs D competition on validation)
-                mse_val = float(torch.nn.functional.mse_loss(sim_acc, acc).detach().cpu())
-
+                # Choose D input based on mode
                 if self.adv_signal_input:
-                    # Scenario 42: D on signals
                     d_input_real = acc
                     d_input_sim = sim_acc
-                    sim_feat = self.models[self.sim_fe_key](sim_acc)
                 else:
-                    # Scenario 4: D on features
-                    sim_feat = self.models[self.sim_fe_key](sim_acc)
                     d_input_real = real_feat
                     d_input_sim = sim_feat
 
-                # Compute similarity loss for scenario 4 (feature alignment)
-                sim_loss_val = float(self._cosine(sim_feat, real_feat).detach().cpu())
+                if self.use_acgan:
+                    d_real_out = D(d_input_real, labels=labels, apply_grl=False)
+                    d_sim_out = D(d_input_sim, labels=labels, apply_grl=False)
+                    d_real_logits, _ = d_real_out
+                    d_sim_logits, _ = d_sim_out
+                else:
+                    d_real_logits = D(d_input_real, apply_grl=False)
+                    d_sim_logits = D(d_input_sim, apply_grl=False)
 
-                # Compute logits_sim for scenario 23/24
-                logits_sim = self.models[self.sim_classifier_key](sim_feat)
+                # D accuracy: for WGAN use sign, for BCE use sigmoid
+                if self.adv_loss_type == "wgan":
+                    d_pred_real = (d_real_logits > 0).float()
+                    d_pred_sim = (d_sim_logits < 0).float()
+                    adv_loss_val = float((d_real_logits.mean() - d_sim_logits.mean()).detach().cpu())
+                else:
+                    d_pred_real = (torch.sigmoid(d_real_logits) > 0.5).float()
+                    d_pred_sim = (torch.sigmoid(d_sim_logits) < 0.5).float()
+                    real_labels_d = torch.ones(batch_size, 1, device=self.device)
+                    sim_labels_d = torch.zeros(batch_size, 1, device=self.device)
+                    adv_loss_val = float((
+                        F.binary_cross_entropy_with_logits(d_real_logits, real_labels_d) +
+                        F.binary_cross_entropy_with_logits(d_sim_logits, sim_labels_d)
+                    ).detach().cpu())
+                d_acc = float((d_pred_real.mean() + d_pred_sim.mean()) / 2)
 
-                if self.use_adversarial:
-                    D = self.models["discriminator"]
-                    batch_size = real_feat.size(0)
-
-                    if self.use_acgan:
-                        d_real_out = D(d_input_real, labels=labels, apply_grl=False)
-                        d_sim_out = D(d_input_sim, labels=labels, apply_grl=False)
-                        d_real_logits, _ = d_real_out
-                        d_sim_logits, _ = d_sim_out
-                    else:
-                        d_real_logits = D(d_input_real, apply_grl=False)
-                        d_sim_logits = D(d_input_sim, apply_grl=False)
-
-                    # D accuracy: for WGAN use sign, for BCE use sigmoid
-                    if self.adv_loss_type == "wgan":
-                        d_pred_real = (d_real_logits > 0).float()
-                        d_pred_sim = (d_sim_logits < 0).float()
-                        # WGAN loss: D(real) - D(fake) (Wasserstein distance estimate)
-                        adv_loss_val = float((d_real_logits.mean() - d_sim_logits.mean()).detach().cpu())
-                    else:
-                        d_pred_real = (torch.sigmoid(d_real_logits) > 0.5).float()
-                        d_pred_sim = (torch.sigmoid(d_sim_logits) < 0.5).float()
-                        # BCE loss for discriminator
-                        real_labels_d = torch.ones(batch_size, 1, device=self.device)
-                        sim_labels_d = torch.zeros(batch_size, 1, device=self.device)
-                        adv_loss_val = float((
-                            F.binary_cross_entropy_with_logits(d_real_logits, real_labels_d) +
-                            F.binary_cross_entropy_with_logits(d_sim_logits, sim_labels_d)
-                        ).detach().cpu())
-                    d_acc = float((d_pred_real.mean() + d_pred_sim.mean()) / 2)
-
-            # Return activity loss as total; compute validation metrics for scenarios
+            # Return all metrics (zeros for non-applicable scenarios)
             return (
                 act_loss_real,  # total loss = activity loss on real branch
-                mse_val,        # mse (for scenario 4/42)
-                sim_loss_val,   # sim_loss (feature similarity for scenario 4)
+                mse_val,        # mse (all scenarios)
+                sim_loss_val,   # sim_loss (all scenarios)
                 float(act_loss_real.detach().cpu()),  # act_loss (real only)
                 0.0,            # sec_act_loss (not computed in eval)
-                adv_loss_val,   # adv_loss (for scenario 4/42)
-                d_acc,          # d_acc (computed for eval diagnostics)
+                adv_loss_val,   # adv_loss (scenario 4/42 only)
+                d_acc,          # d_acc (scenario 4/42 only)
                 0.0,            # feat_dist (not computed in eval)
                 0.0,            # mmd_loss (not computed in eval)
                 0.0,            # contrastive_loss (not computed in eval)
@@ -376,7 +359,7 @@ class Trainer:
                 0.0,            # aux_acc (not computed in eval)
                 logits_real,
                 labels,
-                logits_sim,     # logits_sim (for scenario 23/24)
+                logits_sim,     # logits_sim (all scenarios)
             )
         
         # Training path: compute all branches
