@@ -796,12 +796,27 @@ def _build_optim(cfg, models):
     return optimizer, scheduler
 
 
-def _clean_history(history: Dict[str, List[Any]]) -> Dict[str, List[float]]:
-    clean: Dict[str, List[float]] = {}
+def _clean_history(history: Dict[str, List[Any]]) -> Dict[str, Any]:
+    clean: Dict[str, Any] = {}
     for key, values in (history or {}).items():
         if not isinstance(values, list):
             continue
-        clean[key] = [float(v) for v in values]
+        if not values:  # empty list
+            clean[key] = []
+            continue
+        # Find first non-None element to determine structure
+        first_val = next((v for v in values if v is not None), None)
+        if first_val is None:  # all None values
+            clean[key] = [0.0 for _ in values]
+            continue
+        # Handle nested lists (e.g., val_f1_per_class contains list of lists)
+        if isinstance(first_val, list):
+            clean[key] = [
+                [float(x) for x in v] if v else []
+                for v in values
+            ]
+        else:
+            clean[key] = [float(v) if v is not None else 0.0 for v in values]
     return clean
 
 
@@ -1039,6 +1054,120 @@ def _save_plots(run_dir: Path, history: Dict[str, List[Any]], best_epoch: int | 
             "ACGAN Auxiliary Classification Accuracy",
             "aux_acc.png",
         )
+
+    # Adversarial loss (Scenario 4/42) - discriminator loss over epochs
+    if history.get("train_adv_loss") or history.get("val_adv_loss"):
+        _plot_pair(
+            history.get("train_adv_loss"),
+            history.get("val_adv_loss"),
+            ("Train Adv Loss", "Val Adv Loss"),
+            "Adversarial (Discriminator) Loss",
+            "adv_loss.png",
+            use_dual_axis=True,
+        )
+
+    # Combined adversarial metrics plot (Scenario 4/42)
+    # Shows d_acc, adv_loss, and sim_loss/mse together for thesis discussion
+    val_d_acc = history.get("val_d_acc", [])
+    val_adv_loss = history.get("val_adv_loss", [])
+    val_sim_loss = history.get("val_sim_loss", [])
+    val_mse = history.get("val_mse", [])
+    if val_d_acc and (val_adv_loss or val_sim_loss or val_mse):
+        fig, ax1 = plt.subplots(figsize=(10, 6))
+        ax2 = ax1.twinx()
+
+        # D accuracy on primary axis (0-1 scale)
+        line1, = ax1.plot(epochs, val_d_acc, label="D Accuracy", color="#1f77b4", linewidth=2)
+        ax1.axhline(y=0.5, color="#1f77b4", linestyle=":", alpha=0.5, label="Random (50%)")
+        ax1.set_ylabel("Discriminator Accuracy", color="#1f77b4")
+        ax1.tick_params(axis="y", labelcolor="#1f77b4")
+        ax1.set_ylim(0.3, 1.0)
+
+        # Losses on secondary axis
+        lines = [line1]
+        if val_adv_loss:
+            line2, = ax2.plot(epochs, val_adv_loss, label="Adv Loss", color="#ff7f0e", linewidth=2)
+            lines.append(line2)
+        if val_sim_loss and any(v > 0 for v in val_sim_loss):
+            line3, = ax2.plot(epochs, val_sim_loss, label="Similarity Loss", color="#2ca02c", linewidth=2, linestyle="--")
+            lines.append(line3)
+        if val_mse and any(v > 0 for v in val_mse):
+            line4, = ax2.plot(epochs, val_mse, label="MSE Loss", color="#d62728", linewidth=2, linestyle="--")
+            lines.append(line4)
+        ax2.set_ylabel("Loss", color="#ff7f0e")
+        ax2.tick_params(axis="y", labelcolor="#ff7f0e")
+
+        ax1.set_xlabel("Epoch")
+        ax1.set_title("Adversarial Training Dynamics (Validation)")
+        _annotate_best_epoch(ax1, show_label=True)
+        ax1.legend(lines, [l.get_label() for l in lines], loc="upper right")
+        ax1.grid(True, linestyle="--", alpha=0.3)
+        fig.tight_layout()
+        fig.savefig(plot_dir / "adversarial_dynamics.png", dpi=150)
+        plt.close(fig)
+
+    # Scenario 23: Separate classifiers comparison (val_f1 vs val_f1_ac_sim)
+    val_f1 = history.get("val_f1", [])
+    val_f1_ac_sim = history.get("val_f1_ac_sim", [])
+    if val_f1 and val_f1_ac_sim and any(v > 0 for v in val_f1_ac_sim):
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.plot(epochs, val_f1, label="Real Classifier (ac)", color="#1f77b4", linewidth=2)
+        ax.plot(epochs, val_f1_ac_sim, label="Sim Classifier (ac_sim)", color="#ff7f0e", linewidth=2)
+        ax.set_xlabel("Epoch")
+        ax.set_ylabel("Macro F1")
+        ax.set_title("Scenario 23: Separate Classifiers F1 Comparison")
+        _annotate_best_epoch(ax, show_label=True)
+        ax.legend(loc="best")
+        ax.grid(True, linestyle="--", alpha=0.3)
+        fig.tight_layout()
+        fig.savefig(plot_dir / "scenario23_classifiers.png", dpi=150)
+        plt.close(fig)
+
+    # Scenario 24: Classifier confidence comparison
+    val_conf_real = history.get("val_conf_real", [])
+    val_conf_sim = history.get("val_conf_sim", [])
+    if val_conf_real and val_conf_sim and any(v > 0 for v in val_conf_sim):
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.plot(epochs, val_conf_real, label="Real Features Confidence", color="#1f77b4", linewidth=2)
+        ax.plot(epochs, val_conf_sim, label="Sim Features Confidence", color="#ff7f0e", linewidth=2)
+        ax.set_xlabel("Epoch")
+        ax.set_ylabel("Mean Max Softmax Probability")
+        ax.set_title("Scenario 24: Classifier Confidence on Real vs Sim Features")
+        _annotate_best_epoch(ax, show_label=True)
+        ax.legend(loc="best")
+        ax.grid(True, linestyle="--", alpha=0.3)
+        ax.set_ylim(0.0, 1.0)
+        fig.tight_layout()
+        fig.savefig(plot_dir / "scenario24_confidence.png", dpi=150)
+        plt.close(fig)
+
+    # Scenario 3: Per-class F1 bar chart (final epoch)
+    val_f1_per_class = history.get("val_f1_per_class", [])
+    if val_f1_per_class and len(val_f1_per_class) > 0:
+        # Use the per-class F1 from best epoch if available, otherwise last epoch
+        target_epoch = best_epoch_idx if best_epoch_idx is not None and best_epoch_idx < len(val_f1_per_class) else -1
+        per_class_f1 = val_f1_per_class[target_epoch]
+        if per_class_f1 and len(per_class_f1) > 0:
+            fig, ax = plt.subplots(figsize=(max(10, len(per_class_f1) * 0.5), 6))
+            classes = list(range(len(per_class_f1)))
+            bars = ax.bar(classes, per_class_f1, color="#1f77b4", edgecolor="black", alpha=0.8)
+            ax.axhline(y=sum(per_class_f1) / len(per_class_f1), color="#ff7f0e", linestyle="--",
+                       linewidth=2, label=f"Macro F1: {sum(per_class_f1) / len(per_class_f1):.3f}")
+            ax.set_xlabel("Class Index")
+            ax.set_ylabel("F1 Score")
+            epoch_label = f"Epoch {target_epoch + 1}" if target_epoch >= 0 else "Best Epoch"
+            ax.set_title(f"Per-Class F1 Scores ({epoch_label})")
+            ax.set_xticks(classes)
+            ax.legend(loc="best")
+            ax.grid(True, axis="y", linestyle="--", alpha=0.3)
+            ax.set_ylim(0.0, 1.0)
+            # Add value labels on bars
+            for bar, val in zip(bars, per_class_f1):
+                ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.02,
+                       f"{val:.2f}", ha="center", va="bottom", fontsize=8)
+            fig.tight_layout()
+            fig.savefig(plot_dir / "per_class_f1.png", dpi=150)
+            plt.close(fig)
 
 
 def _write_config(run_dir: Path, cfg: SimpleNamespace) -> None:

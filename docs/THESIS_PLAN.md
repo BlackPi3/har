@@ -198,14 +198,14 @@ Each scenario requires specific plots/evidence beyond F1 scores to support the d
 
 #### Evidence Summary Table
 
-| Scenario | Code | Plot Type | Data Source | Comparison | What it shows |
-|----------|------|-----------|-------------|------------|---------------|
-| **No MSE** | scenario22 | Waveform: `real_acc` vs `sim_acc` | Validation | Baseline vs scenario22 | Without MSE loss, regressor output drifts — signals don't match real accelerometer |
-| **Separate Classifiers** | scenario23 | Bar chart: Val F1 per classifier | Validation | `ac` (on real) vs `ac_sim` (on sim) | Are both paths learning effectively? Shows if sim path provides useful training signal |
-| **Separate FEs** | scenario24 | Bar chart: Classifier confidence | Validation | Real features vs sim features | Whether shared classifier sees compatible features from both `F` and `F_sim` |
-| **Auxiliary NTU** | scenario3 | Grouped bar: Per-class F1 | Validation | Baseline vs scenario3 | Which action classes benefit (or suffer) from extra pose diversity |
-| **Feature Discriminator** | scenario4 | Line plot: D accuracy over epochs | Train + Val | Training progression | D accuracy drops toward 50% — feature extractor successfully fools discriminator |
-| **Signal Discriminator** | scenario42 | Dual-axis line: D acc + D loss vs R loss | Train + Val / Train | Training progression | D being fooled + push-pull dynamics showing adversarial "dance" between D and R |
+| Scenario | Code | Plot Type | Data Source | Metrics | What it Shows |
+|----------|------|-----------|-------------|---------|---------------|
+| **No MSE** | scenario22 | Waveform: `real_acc` vs `sim_acc` | Validation | signals | Without MSE, regressor produces meaningless signals |
+| **Separate Classifiers** | scenario23 | Bar chart: Val F1 per classifier | Validation | F1 for `ac` vs `ac_sim` | Whether both paths learn effectively |
+| **Separate FEs** | scenario24 | Bar chart: Classifier confidence | Validation | softmax outputs | Whether shared classifier sees compatible features |
+| **Auxiliary NTU** | scenario3 | Grouped bar: Per-class F1 | Validation | per-class F1 | Which actions benefit/suffer from extra pose data |
+| **Feature Discriminator** | scenario4 | Line plot over epochs | Validation | `val_d_acc`, `val_d_loss`, `val_similarity_loss` | D fooled (acc→50%) + feature alignment |
+| **Signal Discriminator** | scenario42 | Line plot over epochs | Validation | `val_d_acc`, `val_d_loss`, `val_mse_loss` | D fooled (acc→50%) + signal alignment |
 
 #### Data Requirements
 
@@ -215,8 +215,8 @@ Each scenario requires specific plots/evidence beyond F1 scores to support the d
 - scenario24: Classifier softmax outputs on real vs sim features
 
 **Logged during training:**
-- scenario4: `train_d_acc`, `val_d_acc` per epoch (already logged in history)
-- scenario42: `train_d_acc`, `val_d_acc`, `train_adv_loss` (D loss proxy), regressor loss per epoch
+- scenario4: `val_d_acc`, `val_d_loss`, `val_similarity_loss` per epoch
+- scenario42: `val_d_acc`, `val_d_loss`, `val_mse_loss` per epoch
 
 **Computed from predictions:**
 - scenario3: Per-class F1 (from `classification_report`)
