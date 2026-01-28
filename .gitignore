@@ -30,6 +30,7 @@ outputs/
 experiments/hpo/
 experiments/best_run/
 experiments/eval/
+experiments/trial/
 *.log
 multirun
 

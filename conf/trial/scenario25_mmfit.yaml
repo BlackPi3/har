@@ -20,8 +20,8 @@ data:
 optim:
   name: adam
 
-  lr: 0.0005
-  weight_decay: 2.0e-05
+  lr: 0.0003060236651813944
+  weight_decay: 1.0096269449087514e-05
 
   warmup_epochs: 5
   warmup_start_factor: 0.05
@@ -40,7 +40,7 @@ trainer:
   epochs: 200
   patience: 25
   gradient_clip: 1.0
-  label_smoothing: 0.0
+  label_smoothing: 0.1
 
   # Scenario 25 specific: disable feature similarity loss
   losses:
@@ -50,15 +50,18 @@ model:
   regressor:
     name: regressor
     joint_hidden_channels: [32, 32, 32, 32]
-    temporal_hidden_channels: 16
+    temporal_hidden_channels: 8
+    joint_kernel_sizes: [3, 3, 3, 3]
+    joint_dropouts: [0.0, 0.2, 0.2, 0.2]
+    temporal_dropout: 0.3
   encoder_classifier:
     name: mmfit
     n_classes: 11
     feature_extractor:
       kernel_size: 9
-      base_filters: [9, 15, 24]
-      embedding_dim: 100
-      drop_prob: 0.2
+      base_filters: [8, 12, 16]
+      embedding_dim: 80
+      drop_prob: 0.3
     classifier:
-      hidden_units: [100]
+      hidden_units: [128]
       dropout: 0.3

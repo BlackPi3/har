@@ -20,7 +20,7 @@ save_checkpoints: true    # Save model weights
 data:
   name: mmfit
 
-  sensor_window_length: 500
+  sensor_window_length: 400
   n_channels: 3            # Accelerometer channels (x, y, z)
   stride_seconds: 0.2
   batch_size: 64
@@ -41,9 +41,9 @@ optim:
 trainer:
   name: scenario2
 
-  alpha: 1.0           # Activity classification weight
-  beta: 1.0            # Feature similarity weight (cosine)
-  gamma: 1.0           # MSE loss weight
+  alpha: 2             # Activity classification weight
+  beta: 2              # Feature similarity weight (cosine)
+  gamma: 5             # MSE loss weight
 
   epochs: 200
   patience: 25
@@ -53,11 +53,11 @@ trainer:
   # Uses alternating D/G updates (proper WGAN training, not GRL)
   adversarial:
     enabled: true
-    weight: 0.5              # Adversarial weight for G loss
+    weight: 1.0              # Adversarial weight for G loss
     use_grl: false           # WGAN uses alternating updates, not GRL
     alternating: true        # Enable alternating D/G optimization
     n_critic: 5              # D updates per G update (standard for WGAN-GP)
-    pretrain_epochs: 20      # Train regressor with MSE for 20 epochs first (longer for mmfit)
+    pretrain_epochs: 5       # Train regressor with MSE first
     discriminator:
       input_type: signal     # KEY: D operates on raw acc, not features
       hidden_channels: [32, 64, 128]  # More capacity for longer window
@@ -68,7 +68,7 @@ trainer:
       lambda_gp: 10.0        # Gradient penalty coefficient
       # ACGAN: class-conditional discrimination (optional, searchable via HPO)
       use_acgan: true       # Enable to add class conditioning + aux classifier
-      aux_weight: 1.0        # Weight for aux classification loss
+      aux_weight: 2.0        # Weight for aux classification loss
       embed_dim: 32          # Class label embedding dimension
       n_classes: 11          # Must match model.encoder_classifier.n_classes
 
