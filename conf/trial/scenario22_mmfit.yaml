@@ -6,39 +6,40 @@ defaults:
 trial_name: scenario22_mmfit
 
 # Artifact control
-save_artifacts: false      # Save history to JSON + generate plots
-save_checkpoints: false    # Save model weights
+save_artifacts: true      # Save history to JSON + generate plots
+save_checkpoints: true    # Save model weights
 
 data:
   name: mmfit
 
-  sensor_window_length: 500
+  sensor_window_length: 400
   stride_seconds: 0.2
   batch_size: 64
 
 optim:
   name: adam
 
-  lr: 0.0005
-  weight_decay: 0.00002
+  lr: 0.0008
+  weight_decay: 2.0e-05
 
   warmup_epochs: 5
   warmup_start_factor: 0.05
 
   scheduler:
-    patience: 10
-    factor: 0.05
+    patience: 15
+    factor: 0.1
 
 trainer:
   name: scenario2
 
   alpha: 0.2
-  beta: 5
+  beta: 100
   gamma: 0  # Scenario 22: no regression loss
 
   epochs: 200
   patience: 25
   gradient_clip: 1.0
+  label_smoothing: 0.0
 
   # Scenario 22 specific: disable MSE loss
   losses:
@@ -50,3 +51,11 @@ model:
   encoder_classifier:
     name: mmfit
     n_classes: 11
+    feature_extractor:
+      kernel_size: 11
+      base_filters: [9, 15, 24]
+      embedding_dim: 100
+      drop_prob: 0.2
+    classifier:
+      hidden_units: [100]
+      dropout: 0.3

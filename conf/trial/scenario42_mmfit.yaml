@@ -14,8 +14,8 @@ defaults:
 trial_name: scenario42_mmfit
 
 # Artifact control
-save_artifacts: false      # Save history to JSON + generate plots
-save_checkpoints: false    # Save model weights
+save_artifacts: true      # Save history to JSON + generate plots
+save_checkpoints: true    # Save model weights
 
 data:
   name: mmfit

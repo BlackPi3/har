@@ -7,8 +7,8 @@ defaults:
 trial_name: scenario25_mmfit
 
 # Artifact control
-save_artifacts: false      # Save history to JSON + generate plots
-save_checkpoints: false    # Save model weights
+save_artifacts: true      # Save history to JSON + generate plots
+save_checkpoints: true    # Save model weights
 
 data:
   name: mmfit
@@ -21,7 +21,7 @@ optim:
   name: adam
 
   lr: 0.0005
-  weight_decay: 0.00002
+  weight_decay: 2.0e-05
 
   warmup_epochs: 5
   warmup_start_factor: 0.05
@@ -33,13 +33,14 @@ optim:
 trainer:
   name: scenario2
 
-  alpha: 0.2
+  alpha: 5
   beta: 0   # Scenario 25: no feature similarity loss
-  gamma: 1
+  gamma: 50
 
   epochs: 200
   patience: 25
   gradient_clip: 1.0
+  label_smoothing: 0.0
 
   # Scenario 25 specific: disable feature similarity loss
   losses:
@@ -48,6 +49,16 @@ trainer:
 model:
   regressor:
     name: regressor
+    joint_hidden_channels: [32, 32, 32, 32]
+    temporal_hidden_channels: 16
   encoder_classifier:
     name: mmfit
     n_classes: 11
+    feature_extractor:
+      kernel_size: 9
+      base_filters: [9, 15, 24]
+      embedding_dim: 100
+      drop_prob: 0.2
+    classifier:
+      hidden_units: [100]
+      dropout: 0.3
