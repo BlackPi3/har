@@ -8,10 +8,8 @@ This chapter describes the implementation details of our framework, including th
 
 Our framework comprises four primary neural network components: the feature extractor, activity classifier, pose-to-IMU regressor, and discriminator. Each component is designed with configurable hyperparameters to enable systematic architecture search.
 
-\subsection{Feature Extractor}
-\label{sec:feature-extractor}
-
-The feature extractor $F$ transforms raw accelerometer signals into fixed-dimensional feature representations suitable for classification. In thesis we adapt the encoder portion of the convolutional autoencoder architecture from MM-Fit \cite{stromback2020mm} as our feature extractor, using 1D convolutions that operate along the temporal axis while treating the three accelerometer axes as input channels. Our implementation maps an accelerometer window $\mathbf{a}\in\mathbb{R}^{3\times T}$ to an embedding $\mathbf{z}\in\mathbb{R}^{d}$ using a stack of strided temporal convolutions, optional pooling, and a final linear projection. The detailed architecture is controlled entirely through configuration. \Cref{tab:fe-params} reports the hyperparameters and their default values. For linear layers (including the final projection), we use Kaiming Normal initialization \cite{he2015delving} as implemented in PyTorch for LeakyReLU-based networks.
+\paragraph{Feature Extractor.}
+The feature extractor $F$ transforms raw accelerometer signals into fixed-dimensional feature representations suitable for classification. We adapt the encoder portion of the convolutional autoencoder architecture from MM-Fit \cite{stromback2020mm} as our feature extractor, using 1D convolutions that operate along the temporal axis while treating the three accelerometer axes as input channels. It maps an accelerometer window $\mathbf{a}\in\mathbb{R}^{3\times T}$ to an embedding $\mathbf{z}\in\mathbb{R}^{d}$ using a stack of strided temporal convolutions, optional pooling, and a final linear projection. \Cref{tab:fe-params} reports the hyperparameters and their default values. Linear layers use Kaiming Normal initialization \cite{he2015delving} for LeakyReLU-based networks.
 
 \begin{table}[!t]
 \centering
@@ -22,7 +20,7 @@ The feature extractor $F$ transforms raw accelerometer signals into fixed-dimens
 \textbf{Parameter} & \textbf{Default} & \textbf{Description} \\
 \hline
 \texttt{input\_channels} & 3 & Number of input channels (accelerometer axes) \\
-\texttt{window\_size} & \texttt{data.sensor\_window\_length} & Window length used to size the final projection \\
+\texttt{window\_size} & --- & Window length used to size the final projection \\
 \texttt{layers} & 3 & Number of strided convolution layers \\
 \texttt{kernel\_size} & 11 & Convolution kernel size \\
 \texttt{kernel\_stride} & 2 & Stride for strided convolutions \\
@@ -37,10 +35,8 @@ The feature extractor $F$ transforms raw accelerometer signals into fixed-dimens
 \end{tabular}
 \end{table}
 
-\subsection{Activity Classifier}
-\label{sec:classifier}
-
-The activity classifier $C$ maps feature embeddings to class predictions. We implement a multi-layer perceptron (MLP) with configurable hidden layers. The classifier is a configurable MLP head that maps the encoder embedding to $K$ activity logits. We report its tunable hyperparameters and default values in \Cref{tab:clf-params}.
+\paragraph{Activity Classifier}
+The activity classifier $C$ is an MLP head that maps the feature embedding to $K$ activity logits. \Cref{tab:clf-params} reports its hyperparameters and default values.
 
 \begin{table}[!t]
 \centering
@@ -54,22 +50,17 @@ The activity classifier $C$ maps feature embeddings to class predictions. We imp
 \texttt{n\_classes} & --- & Number of activity classes $K$ (dataset-dependent) \\
 \texttt{hidden\_units} & $[100]$ & Hidden layer widths \\
 \texttt{dropout} & 0.2 & Dropout probability after each hidden layer \\
+\texttt{label\_smoothing} & 0.0 & Label smoothing for activity classification \\
 \hline
 \end{tabular}
 \end{table}
 
-\subsection{Pose-to-IMU Regressor}
-\label{sec:regressor}
-
-The regressor $R$ transforms skeleton pose sequences into simulated accelerometer signals. We adopt the regressor architecture proposed by Rey \textit{et al.} \cite{fortes2021translating}. Compared to the original formulation which predicts a single sensor channel at a time, our implementation predicts the full 3-axis accelerometer window jointly. The regressor consumes a pose window $\mathbf{p} \in \mathbb{R}^{C_{\text{in}} \times J \times T}$ and outputs a simulated accelerometer window $\tilde{\mathbf{a}} \in \mathbb{R}^{3 \times T}$. Our implementation is a residual Temporal Convolutional Network (TCN): joint-temporal blocks operate on tensors of shape $(B, C_{\text{in}}, J, T)$ using dilated convolutions, followed by a temporal aggregation block and a final projection. An optional per-output-channel variant exists (\texttt{separate\_channel=true}), but we use a shared backbone by default.
-
-\subsubsection{Configurable Parameters}
-
-\Cref{tab:regressor-params} summarizes the regressor's hyperparameters. The default configuration uses four joint-level blocks with expanding dilations, followed by a single temporal aggregation block.
+\paragraph{Pose-to-IMU Regressor}
+The regressor $R$ transforms skeleton pose sequences into simulated accelerometer signals. We adopt the architecture proposed by Rey \textit{et al.} \cite{fortes2021translating}. Compared to the original formulation which predicts a single sensor channel at a time, our implementation predicts the full 3-axis accelerometer window jointly. The regressor consumes a pose window $\mathbf{p} \in \mathbb{R}^{C_{\text{in}} \times J \times T}$ and outputs a simulated accelerometer window $\tilde{\mathbf{a}} \in \mathbb{R}^{3 \times T}$ using a residual Temporal Convolutional Network (TCN): joint-temporal blocks operate on the input using dilated convolutions, followed by a temporal aggregation block and a final projection. \Cref{tab:regressor-params} summarizes the hyperparameters.
 
 \begin{table}[!t]
 \centering
-\caption{Pose-to-IMU regressor (\texttt{Regressor}) parameters and default configuration values.}
+\caption{Pose-to-IMU regressor parameters and default configuration values.}
 \label{tab:regressor-params}
 \begin{tabular}{llp{6.5cm}}
 \hline
@@ -86,28 +77,19 @@ The regressor $R$ transforms skeleton pose sequences into simulated acceleromete
 \texttt{temporal\_kernel\_size} & 3 & Temporal aggregation kernel size \\
 \texttt{temporal\_dilation} & 1 & Temporal dilation \\
 \texttt{temporal\_dropout} & 0.1 & Dropout in the temporal aggregation block \\
-\texttt{fc\_hidden} & 0 & Optional hidden width for the final MLP head (disabled when 0) \\
-\texttt{fc\_dropout} & 0.0 & Dropout before the final projection \\
 \texttt{use\_batch\_norm} & True & Enable batch normalization in TCN blocks \\
-\texttt{separate\_channel} & False & Use a separate backbone per output channel \\
 \hline
 \end{tabular}
 \end{table}
 
-\subsection{Discriminator}
-\label{sec:discriminator-arch}
-
 For adversarial training scenarios, we implement discriminators that distinguish real from simulated data. Two variants exist depending on whether discrimination operates at the feature level or signal level.
 
-\subsubsection{Feature-level Discriminator}
-
-The feature-level discriminator $D_F$ is an MLP that takes encoder embeddings and outputs a single real/fake logit. In GRL-based adversarial mode, the discriminator input is passed through a Gradient Reversal Layer (GRL), enabling end-to-end adversarial training with a single backward pass. We optimize the real/fake head using \texttt{BCEWithLogitsLoss} (optionally with label smoothing). When \texttt{use\_acgan=true}, the discriminator additionally outputs auxiliary activity logits.
-
-\Cref{tab:df-params} summarizes the discriminator parameters and default configuration values used by our implementation.
+\paragraph{Feature-level Discriminator}
+The feature-level discriminator $D_F$ is an MLP that takes encoder embeddings and outputs a single real/fake logit, optimized with binary cross-entropy loss. Its input is passed through a Gradient Reversal Layer (GRL), enabling end-to-end adversarial training with a single backward pass. When the ACGAN variant is enabled, the discriminator additionally outputs auxiliary activity logits. \Cref{tab:df-params} summarizes the hyperparameters.
 
 \begin{table}[!t]
 \centering
-\caption{Feature discriminator (\texttt{FeatureDiscriminator}/\texttt{ACFeatureDiscriminator}) parameters and default configuration values.}
+\caption{Feature discriminator parameters and default configuration values.}
 \label{tab:df-params}
 \begin{tabular}{llp{6.5cm}}
 \hline
@@ -116,247 +98,93 @@ The feature-level discriminator $D_F$ is an MLP that takes encoder embeddings an
 \texttt{f\_in} & 100 & Input feature dimension $d$ \\
 \texttt{hidden\_units} & $[64]$ & MLP hidden layer sizes \\
 \texttt{dropout} & 0.3 & Dropout probability in the MLP \\
-\texttt{use\_grl} & True & Apply GRL to inputs (feature-level adversarial mode) \\
 \texttt{grl\_lambda} & 1.0 & GRL strength (fixed or scheduled by the trainer) \\
-\texttt{normalize\_features} & True & L2-normalize inputs for stable training \\
-\texttt{use\_spectral\_norm} & False & Apply spectral normalization to linear layers \\
-\texttt{label\_smoothing} & 0.1 & Label smoothing for the real/fake head (BCE) \\
-\texttt{n\_classes} & \texttt{model.encoder\_classifier.n\_classes} & (ACGAN only) Number of activity classes \\
+\texttt{label\_smoothing} & 0.0 & Label smoothing for the real/fake head (BCE) \\
 \texttt{embed\_dim} & 32 & (ACGAN only) Label embedding dimension \\
 \texttt{aux\_weight} & 1.0 & (ACGAN only) Weight for auxiliary classification loss \\
 \hline
 \end{tabular}
 \end{table}
 
-\subsubsection{Signal-level Discriminator}
-
-The signal-level discriminator $D_S$ operates directly on accelerometer windows and outputs a single scalar score/logit. It is implemented as a small 1D CNN with a lightweight MLP head, and its configurable hyperparameters are summarized in \Cref{tab:ds-params}. For Scenario 4.2 we train this discriminator using WGAN-GP \cite{gulrajani2017improved} with alternating critic/generator updates for stability.
-
-\Cref{tab:ds-params} summarizes the signal discriminator parameters and default configuration values.
+\paragraph{Signal-level Discriminator}
+The signal-level discriminator $D_S$ operates directly on accelerometer windows and outputs a single scalar score. It is a small 1D CNN with a lightweight MLP head, trained using WGAN-GP \cite{arjovsky2017wasserstein, gulrajani2017improved} with alternating critic/generator updates. \Cref{tab:ds-params} summarizes the hyperparameters.
 
 \begin{table}[!t]
 \centering
-\caption{Signal discriminator (\texttt{SignalDiscriminator}/\texttt{ACSignalDiscriminator}) parameters and default configuration values.}
+\caption{Signal discriminator parameters and default configuration values.}
 \label{tab:ds-params}
 \begin{tabular}{llp{6.5cm}}
 \hline
 \textbf{Parameter} & \textbf{Default} & \textbf{Description} \\
 \hline
 \texttt{n\_channels} & 3 & Number of input channels (accelerometer axes) \\
-\texttt{window\_size} & \texttt{data.sensor\_window\_length} & Temporal window length $T$ \\
+\texttt{window\_size} & --- & Temporal window length $T$ \\
 \texttt{hidden\_channels} & $[32, 64]$ & Convolution channel sizes \\
 \texttt{dropout} & 0.3 & Dropout probability in CNN/MLP head \\
-\texttt{use\_grl} & True & Apply GRL to inputs (disabled for WGAN alternating mode) \\
-\texttt{grl\_lambda} & 1.0 & GRL strength (if used) \\
-\texttt{use\_spectral\_norm} & False & Apply spectral normalization to conv/linear layers \\
-\texttt{label\_smoothing} & 0.1 & Label smoothing for the real/fake head (BCE) \\
-\texttt{n\_classes} & \texttt{model.encoder\_classifier.n\_classes} & (ACGAN only) Number of activity classes \\
+\texttt{label\_smoothing} & 0.0 & Label smoothing for the real/fake head (BCE) \\
+\texttt{n\_classes} & --- & (ACGAN only) Number of activity classes \\
 \texttt{embed\_dim} & 32 & (ACGAN only) Label embedding dimension \\
 \texttt{aux\_weight} & 1.0 & (ACGAN only) Weight for auxiliary classification loss \\
 \hline
 \end{tabular}
 \end{table}
 
-\paragraph{WGAN-GP Training.} For signal-level adversarial training we use WGAN-GP \cite{gulrajani2017improved} with gradient penalty (default $\lambda_{\text{GP}}=10$) and alternating updates ($n_{\text{critic}}=5$ critic steps per regressor step by default). We omit the full objective here because the adversarial losses are defined in the Method chapter; in this chapter we focus on implementation choices and default hyperparameters.
+\paragraph{WGAN-GP Training.} For signal-level adversarial training we use WGAN-GP \cite{arjovsky2017wasserstein, gulrajani2017improved} with gradient penalty (default $\lambda_{\text{GP}}=10$) and alternating updates ($n_{\text{critic}}=5$ critic steps per regressor step by default). We omit the full objective here because the adversarial losses are defined in the Method chapter; in this chapter we focus on implementation choices and default hyperparameters.
 
-\paragraph{ACGAN Variant.} We optionally extend the discriminator with class conditioning following the Auxiliary Classifier GAN (ACGAN) framework \cite{odena2017conditional}. When \texttt{use\_acgan=true}, the discriminator also outputs auxiliary activity logits. The auxiliary head is trained with cross-entropy on both real and simulated samples, and the same auxiliary loss is included in the regressor update for simulated samples, encouraging class-conditional realism.
+\paragraph{ACGAN Variant.} We optionally extend the discriminator with class conditioning following the Auxiliary Classifier GAN (ACGAN) framework \cite{odena2017conditional}. In this variant, the discriminator also outputs auxiliary activity logits. The auxiliary head is trained with cross-entropy on both real and simulated samples, and the same auxiliary loss is included in the regressor update for simulated samples, encouraging class-conditional realism.
 
 \paragraph{Staged Training.} To prevent the regressor from receiving adversarial gradients before learning basic signal structure, we optionally pretrain for $E_{\text{pre}}$ epochs using only MSE loss before enabling adversarial training. This staged approach helps establish reasonable signal quality before the discriminator begins providing feedback.
 
-\subsubsection{Gradient Reversal Layer}
-
-For the feature-level discriminator (Scenario 4.1), we use a Gradient Reversal Layer (GRL) \cite{ganin2016domain} to enable end-to-end adversarial training in a single backward pass. The GRL is the identity in the forward pass but multiplies upstream gradients by $-\lambda$ in the backward pass; $\lambda$ can be fixed or scheduled by the trainer.
+\paragraph{Gradient Reversal Layer}
+For the feature-level discriminator (Scenario 4.1), we use a Gradient Reversal Layer (GRL) \cite{ganin2016domain} to enable end-to-end adversarial training in a single backward pass. The GRL is the identity in the forward pass but multiplies upstream gradients by $-\lambda$ in the backward pass. $\lambda$ can be fixed or scheduled by the trainer.
 
 Note that the signal-level discriminator (Scenario 4.2) does not use GRL; it uses WGAN-GP with alternating critic/regressor updates instead.
 
 \section{Training Pipeline}
 \label{sec:pipeline}
 
-We implement a unified training pipeline that supports all scenarios (including adversarial variants) through configuration-controlled options. We omit internal configuration mechanics and focus on the training/evaluation behavior relevant to the experimental protocol.
-
-\subsection{Training Loop}
+All scenarios are implemented in a single configurable training script. Configuration flags control which components are instantiated (e.g., separate feature extractors or classifiers) and which losses are active, so each scenario corresponds to a specific configuration rather than separate code.
 
 Each training batch evaluates two computational paths:
 \begin{itemize}
     \item \textbf{Real path}: $\mathbf{a} \rightarrow F \rightarrow \mathbf{z}_{\text{real}} \rightarrow C \rightarrow \hat{y}_{\text{real}}$
     \item \textbf{Simulated path}: $\mathbf{p} \rightarrow R \rightarrow \tilde{\mathbf{a}} \rightarrow F_{\text{sim}} \rightarrow \mathbf{z}_{\text{sim}} \rightarrow C_{\text{sim}} \rightarrow \hat{y}_{\text{sim}}$
 \end{itemize}
-where by default $F_{\text{sim}} \equiv F$ and $C_{\text{sim}} \equiv C$, and separate modules are instantiated only when \texttt{trainer.separate\_feature\_extractors} or \texttt{trainer.separate\_classifiers} is enabled.
+where by default $F_{\text{sim}} \equiv F$ and $C_{\text{sim}} \equiv C$. When signal-level WGAN-GP adversarial training is enabled (Scenario~4.2), we use alternating optimization ($n_{\text{critic}}$ critic updates per generator update); all other scenarios use a single backward pass.
 
-In standard mode (including GRL-based adversarial training), we compute all enabled losses and update parameters with a single backward pass. When signal-level WGAN-GP adversarial training is enabled (Scenario 4.2), we use alternating optimization ($n_{\text{critic}}$ critic updates per generator update) as described in the discriminator section; this alternation can be disabled during an optional staged pretraining period of $E_{\text{pre}}$ epochs. We optionally apply gradient clipping (default max norm 1.0).
-
-\subsection{Evaluation Protocol}
-
-During validation and testing, only the real accelerometer branch is evaluated:
+During validation and testing, only the real path is evaluated:
 \begin{equation}
     \hat{y} = \arg\max_k [C(F(\mathbf{a}_{\text{real}}))]_k
 \end{equation}
-
-The simulated path (regressor, and optionally separate feature extractor/classifier) is ignored at evaluation time. This ensures metrics reflect the real-sensor test setting where only physical accelerometer signals are available.
-
-\subsection{Learning Rate Schedule}
-
-We combine two scheduling strategies:
-
-\textbf{Warmup phase}: For the first $W$ epochs (\texttt{optim.warmup\_epochs}), the learning rate linearly increases from $s \cdot \text{lr}_{\text{base}}$ to $\text{lr}_{\text{base}}$, where $s=\texttt{optim.warmup\_start\_factor}$:
-\begin{equation}
-    \text{lr}(e) = \text{lr}_{\text{base}} \cdot \left(s + (1-s)\cdot \frac{e}{W}\right), \quad e < W
-\end{equation}
-
-\textbf{Plateau reduction}: After warmup, we use ReduceLROnPlateau with configurable \texttt{optim.scheduler.factor} and \texttt{optim.scheduler.patience}, monitoring a configurable metric (e.g., \texttt{val\_f1}).
-
-\subsection{Early Stopping}
-
-Training terminates when the configured objective metric (macro F1 by default) does not improve for a patience period (\texttt{trainer.patience}; default 25 in our base trainer config). The trainer keeps an in-memory copy of the best model parameters and restores them before final evaluation; optionally, these parameters can be written to disk when checkpoint saving is enabled.
+All model selection---early stopping, best checkpoint retention, and hyperparameter optimization---is driven by validation macro~F1 computed on this real-only path. Training hyperparameters including learning rate scheduling (linear warmup followed by plateau reduction), early stopping patience, and gradient clipping are all subject to hyperparameter optimization as described in \Cref{sec:hpo}.
 
 \section{Hyperparameter Optimization}
 \label{sec:hpo}
 
-Given the large number of configurable hyperparameters and their interactions, we employ a systematic multi-pass optimization strategy to efficiently search the hyperparameter space.
+We use Optuna \cite{akiba2019optuna} for hyperparameter optimization. Optuna persists study state in an SQLite database, which allows interrupted searches to be resumed without loss of progress. As the sampler we use the Tree-structured Parzen Estimator (TPE), a Bayesian approach that models the distributions of hyperparameter values separately for well-performing and poorly-performing trials, then samples candidates that are more likely under the former. This lets TPE focus the evaluation budget on promising regions of the space, typically reaching competitive configurations within 150--200 trials even in large search spaces.
 
-\subsection{Optimization Framework}
+Grid search is impractical in our setting because the number of hyperparameters and their interactions make the combinatorial space too large to enumerate, and each trial requires a full training run. Beyond feasibility, even an exhaustive search would not guarantee reliable selection: a single run with a favorable random seed can produce a misleadingly high score. To address this, after each search phase we retain the top~10 configurations ranked by validation~F1 and re-evaluate each with 5~different random seeds. The configuration with the highest mean validation~F1 across these reruns is selected as the winner, guarding against configurations that scored well due to a lucky initialization.
 
-We use Optuna \cite{akiba2019optuna} for hyperparameter optimization with the Tree-structured Parzen Estimator (TPE) sampler. In our implementation, a native orchestrator (\texttt{experiments/run\_hpo.py}) launches training runs (\texttt{experiments/run\_trial.py}) in subprocesses, applies sampled hyperparameters as dot-path overrides, and reports the chosen validation metric to Optuna.
-
-Study state is persisted to SQLite databases, enabling:
-\begin{itemize}
-    \item Resumption of interrupted studies
-    \item Parallel trial execution across multiple workers
-    \item Post-hoc analysis of the search trajectory
-\end{itemize}
-
-\subsection{Three-Pass Strategy}
+\paragraph{Three-Pass Strategy.}
 \label{sec:three-pass}
+Because the full search space is large and parameter interactions are complex, we decompose the optimization into three sequential passes. Each pass searches a subset of parameters while fixing those selected in earlier passes. \Cref{tab:hpo-passes} summarizes the parameters optimized in each pass. To speed up the search, passes use a reduced training epoch budget; final evaluation retrains with the full epoch budget.
 
-Rather than searching all hyperparameters simultaneously, we decompose the search into sequential passes by editing the search-space YAMLs under \texttt{conf/hpo/}. In each pass we restrict the active parameter set; to ``fix'' a previously selected hyperparameter we turn it into a singleton choice. This hierarchical approach reduces the combinatorial search space while still capturing important interactions.
+\begin{table}[!t]
+\centering
+\caption{Hyperparameters searched in each HPO pass. Values selected in earlier passes are fixed for subsequent ones.}
+\label{tab:hpo-passes}
+\begin{tabular}{clp{7cm}}
+\hline
+\textbf{Pass} & \textbf{Focus} & \textbf{Parameters} \\
+\hline
+1 & Loss weights \& data & Loss weights ($\alpha$, $\beta$, $\gamma$), window length, window stride, batch size; adversarial weight (Scenarios~4.x) \\
+2 & Regularization & Learning rate, weight decay, warmup epochs, LR scheduler patience and factor, label smoothing, dropout rates (feature extractor, classifier, regressor) \\
+3 & Model capacity & Convolution kernel sizes, filter counts per layer, embedding dimension, hidden layer sizes \\
+\hline
+\end{tabular}
+\end{table}
 
-\subsubsection{Pass 1: Loss Weights and Data Parameters}
+Pass~1 targets loss weights and data parameters because these determine the optimization landscape before regularization or capacity considerations matter. Pass~2 tunes regularization and learning rate scheduling, which affect generalization and training stability. Pass~3 searches model capacity last, since optimal architecture size depends on the regularization regime established in earlier passes.
 
-The first pass optimizes hyperparameters with the highest impact on training dynamics:
-\begin{itemize}
-    \item Loss weights: $\alpha$ (activity), $\beta$ (similarity), $\gamma$ (regression)
-    \item Data parameters: window stride, batch size
-    \item Adversarial parameters (if applicable): adversarial weight, GRL $\lambda$
-\end{itemize}
-
-These parameters fundamentally determine the optimization landscape and training behavior. To speed up the search, the HPO configuration can override \texttt{trainer.epochs} to a smaller value than the full trial training budget; final results are obtained by re-training with the full epoch setting.
-
-\subsubsection{Pass 2: Regularization}
-
-The second pass fixes the winning values from Pass 1 and searches regularization hyperparameters:
-\begin{itemize}
-    \item Learning rate and weight decay
-    \item Dropout probability
-    \item Label smoothing coefficient
-    \item Scheduler patience
-\end{itemize}
-
-These parameters affect generalization and training stability but have less impact on the fundamental optimization dynamics established in Pass 1.
-
-\subsubsection{Pass 3: Model Capacity}
-
-The final pass fixes all previous winners and searches architecture hyperparameters:
-\begin{itemize}
-    \item Convolutional kernel sizes
-    \item Number and size of filters
-    \item Embedding dimensions
-    \item Hidden layer configurations
-\end{itemize}
-
-Capacity search is performed last because optimal model size depends on the regularization regime established in earlier passes.
-
-\subsection{Duplicate Handling}
-
-The TPE sampler may suggest previously-evaluated hyperparameter configurations. Rather than skipping duplicates, our orchestrator (\texttt{experiments/run\_hpo.py}) re-runs the same configuration with an incremented seed and reports the running mean of all observed scores for that configuration. This yields a more robust estimate of configuration quality and reduces the effect of ``lucky'' initializations.
-
-\begin{algorithm}[!t]
-\caption{Duplicate-aware objective reporting with running mean (\texttt{experiments/run\_hpo.py}).}
-\label{alg:hpo-duplicate-mean}
-\begin{algorithmic}[1]
-\Require Optuna study, sampled hyperparameters $\theta$, base seed $s_0$, objective metric $m$
-\State $(n, s_{\max}, \{v_i\}_{i=1}^n) \gets$ completed trials in the study with params $\theta$
-\If{$n>0$}
-    \State $s \gets s_{\max}+1$ \Comment{re-evaluate duplicate with a new seed}
-\Else
-    \State $s \gets s_0$
-\EndIf
-\State Run \texttt{experiments.run\_trial} with overrides $\theta$ and \texttt{seed}$=s$; read score $v$ for metric $m$
-\If{$n>0$}
-    \State $\bar{v} \gets \frac{\sum_{i=1}^{n} v_i + v}{n+1}$ \Comment{running mean}
-    \State Report $\bar{v}$ to Optuna; store $\{v_i\}_{i=1}^{n}\cup\{v\}$ as trial metadata
-\Else
-    \State Report $v$ to Optuna
-\EndIf
-\end{algorithmic}
-\end{algorithm}
-
-\subsection{Top-K Validation}
-
-After each HPO pass completes, we select the top-10 configurations by validation F1 and re-evaluate each with 5 different seeds. The orchestrator writes a summary report (\texttt{repeats\_report.yaml}) containing mean and standard deviation per configuration, and exports the best configuration parameters (\texttt{repeats\_best\_params.yaml}) for the next pass. This validation step ensures the selected configuration is robust to initialization variance rather than benefiting from a favorable random seed.
-
-\begin{algorithm}[!t]
-\caption{Top-$K$ repeats and best-parameter export (\texttt{experiments/run\_hpo.py}).}
-\label{alg:hpo-topk-repeats}
-\begin{algorithmic}[1]
-\Require Completed Optuna study, $K=10$, repeat count $R=5$, metric $m$ (validation F1)
-\State Select top-$K$ \emph{unique} configurations by objective value (deduplicated by hyperparameters)
-\ForAll{selected configurations $\theta_k$ with trial id $t_k$}
-    \For{$r=0$ to $R-1$}
-        \State Run \texttt{experiments.run\_trial} with overrides $\theta_k$ and \texttt{seed}$=r$; record score $v_{k,r}$
-    \EndFor
-    \State Compute $\mu_k=\text{mean}(\{v_{k,r}\}_{r=0}^{R-1})$ and $\sigma_k=\text{std}(\{v_{k,r}\}_{r=0}^{R-1})$
-\EndFor
-\State Write \texttt{repeats\_report.yaml} containing $(t_k,\mu_k,\sigma_k)$ and select $k^\star=\arg\max_k \mu_k$
-\State Export best configuration $\theta_{k^\star}$ to \texttt{repeats\_best\_params.yaml}
-\end{algorithmic}
-\end{algorithm}
-
-\section{Reproducibility}
-\label{sec:reproducibility}
-
-Ensuring reproducible results is critical for scientific validity. We implement multiple mechanisms to control randomness and document experimental conditions.
-
-\subsection{Random Seed Control}
-
-All sources of randomness are seeded from a single configuration parameter:
-\begin{itemize}
-    \item PyTorch random number generators (CPU and CUDA)
-    \item NumPy random state
-    \item Python's built-in random module
-    \item Data shuffling in dataloaders
-\end{itemize}
-
-For CUDA operations, we optionally enable deterministic mode (\texttt{torch.backends.cudnn.deterministic = True}), which sacrifices some performance for exact reproducibility.
-
-\subsection{Configuration Snapshots}
-
-Each training run writes a fully-resolved configuration snapshot (\texttt{resolved\_config.yaml}) to its output directory, including:
-\begin{itemize}
-    \item All hyperparameter values (explicitly set and defaults)
-    \item Applied dot-path overrides from the CLI/HPO runner
-\end{itemize}
-
-This enables exact reproduction of any experiment by re-running with the saved configuration and seed.
-
-\subsection{Checkpoint Management}
-
-Checkpoint saving is optional (controlled via \texttt{save\_artifacts} and \texttt{save\_checkpoints}). When enabled, the runner stores the best-performing model state dictionaries for all components; by default, optimizer and scheduler state are not persisted.
-
-\subsection{Evaluation Pipeline}
-
-Final evaluation on the test set is performed through a dedicated script (\texttt{experiments/run\_eval.py}), which loads the best hyperparameters from the HPO repeats outputs, re-runs training/evaluation with multiple seeds, and aggregates test metrics.
-
-\begin{algorithm}[!t]
-\caption{Final evaluation of the best HPO configuration (\texttt{experiments/run\_eval.py}).}
-\label{alg:eval-pipeline}
-\begin{algorithmic}[1]
-\Require Study directory containing \texttt{repeats\_best\_params.yaml}
-\Require Base seed $s_0$, repeat count $R=10$, full training epochs
-\State Load best hyperparameters $\theta^\star$ from \texttt{repeats\_best\_params.yaml}
-\For{$r=0$ to $R-1$}
-    \State Run \texttt{experiments.run\_trial} with $\theta^\star$, \texttt{seed}$=s_0+r$, and full epoch budget
-    \State Extract test metrics from \texttt{results.json}
-\EndFor
-\State Report test F1 as mean $\pm$ standard deviation over 10 runs
-\end{algorithmic}
-\end{algorithm}
+\paragraph{Final Evaluation.}
+Once the three-pass HPO selects the best configuration, we evaluate it on the held-out test set. We train the winning configuration 10~times with different random seeds, each time using the full epoch budget. For each run, the model with the best validation~F1 is selected and evaluated on the test set. We report the mean and standard deviation of test~F1 across the 10~runs as the final result.

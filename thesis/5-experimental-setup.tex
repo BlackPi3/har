@@ -6,7 +6,7 @@ This chapter describes the experimental framework used to evaluate our proposed 
 \section{Datasets}
 \label{sec:datasets}
 
-We evaluate our method on two primary datasets that provide synchronized skeleton pose and inertial measurement unit (IMU) data: UTD-MHAD and MM-Fit. Additionally, we use NTU RGB+D as a secondary pose-only dataset for auxiliary training experiments.
+We evaluate our method on two primary datasets that provide synchronized skeleton pose and inertial measurement unit (IMU) data: UTD-MHAD \cite{chen2015utd} and MM-Fit \cite{stromback2020mm}. Additionally, we use NTU RGB+D \cite{shahroudy2016ntu} as a secondary pose-only dataset for auxiliary training experiments.
 
 \paragraph{UTD-MHAD.}
 The University of Texas at Dallas Multimodal Human Action Dataset (UTD-MHAD) \cite{chen2015utd} is a benchmark dataset for multimodal action recognition. It captures human activities using both a Microsoft Kinect sensor and a wearable inertial sensor. The dataset has 8 subjects, 21 activity classes including gestures, sports movements, and daily activities. It has 671 actions clips with approximately 4 repetitions per subject and per action. It has both 3D skeleton pose sequence sampled at 30 Hz and 3D accelerometer sampled at 50 Hz. The Kinect sensor captures 3D joint positions at 30 fps. We upsample them to 50 Hz to match the inertial sensor. The wearable sensor is placed on the subject's right wrist for upper-body actions and right thigh for lower-body actions. We use a subject-disjoint split to evaluate generalization to unseen individuals. For training we use subjects 1--4, for validation subjects 5--6 and for test subjects 7--8. This split ensures that models are evaluated on subjects never seen during training or hyperparameter tuning.
