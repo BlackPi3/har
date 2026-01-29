@@ -18,11 +18,11 @@ The central finding of this work is that joint end-to-end training of the pose-t
 
 The three-term objective ($\alpha \mathcal{L}_{\text{cls}} + \beta \mathcal{L}_{\text{similarity}} + \gamma \mathcal{L}_{\text{regression}}$) provides complementary supervision signals:
 
-\textbf{Classification loss ($\alpha$).} Essential for task performance. Training on both real and simulated paths exposes the classifier to greater variation, improving robustness. The equal weighting of real and simulated classification losses ensures neither domain dominates optimization.
+\textbf{Classification loss ($\alpha$).} Essential for task performance. Training on both real and simulated paths exposes the classifier to greater variation, improving robustness. The equal weighting of real and simulated classification losses ensures neither domain dominates optimization. With separate classifiers (Scenario 2.4), \Cref{fig:scenario23-f1} confirms that both the real and simulated paths learn effective decision boundaries, with the simulated classifier achieving comparable F1 despite never seeing real accelerometer data during training.
 
-\textbf{Feature similarity loss ($\beta$).} Provides explicit domain alignment at the representation level. The importance of this loss depends on the architecture: with shared feature extractors, the architecture itself provides implicit alignment, making explicit similarity loss a form of additional regularization. With separate feature extractors (Scenario 24), the similarity loss becomes critical for encouraging compatible representations.
+\textbf{Feature similarity loss ($\beta$).} Provides explicit domain alignment at the representation level. The importance of this loss depends on the architecture: with shared feature extractors, the architecture itself provides implicit alignment, making explicit similarity loss a form of additional regularization. With separate feature extractors (Scenario 2.5), the similarity loss becomes critical for encouraging compatible representations---\Cref{fig:scenario24-confidence} shows that with proper $\beta$ tuning, the shared classifier receives features of similar confidence from both extractors.
 
-\textbf{Regression loss ($\gamma$).} Grounds the simulated signals in physical reality. The ablation with $\gamma = 0$ (Scenario 22) tests whether task gradients alone can guide meaningful simulation without explicit signal supervision. Including regression loss provides interpretable intermediate outputs and may improve training stability by giving the regressor direct supervision early in training.
+\textbf{Regression loss ($\gamma$).} Grounds the simulated signals in physical reality. The ablation with $\gamma = 0$ (Scenario 2.2) demonstrates catastrophically that task gradients alone cannot guide meaningful simulation---without MSE supervision, the regressor produces chaotic, high-frequency noise bearing no resemblance to real accelerometer signals (\Cref{fig:scenario22-waveforms}). Including regression loss provides interpretable intermediate outputs and improves training stability by giving the regressor direct supervision early in training.
 
 \subsection{When Does Simulation Help?}
 
@@ -54,8 +54,8 @@ Adversarial training introduces a competitive dynamic between the discriminator 
 
 \textbf{Achieving equilibrium.} The two adversarial scenarios use different mechanisms to achieve balance:
 \begin{itemize}
-    \item \textbf{Feature-level (GRL):} The lambda schedule starts with weak adversarial gradients (allowing initial feature learning) and increases strength as training progresses. Healthy training shows discriminator accuracy gradually decreasing from near 100\% to approximately 50\%.
-    \item \textbf{Signal-level (WGAN-GP):} Alternating updates with $n_{\text{critic}}$ discriminator steps per generator step (typically 5) naturally balances the two. The gradient penalty enforces the Lipschitz constraint, preventing discriminator collapse. Staged training with MSE pretraining before adversarial feedback helps establish reasonable signal structure first.
+    \item \textbf{Feature-level (GRL):} The lambda schedule starts with weak adversarial gradients (allowing initial feature learning) and increases strength as training progresses. As shown in \Cref{fig:scenario4-dynamics}, healthy training shows discriminator accuracy hovering around 50\% once GRL $\lambda$ ramps up, indicating the feature extractor successfully produces domain-invariant representations.
+    \item \textbf{Signal-level (WGAN-GP):} Alternating updates with $n_{\text{critic}}$ discriminator steps per generator step naturally balances the two. The gradient penalty enforces the Lipschitz constraint, preventing discriminator collapse. As shown in \Cref{fig:scenario42-dynamics}, staged training with MSE pretraining (before the dashed vertical line) establishes reasonable signal structure before adversarial feedback begins.
 \end{itemize}
 
 \subsection{Feature-Level vs. Signal-Level Discrimination}
@@ -67,6 +67,8 @@ Our experiments compare two discriminator operating points with different traini
 \textbf{Signal-level discrimination (Scenario 4.2)} operates on raw accelerometer signals $\mathbf{a}$ vs. $\tilde{\mathbf{a}}$ using WGAN-GP with alternating updates. The adversarial gradient flows to the regressor $R$, encouraging realistic signal synthesis. This approach aligns with generative adversarial networks for time series, and the Wasserstein distance provides smoother gradients than BCE when distributions have limited overlap. An optional ACGAN variant adds class conditioning to encourage activity-specific realism.
 
 The two approaches target different components: feature-level discrimination directly improves the representations used for classification, while signal-level discrimination improves regressor output quality. These are complementary goals---feature-level alignment may compensate for imperfect simulation, while signal-level realism reduces the burden on the feature extractor to bridge the domain gap.
+
+Notably, both approaches achieve their objective of fooling the discriminator (D accuracy $\approx 50\%$), yet only signal-level discrimination on UTD-MHAD translates to improved classification (+3.3\%). This reveals an important insight: \emph{domain alignment is necessary but not sufficient} for downstream task improvement. The feature-level approach may discard task-relevant information in pursuit of domain invariance (\Cref{tab:adversarial-comparison}).
 
 \subsection{Connection to Domain Adaptation Literature}
 
@@ -138,7 +140,69 @@ would require retraining or architectural modifications. The physics of accelero
 
 \subsection{Activity Class Coverage}
 
-The auxiliary data experiments with NTU RGB+D reveal that secondary datasets are most beneficial when they share activity semantics with the primary dataset. When activity classes differ substantially, the regressor may learn mappings that do not transfer. This limits the utility of large-scale pose datasets for arbitrary HAR tasks.
+The auxiliary data experiments with NTU RGB+D reveal that secondary datasets are most beneficial when they share activity semantics with the primary dataset. When activity classes differ substantially, the regressor may learn mappings that do not transfer. The per-class analysis in \Cref{fig:scenario3-perclass} shows this effect clearly: activities with NTU equivalents tend to benefit, while dataset-specific activities (e.g., MM-Fit's fitness exercises) may degrade. This limits the utility of large-scale pose datasets for arbitrary HAR tasks.
+
+Tables~\ref{tab:utd-ntu-overlap} and~\ref{tab:mmfit-ntu-overlap} show the activity class overlap between each primary dataset and NTU RGB+D. The limited overlap---particularly for MM-Fit's fitness-focused activities---helps explain why auxiliary NTU data provides inconsistent benefits across datasets.
+
+\begin{table}[htbp]
+\centering
+\caption{UTD-MHAD activity classes and their overlap with NTU RGB+D. A checkmark ($\checkmark$) indicates a semantically similar activity exists in NTU.}
+\label{tab:utd-ntu-overlap}
+\begin{tabular}{llc}
+\toprule
+\textbf{UTD-MHAD Activity} & \textbf{NTU Equivalent} & \textbf{Overlap} \\
+\midrule
+Swipe Left & --- & $\times$ \\
+Swipe Right & --- & $\times$ \\
+Wave & Hand waving (A023) & $\checkmark$ \\
+Clap & Clapping (A010) & $\checkmark$ \\
+Throw & Throw (A007) & $\checkmark$ \\
+Arm Cross & Cross hands in front (A040) & $\checkmark$ \\
+Basketball Shoot & --- & $\times$ \\
+Draw X & --- & $\times$ \\
+Draw Circle (CW) & --- & $\times$ \\
+Draw Circle (CCW) & --- & $\times$ \\
+Draw Triangle & --- & $\times$ \\
+Bowling & --- & $\times$ \\
+Boxing & Punching/slapping (A050) & $\checkmark$ \\
+Baseball Swing & --- & $\times$ \\
+Tennis Swing & --- & $\times$ \\
+Arm Curl & --- & $\times$ \\
+Tennis Serve & --- & $\times$ \\
+Push & Pushing other person (A052) & $\checkmark$ \\
+Knock & --- & $\times$ \\
+Catch & --- & $\times$ \\
+Pickup \& Throw & Pickup (A006), Throw (A007) & $\checkmark$ \\
+\midrule
+\multicolumn{2}{r}{\textbf{Total overlap:}} & \textbf{7/21 (33\%)} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{MM-Fit activity classes and their overlap with NTU RGB+D. Fitness exercises have minimal representation in NTU's daily activity vocabulary.}
+\label{tab:mmfit-ntu-overlap}
+\begin{tabular}{llc}
+\toprule
+\textbf{MM-Fit Activity} & \textbf{NTU Equivalent} & \textbf{Overlap} \\
+\midrule
+Squats & --- & $\times$ \\
+Lunges & --- & $\times$ \\
+Bicep Curls & --- & $\times$ \\
+Situps & --- & $\times$ \\
+Pushups & --- & $\times$ \\
+Tricep Extensions & --- & $\times$ \\
+Dumbbell Rows & --- & $\times$ \\
+Jumping Jacks & Jump up (A027), Hopping (A026) & $\checkmark$ \\
+Dumbbell Shoulder Press & --- & $\times$ \\
+Lateral Shoulder Raises & --- & $\times$ \\
+Non-activity & --- & $\times$ \\
+\midrule
+\multicolumn{2}{r}{\textbf{Total overlap:}} & \textbf{1/11 (9\%)} \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \section{Practical Recommendations}
 \label{sec:recommendations}

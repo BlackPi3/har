@@ -38,7 +38,7 @@ multirun
 tests/test_outputs/
 
 # Model checkpoints and temporary files
-*.pth
+# *.pth
 *.pkl
 *.joblib
 tmp/

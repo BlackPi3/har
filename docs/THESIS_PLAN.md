@@ -202,10 +202,14 @@ Each scenario requires specific plots/evidence beyond F1 scores to support the d
 |----------|------|-----------|-------------|---------|---------------|
 | **No MSE** | scenario22 | Waveform: `real_acc` vs `sim_acc` | Validation | signals | Without MSE, regressor produces meaningless signals |
 | **Separate Classifiers** | scenario23 | Bar chart: Val F1 per classifier | Validation | F1 for `ac` vs `ac_sim` | Whether both paths learn effectively |
-| **Separate FEs** | scenario24 | Bar chart: Classifier confidence | Validation | softmax outputs | Whether shared classifier sees compatible features |
-| **Auxiliary NTU** | scenario3 | Grouped bar: Per-class F1 | Validation | per-class F1 | Which actions benefit/suffer from extra pose data |
-| **Feature Discriminator** | scenario4 | Line plot over epochs | Validation | `val_d_acc`, `val_d_loss`, `val_similarity_loss` | D fooled (acc→50%) + feature alignment |
-| **Signal Discriminator** | scenario42 | Line plot over epochs | Validation | `val_d_acc`, `val_d_loss`, `val_mse_loss` | D fooled (acc→50%) + signal alignment |
+| **Separate FEs** | scenario24 | Bar chart: Classifier confidence | Validation | `val_conf_real`, `val_conf_sim` | Whether shared classifier sees compatible features |
+| **Auxiliary NTU** | scenario3 | Grouped bar: Per-class F1 | Validation | `val_f1_per_class` | Which actions benefit/suffer from extra pose data |
+| **Feature Discriminator** | scenario4 | Line plots over epochs | Training history | `val_d_acc`, `train_adv_loss`, `train_feat_dist`, `train_grl_lambda` | D fooled (acc→50%) + feature alignment + GRL schedule |
+| **Signal Discriminator** | scenario42 | Line plots over epochs | Training history | `val_d_acc`, `train_adv_loss`, `val_mse`, `train_signal_dist`, `val_conf_real/sim` | D fooled (acc→50%) + signal quality + domain alignment |
+
+> **Note on adversarial training styles:**
+> - scenario4 uses **GRL** (Gradient Reversal Layer) for end-to-end training
+> - scenario42 uses **WGAN-style alternating D/G updates** with `n_critic=5` and pretrain phase
 
 #### Data Requirements
 
@@ -213,14 +217,16 @@ Each scenario requires specific plots/evidence beyond F1 scores to support the d
 - scenario2 (baseline): `sim_acc` outputs, features (`z_real`, `z_sim`), predictions for per-class F1
 - scenario22: `sim_acc` outputs (to compare waveforms with baseline)
 - scenario24: Classifier softmax outputs on real vs sim features
+- scenario4: t-SNE of `z_real` vs `z_sim` (optional, for feature visualization)
 
-**Logged during training:**
-- scenario4: `val_d_acc`, `val_d_loss`, `val_similarity_loss` per epoch
-- scenario42: `val_d_acc`, `val_d_loss`, `val_mse_loss` per epoch
+**Logged during training (in `results.json` history):**
+- scenario4: `val_d_acc`, `train_d_acc`, `train_adv_loss`, `val_adv_loss`, `train_feat_dist`, `train_grl_lambda`, `val_conf_real`, `val_conf_sim`
+- scenario42: `val_d_acc`, `train_d_acc`, `train_adv_loss`, `val_adv_loss`, `train_mse`, `val_mse`, `train_signal_dist`, `val_conf_real`, `val_conf_sim`
+- Both also log `train_mmd_loss` as diagnostic (even if not used in loss)
 
 **Computed from predictions:**
 - scenario3: Per-class F1 (from `classification_report`)
-- scenario23: Separate F1 for `ac` path and `ac_sim` path
+- scenario23: Separate F1 for `ac` path and `ac_sim` path (`val_f1_ac_sim`)
 
 #### Arguments Each Plot Supports
 

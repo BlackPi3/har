@@ -6,7 +6,7 @@ acc_file: inertial_std.npy
 # Subject splits (leave-one-subject-out style)
 train_subjects: ["s1", "s2", "s3", "s4"]
 val_subjects: ["s5", "s6"]
-test_subjects: ["s5", "s6"] #["s7", "s8"]
+test_subjects: ["s7", "s8"]
 
 # Sampling + window policy (50 Hz, 2-second window)
 sampling_rate_hz: 50
