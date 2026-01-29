@@ -1,7 +1,7 @@
 \chapter{Introduction}
 
 % Background and Context
-Human Activity Recognition (HAR) refers to the task of automatically identifying and classifying physical activities, such as swinging tennis bat, doing push-ups, or throwing a ball, using data collected from various sensors. These sensors include Inertial Measurement Units (IMUs), which typically consist of accelerometers and gyroscopes, as well as video cameras, depth sensors, and audio devices. HAR is central to enabling context-aware computing, wherein systems adapt to the user's activity and environment in real-time.
+Human Activity Recognition (HAR) refers to the task of automatically identifying and classifying physical activities, such as swinging tennis bat, doing push-ups, or throwing a ball, using data collected from various sensors. These sensors include Inertial Measurement Units (IMUs), which typically consist of accelerometers and gyroscopes, as well as video cameras, depth sensors, and audio devices. HAR is central to enabling context-aware computing, wherein systems adapt to the user's activity and environment in real-time \cite{lara2012survey, hammerla2016deep}.
 
 Initially, HAR systems relied on hand-crafted features and classical machine learning techniques such as Decision Trees, Support Vector Machines, and Random Forests \cite{lara2012survey}. However, the advent of deep learning, particularly convolutional neural networks (CNNs) and recurrent neural networks (RNNs), has dramatically improved performance by enabling automatic feature extraction from raw sensor data \cite{hammerla2016deep, wang2019deep}. More recently, attention-based models and transformers have further enhanced sequential data modeling capabilities \cite{zeng2018understanding}.
 
@@ -16,17 +16,17 @@ Key concepts in HAR include:
 HAR plays a significant role across diverse domains:
 \begin{itemize}
     \item In healthcare, it facilitates patient monitoring, rehabilitation assessment, and fall detection \cite{yoshida2022data, sangeethalakshmi2023patient}.
-    \item In fitness and sports, HAR systems enable personalized training, movement analysis, and injury prevention.
-    \item In industry, HAR supports ergonomic risk detection, workplace safety automation, and productivity monitoring.
+    \item In fitness and sports, HAR systems enable personalized training, movement analysis, and injury prevention \cite{stromback2020mm}.
+    \item In industry, HAR supports ergonomic risk detection, workplace safety automation, and productivity monitoring \cite{suh2023worker}.
 \end{itemize}
 These applications highlight the social and economic value of accurate HAR systems and its growing integration into smart environments \cite{hammerla2016deep, wang2019deep}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Problem statement
-Despite progress in deep learning models, such as Convolutional Neural Networks (CNNs), Long Short-Term Memory networks (LSTMs), and transformers, Human Activity Recognition (HAR) remains bottlenecked by the scarcity of labeled data. Collecting and annotating real-world sensor data is both expensive and time-consuming, requiring diverse participants, varied environments, and meticulous labeling. Consequently, state-of-the-art HAR models often suffer from poor generalization to unseen users, novel activities, or differing sensor configurations, significantly constraining broader deployment in real-world settings.
+Despite progress in deep learning models, such as Convolutional Neural Networks (CNNs), Long Short-Term Memory networks (LSTMs), and transformers, Human Activity Recognition (HAR) remains bottlenecked by the scarcity of labeled data. Collecting and annotating real-world sensor data is both expensive and time-consuming, requiring diverse participants, varied environments, and meticulous labeling. Consequently, state-of-the-art HAR models often suffer from poor generalization to unseen users, novel activities, or differing sensor configurations, significantly constraining broader deployment in real-world settings \cite{lara2012survey, hammerla2016deep}.
 
-This limitation is especially critical given the growing reliance on HAR in domains like healthcare, industrial safety, and fitness monitoring. In healthcare, for example, poor model generalization can lead to misclassifications that compromise patient monitoring and fall detection systems \cite{yoshida2022data}. Similarly, in industrial settings, unreliable HAR can hinder automation aimed at ensuring worker safety and ergonomics.
+This limitation is especially critical given the growing reliance on HAR in domains like healthcare, industrial safety, and fitness monitoring. In healthcare, for example, poor model generalization can lead to misclassifications that compromise patient monitoring and fall detection systems \cite{yoshida2022data}. Similarly, in industrial settings, unreliable HAR can hinder automation aimed at ensuring worker safety and ergonomics \cite{suh2023worker}.
 
 Addressing the data scarcity challenge is therefore pivotal not only for improving model accuracy and robustness, but also for enabling the reliable, scalable application of HAR technologies in everyday and high-stakes environments.
 
@@ -42,13 +42,13 @@ Researchers have proposed several approaches to mitigate this challenge:
     \end{itemize}
 \end{itemize}
 
-These advanced methods have demonstrated substantial improvements in HAR performance under limited data regimes, often surpassing traditional augmentation strategies. Nevertheless, challenges persist in ensuring temporal consistency, modality alignment, and generalizability of the generated data, especially to other subjects, areas that this thesis seeks to explore further.
+These advanced methods have demonstrated substantial improvements in HAR performance under limited data regimes, often surpassing traditional augmentation strategies \cite{kwon2020imutube, leng2024imugpt, li2024diffusionhar}. Nevertheless, challenges persist in ensuring temporal consistency, modality alignment, and generalizability of the generated data, especially to other subjects, areas that this thesis seeks to explore further.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Research Questions or Hypotheses
 Given the challenges of data scarcity in HAR and the opportunities presented by multi-modal data, this thesis investigates several interrelated questions aimed at enhancing HAR performance, on well known datasets such as MMFit, UTD-MHAD and NTU RGB+D \cite{stromback2020mm, chen2015utd, shahroudy2016ntu}, through novel training pipelines.
 
-A primary objective of this work is to explore whether HAR performance can be improved by integrating a joint training framework that concurrently learns a sensor data regressor and an activity classifier. Specifically, this involves generating synthetic wrist accelerometer data from corresponding joint pose sequences of an arm, comprising the wrist, elbow, and shoulder, and utilizing both real and generated sensor data to inform the classifier. This approach differs from prior works where regressors and classifiers were trained separately, and we hypothesize that concurrent optimization may yield more robust activity representations.
+A primary objective of this work is to explore whether HAR performance can be improved by integrating a joint training framework that concurrently learns a sensor data regressor and an activity classifier. Specifically, this involves generating synthetic wrist accelerometer data from corresponding joint pose sequences of an arm, comprising the wrist, elbow, and shoulder, and utilizing both real and generated sensor data to inform the classifier. This approach differs from prior works where regressors and classifiers were trained separately \cite{kwon2020imutube, fortes2021translating, santhalingam2023synthetic}, and we hypothesize that concurrent optimization may yield more robust activity representations.
 
 Another key investigation concerns the role of loss functions in this pipeline. We do ablation studies to understand the role of each loss in our pipeline. For instance in one study, we examine whether removing mean squared error (MSE) loss between real and simulated sensor data, affects the classifier’s effectiveness. Understanding the contribution of each loss component is critical for designing efficient HAR models.
 
@@ -56,31 +56,31 @@ Additionally, this thesis explores architectural variants that use separate feat
 
 We also investigate the potential of leveraging external pose datasets, specifically NTU RGB+D \cite{shahroudy2016ntu}, to supplement the pose-to-sensor data generation process. By incorporating pose data from a broader range of activities, we aim to assess whether cross-dataset augmentation can further enhance IMU-based HAR performance, particularly under low-data regimes.
 
-Finally, we explore the introduction of adversarial components into the training pipeline. We investigate two complementary approaches: (1) feature-level discrimination using a Gradient Reversal Layer (GRL) that encourages the feature extractor to produce domain-invariant representations, and (2) signal-level discrimination using Wasserstein GAN with gradient penalty (WGAN-GP) that trains the regressor to produce realistic accelerometer waveforms through alternating discriminator/generator updates. We analyze the adversarial learning dynamics to understand how the competition between generator and discriminator affects classification accuracy. 
+Finally, we explore the introduction of adversarial components into the training pipeline. We investigate two complementary approaches: (1) feature-level discrimination using a Gradient Reversal Layer (GRL) \cite{ganin2016domain} that encourages the feature extractor to produce domain-invariant representations, and (2) signal-level discrimination using Wasserstein GAN with gradient penalty (WGAN-GP) \cite{arjovsky2017wasserstein, gulrajani2017improved} that trains the regressor to produce realistic accelerometer waveforms through alternating discriminator/generator updates. We analyze the adversarial learning dynamics to understand how the competition between generator and discriminator affects classification accuracy. 
 
 Through these inquiries, this thesis seeks to advance understanding of how synthetic data generation, multi-modal learning, loss function design, and adversarial training interact to address data scarcity and enhance the generalization capabilities of HAR systems.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Research Objectives
 
-The overarching objective of this thesis is to address the data scarcity problem in HAR by leveraging multi-modal data and advanced training strategies. To this end, the specific objectives of this research are:
+The overarching objective of this thesis is to address the data scarcity problem in HAR by leveraging multi-modal data and advanced training strategies \cite{lara2012survey, hammerla2016deep}. To this end, the specific objectives of this research are:
 
 \begin{enumerate}
-    \item To design and implement a unified training pipeline that concurrently trains a pose-to-IMU regressor and an activity classifier, integrating real and synthetic accelerometer data derived from joint pose sequences, evaluated on MM-Fit and UTD-MHAD datasets.
+    \item To design and implement a unified training pipeline that concurrently trains a pose-to-IMU regressor and an activity classifier, integrating real and synthetic accelerometer data derived from joint pose sequences, evaluated on MM-Fit and UTD-MHAD datasets \cite{stromback2020mm, chen2015utd}.
 
     \item To investigate the effect of different loss function configurations, specifically evaluating the contribution of MSE regression loss and feature similarity loss through systematic ablation studies.
 
     \item To explore architectural variants including separate feature extractors and separate classifiers for real and simulated data paths, testing whether domain-specific components improve over fully shared architectures.
 
-    \item To augment the pose-to-sensor data generation process with NTU RGB+D as a secondary pose-only dataset, evaluating whether additional pose diversity improves HAR performance.
+    \item To augment the pose-to-sensor data generation process with NTU RGB+D as a secondary pose-only dataset \cite{shahroudy2016ntu}, evaluating whether additional pose diversity improves HAR performance.
 
-    \item To integrate adversarial discriminators into the training pipeline using two approaches: feature-level discrimination with gradient reversal for domain-invariant representations, and signal-level discrimination with WGAN-GP for realistic signal synthesis.
+    \item To integrate adversarial discriminators into the training pipeline using two approaches: feature-level discrimination with gradient reversal \cite{ganin2016domain} for domain-invariant representations, and signal-level discrimination with WGAN-GP \cite{arjovsky2017wasserstein, gulrajani2017improved} for realistic signal synthesis.
 \end{enumerate}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Scope and Limitations
 
-This thesis focuses on addressing the data scarcity problem in HAR by leveraging multi-modal data, specifically wrist accelerometer data and upper-limb joint pose data (wrist, elbow, shoulder). The study primarily utilizes publicly available datasets: MM-Fit and UTD-MHAD as primary datasets with synchronized pose and accelerometer data, and NTU RGB+D as a secondary pose-only dataset for auxiliary training experiments.
+This thesis focuses on addressing the data scarcity problem in HAR by leveraging multi-modal data, specifically wrist accelerometer data and upper-limb joint pose data (wrist, elbow, shoulder). The study primarily utilizes publicly available datasets: MM-Fit and UTD-MHAD as primary datasets with synchronized pose and accelerometer data, and NTU RGB+D as a secondary pose-only dataset for auxiliary training experiments \cite{stromback2020mm, chen2015utd, shahroudy2016ntu}.
 
 The research explores the design and evaluation of a joint training pipeline that concurrently trains a pose-to-IMU regressor and an activity classifier. Eight training scenarios are systematically compared through ablation studies, exploring loss function configurations, architectural variants (shared vs.\ separate components), auxiliary data integration, and adversarial training approaches. Experiments focus on evaluating macro F1 score and accuracy, with subject-disjoint evaluation to assess cross-subject generalization.
 

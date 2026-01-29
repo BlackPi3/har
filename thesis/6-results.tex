@@ -1,13 +1,15 @@
 \chapter{Results and Analysis}
 \label{chap:results}
 
-This chapter presents the experimental results of all training scenarios on both primary datasets (UTD-MHAD and MM-Fit) using the evaluation protocol described in \Cref{chap:experimental-setup}. \Cref{tab:main-results} presents the test-set performance for all scenarios, representing the best configurations found during the 3-pass HPO introduced in \Cref{chap:implementation}.
+\section{Experiment Results}
+
+This chapter presents the experimental results of all training scenarios on both primary datasets (UTD-MHAD\cite{chen2015utd} and MM-Fit\cite{stromback2020mm}) using the evaluation protocol described in \Cref{chap:experimental-setup}. \Cref{tab:main-results} presents the test-set performance for all scenarios, representing the best configurations found during the 3-pass HPO introduced in \Cref{chap:implementation}.
 
 \paragraph{Loss Ablations.}
 Scenario 2.2 ($\gamma=0$) exhibits catastrophic failure, with F1 dropping over 90\% on both datasets. This demonstrates that the regression loss is essential. Classification gradients alone cannot guide meaningful pose-to-accelerometer simulation. Scenario 2.3 ($\beta=0$) shows performance degradation on both datasets, though more pronounced on MM-Fit ($-$4.9\%) than UTD-MHAD ($-$0.9\%), suggesting the feature similarity loss provides regularization benefits but not as pronounced as regression loss.
 
 \paragraph{Architecture and Training Variants.}
-Unlike the loss ablations, the remaining scenarios do not exhibit consistent trends across datasets. On UTD-MHAD, signal-level adversarial training (Scenario 4.2, +3.3\%) and auxiliary NTU data (Scenario 3, +2.1\%) appear to improve generalization, with Scenario 4.2 achieving the best overall F1 of 0.689. The architectural variants (Scenarios 2.4 and 2.5) also show modest gains (+0.7\% to +1.3\%). However, these improvements do not transfer to MM-Fit, where the baseline achieves the highest F1 (0.857) and all variants show degradation ranging from $-$1.5\% to $-$7.7\%. One pattern that does hold across both datasets is the underperformance of feature-level adversarial training (Scenario 4.1), which degrades F1 by 6.0\% on UTD-MHAD and 5.3\% on MM-Fit. This may indicate that adversarial alignment at the feature level conflicts with the explicit similarity loss or discards task-relevant information. The overall divergence between datasets could suggest that the proposed variants tend to benefit smaller datasets with limited training data, while larger datasets may already provide sufficient coverage for the baseline to perform well.
+Unlike the loss ablations, the remaining scenarios do not exhibit consistent trends across datasets. On UTD-MHAD, signal-level adversarial training\cite{arjovsky2017wasserstein,gulrajani2017improved} (Scenario 4.2, +3.3\%) and auxiliary NTU data\cite{shahroudy2016ntu} (Scenario 3, +2.1\%) appear to improve generalization, with Scenario 4.2 achieving the best overall F1 of 0.689. The architectural variants (Scenarios 2.4 and 2.5) also show modest gains (+0.7\% to +1.3\%). However, these improvements do not transfer to MM-Fit, where the baseline achieves the highest F1 (0.857) and all variants show degradation ranging from $-$1.5\% to $-$7.7\%. One pattern that does hold across both datasets is the underperformance of feature-level adversarial training\cite{ganin2016domain} (Scenario 4.1), which degrades F1 by 6.0\% on UTD-MHAD and 5.3\% on MM-Fit. This may indicate that adversarial alignment at the feature level conflicts with the explicit similarity loss or discards task-relevant information. The overall divergence between datasets could suggest that the proposed variants tend to benefit smaller datasets with limited training data, while larger datasets may already provide sufficient coverage for the baseline to perform well.
 
 \begin{table}[!t]
 \centering
@@ -44,7 +46,7 @@ Scenario 4.2 & \boldmath{$.689 \pm .019$} & \textbf{$+$3.3\%} & $.799 \pm .025$ 
 
 \begin{figure}[!t]
     \centering
-    \begin{subfigure}[b]{0.95\textwidth}
+    \begin{subfigure}[b]{1\textwidth}
         \includegraphics[width=\textwidth]{Thesis_Template_DE_EN/BA_MA_English/Figures/scenario22_utd_waveform.pdf}
         \caption{UTD-MHAD: Clap action. Baseline MSE = 0.26, No-MSE MSE = 188.9}
         \label{fig:scenario22-utd}
@@ -52,7 +54,7 @@ Scenario 4.2 & \boldmath{$.689 \pm .019$} & \textbf{$+$3.3\%} & $.799 \pm .025$ 
 
     \vspace{0.5em}
 
-    \begin{subfigure}[b]{0.95\textwidth}
+    \begin{subfigure}[b]{1\textwidth}
         \includegraphics[width=\textwidth]{Thesis_Template_DE_EN/BA_MA_English/Figures/scenario22_mmfit_waveform_tricep.pdf}
         \caption{MM-Fit: Tricep Extensions. Baseline MSE = 0.22, No-MSE MSE = 897,455}
         \label{fig:scenario22-mmfit-tricep}
@@ -71,13 +73,13 @@ Scenario 2.4 uses separate classifiers for real and simulated paths while sharin
 
 \begin{figure}[!t]
     \centering
-    \begin{subfigure}[b]{0.48\textwidth}
+    \begin{subfigure}[b]{1\textwidth}
         \includegraphics[width=\textwidth]{Thesis_Template_DE_EN/BA_MA_English/Figures/scenario23_utd_f1.pdf}
         \caption{UTD-MHAD}
         \label{fig:scenario23-utd}
     \end{subfigure}
     \hfill
-    \begin{subfigure}[b]{0.48\textwidth}
+    \begin{subfigure}[b]{1\textwidth}
         \includegraphics[width=\textwidth]{Thesis_Template_DE_EN/BA_MA_English/Figures/scenario23_mmfit_f1.pdf}
         \caption{MM-Fit}
         \label{fig:scenario23-mmfit}
@@ -91,13 +93,13 @@ Scenario 2.5 uses separate feature extractors for real and simulated paths while
 
 \begin{figure}[!t]
     \centering
-    \begin{subfigure}[b]{0.48\textwidth}
+    \begin{subfigure}[b]{1\textwidth}
         \includegraphics[width=\textwidth]{Thesis_Template_DE_EN/BA_MA_English/Figures/scenario24_utd_confidence.pdf}
         \caption{UTD-MHAD}
         \label{fig:scenario24-utd}
     \end{subfigure}
     \hfill
-    \begin{subfigure}[b]{0.48\textwidth}
+    \begin{subfigure}[b]{1\textwidth}
         \includegraphics[width=\textwidth]{Thesis_Template_DE_EN/BA_MA_English/Figures/scenario24_mmfit_confidence.pdf}
         \caption{MM-Fit}
         \label{fig:scenario24-mmfit}
@@ -108,20 +110,20 @@ Scenario 2.5 uses separate feature extractors for real and simulated paths while
 
 
 \paragraph{Scenario 3: Auxiliary Pose Data Analysis}
-Scenario 3 incorporates NTU RGB+D as a secondary pose-only dataset to provide additional training signal for the regressor. The hypothesis is that additional pose diversity may help the regressor learn more generalizable pose-to-accelerometer mappings. However, the aggregate results show divergent effects: UTD-MHAD improves (+2.1\%) while MM-Fit degrades ($-$7.7\%).
+Scenario 3 incorporates NTU RGB+D\cite{shahroudy2016ntu} as a secondary pose-only dataset to provide additional training signal for the regressor. The hypothesis is that additional pose diversity may help the regressor learn more generalizable pose-to-accelerometer mappings. However, the aggregate results show divergent effects: UTD-MHAD improves (+2.1\%) while MM-Fit degrades ($-$7.7\%).
 
 \paragraph{Per-Class Analysis.}
 \Cref{fig:scenario3-perclass} shows per-class F1 scores for baseline versus auxiliary training. On UTD-MHAD, some activities improve (Draw Triangle +13\%, Draw Circle +6\%, Swipe Right +8\%) while others degrade (Wave $-$11\%, Swipe Left $-$10\%, Tennis Serve $-$14\%). Notably, the changes do not simply correlate with having direct NTU equivalents, Wave has a semantic match (Hand waving) yet degrades, while the drawing gestures have no direct equivalent yet improve. Among activities with NTU equivalents, results are mixed: Throw (+4\%) and Boxing (+3\%) improve, while Wave ($-$11\%) and Push ($-$8\%) degrade. This suggests the auxiliary data may provide general motion diversity rather than activity-specific transfer. On MM-Fit, lower-body exercises show improvement (Squats +21\%, Lunges +5\%) despite no direct NTU equivalents, possibly benefiting from NTU's walking and sitting motions. Jumping Jacks, the only MM-Fit activity with an NTU equivalent, shows minimal change (+1\%). Fitness-specific arm exercises degrade (Bicep Curls $-$5\%, Situps $-$3\%, Tricep Extensions $-$2\%), which lack NTU equivalents.
 
 \begin{figure}[!t]
     \centering
-    \begin{subfigure}[b]{0.48\textwidth}
+    \begin{subfigure}[b]{1\textwidth}
         \includegraphics[width=\textwidth]{Thesis_Template_DE_EN/BA_MA_English/Figures/scenario3_utd_perclass.pdf}
         \caption{UTD-MHAD}
         \label{fig:scenario3-utd}
     \end{subfigure}
     \hfill
-    \begin{subfigure}[b]{0.48\textwidth}
+    \begin{subfigure}[b]{1\textwidth}
         \includegraphics[width=\textwidth]{Thesis_Template_DE_EN/BA_MA_English/Figures/scenario3_mmfit_perclass.pdf}
         \caption{MM-Fit}
         \label{fig:scenario3-mmfit}
@@ -199,7 +201,7 @@ Non-activity & --- & $\times$ \\
 Adversarial training aims to reduce the domain gap between real and simulated data by training a discriminator to distinguish between them, while simultaneously training the generator (feature extractor or regressor) to fool the discriminator. We evaluate two approaches: feature-level discrimination (Scenario 4.1) and signal-level discrimination (Scenario 4.2). Signal-level discrimination improves UTD-MHAD (+3.3\%) but degrades MM-Fit ($-$6.8\%), while feature-level discrimination consistently underperforms on both datasets ($-$6.0\% and $-$5.3\% respectively).
 
 \paragraph{Scenario 4.1: Feature-Level Discriminator.}
-The feature-level discriminator operates on learned representations $\mathbf{z}_{\text{real}}$ vs. $\mathbf{z}_{\text{sim}}$, using GRL with binary cross-entropy loss. \Cref{fig:scenario4-dynamics} shows important metrics on validation set. On both datasets, discriminator accuracy fluctuates around 50\%, indicating the feature extractor learns to produce representations that the discriminator cannot distinguish. The GRL $\lambda$ parameter follows a sigmoid schedule from 0 to 1, gradually introducing adversarial gradients. Despite successfully fooling the discriminator, classification performance does not exceed baseline and in fact degrades on both datasets. The baseline's explicit feature similarity loss ($\beta$) may achieve a better trade-off by encouraging alignment without eliminating domain-specific signals.
+The feature-level discriminator operates on learned representations $\mathbf{z}_{\text{real}}$ vs. $\mathbf{z}_{\text{sim}}$, using GRL\cite{ganin2016domain} with binary cross-entropy loss. \Cref{fig:scenario4-dynamics} shows important metrics on validation set. On both datasets, discriminator accuracy fluctuates around 50\%, indicating the feature extractor learns to produce representations that the discriminator cannot distinguish. The GRL $\lambda$ parameter follows a sigmoid schedule from 0 to 1, gradually introducing adversarial gradients. Despite successfully fooling the discriminator, classification performance does not exceed baseline and in fact degrades on both datasets. The baseline's explicit feature similarity loss ($\beta$) may achieve a better trade-off by encouraging alignment without eliminating domain-specific signals.
 
 \begin{figure}[!t]
     \centering
@@ -219,7 +221,7 @@ The feature-level discriminator operates on learned representations $\mathbf{z}_
 \end{figure}
 
 \paragraph{Scenario 4.2: Signal-Level Discriminator.}
-The signal-level discriminator operates on raw accelerometer signals $\mathbf{a}$ vs. $\tilde{\mathbf{a}}$, using WGAN-GP with alternating updates. This scenario uses staged training: an initial pretraining phase establishes reasonable signal structure before introducing adversarial feedback. \Cref{fig:scenario42-dynamics} shows the similar metrics to scenario 4.1, with the vertical dashed line marking the transition from pretraining to adversarial training. During pretraining, MSE loss drops rapidly, establishing basic signal structure. Once adversarial training starts, discriminator accuracy initially spikes then gradually decreases toward 50\% as the regressor improves. The regressor maintains signal quality (low MSE) while simultaneously learning to fool the discriminator. On UTD-MHAD, F1 continues improving after adversarial activation, yielding a +3.3\% improvement over baseline. However, MM-Fit shows degradation ($-$6.8\%), possible because the regressor is already simulating good enough signals. It can be seen that MSE loss very quickly reduces and does not seem to be affected by discriminator.
+The signal-level discriminator operates on raw accelerometer signals $\mathbf{a}$ vs. $\tilde{\mathbf{a}}$, using WGAN-GP\cite{arjovsky2017wasserstein,gulrajani2017improved} with alternating updates. This scenario uses staged training: an initial pretraining phase establishes reasonable signal structure before introducing adversarial feedback. \Cref{fig:scenario42-dynamics} shows the similar metrics to scenario 4.1, with the vertical dashed line marking the transition from pretraining to adversarial training. During pretraining, MSE loss drops rapidly, establishing basic signal structure. Once adversarial training starts, discriminator accuracy initially spikes then gradually decreases toward 50\% as the regressor improves. The regressor maintains signal quality (low MSE) while simultaneously learning to fool the discriminator. On UTD-MHAD, F1 continues improving after adversarial activation, yielding a +3.3\% improvement over baseline. However, MM-Fit shows degradation ($-$6.8\%), possible because the regressor is already simulating good enough signals. It can be seen that MSE loss very quickly reduces and does not seem to be affected by discriminator.
 
 \begin{figure}[!t]
     \centering
@@ -246,7 +248,7 @@ Both approaches successfully train the discriminator to near-chance accuracy, co
 
 \begin{table}[!t]
 \centering
-\caption{Optimal hyperparameter configurations. Data parameters were fixed (UTD: stride 0.1s, batch 16; MM-Fit: stride 0.2s, batch 64). Scenario-specific parameters: $\lambda_{\text{sec}}$ = secondary dataset loss weight, $\lambda_{\text{adv}}$ = adversarial loss weight, $n_c$ = critic updates per generator update, $\lambda_{\text{ac}}$ = ACGAN auxiliary classifier weight.}
+\caption{Optimal hyperparameter configurations. Data parameters were fixed (UTD: stride 0.1s, batch 16; MM-Fit: stride 0.2s, batch 64). Scenario-specific parameters: $\lambda_{\text{sec}}$ = secondary dataset loss weight, $\lambda_{\text{adv}}$ = adversarial loss weight, $n_c$ = critic updates per generator update, $\lambda_{\text{ac}}$ = ACGAN auxiliary classifier weight\cite{odena2017conditional}.}
 \label{tab:optimal-configs}
 \begin{tabular}{lccccccc}
 \hline
