@@ -8,95 +8,14 @@ This chapter describes the experimental framework used to evaluate our proposed 
 
 We evaluate our method on two primary datasets that provide synchronized skeleton pose and inertial measurement unit (IMU) data: UTD-MHAD and MM-Fit. Additionally, we use NTU RGB+D as a secondary pose-only dataset for auxiliary training experiments.
 
-\subsection{UTD-MHAD}
-\label{sec:utd-dataset}
+\paragraph{UTD-MHAD.}
+The University of Texas at Dallas Multimodal Human Action Dataset (UTD-MHAD) \cite{chen2015utd} is a benchmark dataset for multimodal action recognition. It captures human activities using both a Microsoft Kinect sensor and a wearable inertial sensor. The dataset has 8 subjects, 21 activity classes including gestures, sports movements, and daily activities. It has 671 actions clips with approximately 4 repetitions per subject and per action. It has both 3D skeleton pose sequence sampled at 30 Hz and 3D accelerometer sampled at 50 Hz. The Kinect sensor captures 3D joint positions at 30 fps. We upsample them to 50 Hz to match the inertial sensor. The wearable sensor is placed on the subject's right wrist for upper-body actions and right thigh for lower-body actions. We use a subject-disjoint split to evaluate generalization to unseen individuals. For training we use subjects 1--4, for validation subjects 5--6 and for test subjects 7--8. This split ensures that models are evaluated on subjects never seen during training or hyperparameter tuning.
 
-The University of Texas at Dallas Multimodal Human Action Dataset (UTD-MHAD) \cite{chen2015utd} is a benchmark dataset for multimodal action recognition. It captures human activities using both a Microsoft Kinect sensor and a wearable inertial sensor.
+\paragraph{MM-Fit.}
+The MM-Fit dataset \cite{stromback2020mm} captures fitness activities in a gym setting, providing synchronized video and wearable sensor data. The dataset has 21 subjects performing structured workout sessions across 11 activity classes: 10 exercises (squats, lunges, bicep curls, situps, pushups, tricep extensions, dumbbell rows, jumping jacks, dumbbell shoulder press, lateral shoulder raises) plus a ``no activity'' class for rest periods. Each session comprises 3 sets of 10 exercises with 10 repetitions each. It provides 3D skeleton pose sequences (17 joints) extracted from video at 30 fps and 3-axis accelerometer data from a left wrist smartwatch sampled at 100 Hz. Unlike UTD-MHAD which contains discrete action clips, MM-Fit provides continuous recordings where activities are annotated with start and end timestamps, requiring careful windowing to handle activity boundaries. For training we use 12 subjects (w00--w08, w16--w18), for validation 4 subjects (w14, w15, w19, w20), and for test 4 subjects (w09--w11, w13). One subject (w12) is excluded due to data quality issues. The splits follow the protocol established in the original MM-Fit paper.
 
-\subsubsection{Dataset Statistics}
-
-\begin{itemize}
-    \item \textbf{Subjects:} 8 participants
-    \item \textbf{Activity classes:} 21 actions, including gestures (waving, clapping), sports movements (tennis swing, basketball shoot), and daily activities (walking, sitting)
-    \item \textbf{Samples:} 671 action clips (approximately 4 repetitions per subject per action)
-    \item \textbf{Modalities:} 3D skeleton (20 joints) and 3-axis accelerometer
-    \item \textbf{Sampling rate:} 50 Hz for both skeleton and accelerometer
-\end{itemize}
-
-The Kinect sensor captures 3D joint positions at 30 fps, which are upsampled to 50 Hz to match the inertial sensor. The wearable sensor is placed on the subject's right wrist for upper-body actions and right thigh for lower-body actions, recording acceleration at 50 Hz.
-
-\subsubsection{Data Splits}
-
-We employ a subject-disjoint split to evaluate generalization to unseen individuals:
-\begin{itemize}
-    \item \textbf{Training:} Subjects 1--4 (4 subjects)
-    \item \textbf{Validation:} Subjects 5--6 (2 subjects)
-    \item \textbf{Test:} Subjects 7--8 (2 subjects)
-\end{itemize}
-
-This split ensures that models are evaluated on subjects never seen during training or hyperparameter tuning.
-
-\subsection{MM-Fit}
-\label{sec:mmfit-dataset}
-
-The MM-Fit dataset \cite{stromback2020mm} captures fitness activities in a gym setting, providing synchronized video and wearable sensor data from multiple body locations.
-
-\subsubsection{Dataset Statistics}
-
-\begin{itemize}
-    \item \textbf{Subjects:} 21 participants performing structured workout sessions
-    \item \textbf{Activity classes:} 11 classes including 10 exercises (squats, lunges, bicep curls, situps, pushups, tricep extensions, dumbbell rows, jumping jacks, dumbbell shoulder press, lateral shoulder raises) plus a ``no activity'' class for rest periods
-    \item \textbf{Recording structure:} Each session comprises 3 sets of 10 exercises with 10 repetitions each
-    \item \textbf{Modalities:} 3D skeleton pose (17 joints) and 3-axis accelerometer from left wrist smartwatch
-    \item \textbf{Sampling rate:} 100 Hz for accelerometer; video at 30 fps with pose estimation
-\end{itemize}
-
-Unlike UTD-MHAD which contains discrete action clips, MM-Fit provides continuous recordings where activities are annotated with start and end timestamps. This requires careful windowing to handle activity boundaries.
-
-\subsubsection{Data Splits}
-
-\begin{itemize}
-    \item \textbf{Training:} 12 subjects (w00--w08, w16--w18)
-    \item \textbf{Validation:} 4 subjects (w14, w15, w19, w20)
-    \item \textbf{Test:} 4 subjects (w09--w11, w13)
-\end{itemize}
-
-One subject (w12) is excluded due to data quality issues. The splits follow the protocol established in the original MM-Fit paper to enable direct comparison with prior work.
-
-\subsection{NTU RGB+D}
-\label{sec:ntu-dataset}
-
-The NTU RGB+D dataset \cite{shahroudy2016ntu} is a large-scale action recognition benchmark captured with Microsoft Kinect v2 sensors. We use it as a secondary dataset for auxiliary pose training experiments.
-
-\subsubsection{Dataset Statistics}
-
-\begin{itemize}
-    \item \textbf{Subjects:} 40 participants
-    \item \textbf{Activity classes:} 60 action classes spanning daily activities, mutual interactions, and health-related actions
-    \item \textbf{Samples:} Over 56,000 video clips
-    \item \textbf{Modalities:} 3D skeleton only (25 joints); no IMU data
-    \item \textbf{Skeleton model:} Kinect v2 body tracking with 25 joints
-\end{itemize}
-
-Since NTU RGB+D lacks accelerometer data, it serves exclusively as a source of additional pose sequences for training the regressor in auxiliary data experiments (\Cref{sec:scenario-auxiliary}).
-
-\subsubsection{Data Splits}
-
-\begin{itemize}
-    \item \textbf{Training:} Subjects 1--30 (30 subjects)
-    \item \textbf{Validation:} Subjects 31--35 (5 subjects)
-    \item \textbf{Test:} Subjects 36--40 (5 subjects)
-\end{itemize}
-
-\subsubsection{Temporal Resampling}
-
-To match the sampling rates of primary datasets, we provide two resampled versions:
-\begin{itemize}
-    \item \textbf{50 Hz version:} For use with UTD-MHAD (window length: 100 frames = 2 seconds)
-    \item \textbf{100 Hz version:} For use with MM-Fit (window length: 250 frames = 2.5 seconds)
-\end{itemize}
-
-\subsection{Dataset Summary}
+\paragraph{NTU RGB+D.}
+The NTU RGB+D dataset \cite{shahroudy2016ntu} is a large-scale action recognition benchmark captured with Microsoft Kinect v2 sensors. We use it as a secondary dataset for auxiliary pose training experiments. The dataset has 40 subjects performing 60 action classes spanning daily activities, mutual interactions, and health-related actions, with over 56,000 video clips in total. It provides 3D skeleton sequences only (25 joints from Kinect v2 body tracking) with no IMU data, serving exclusively as a source of additional pose sequences for training the regressor (\Cref{sec:scenario-auxiliary}). For training we use subjects 1--30, for validation subjects 31--35, and for test subjects 36--40. To match the sampling rates of primary datasets, we resample NTU to 50 Hz for use with UTD-MHAD and to 100 Hz for use with MM-Fit.
 
 \Cref{tab:dataset-summary} summarizes the key characteristics of all datasets used in this work.
 
@@ -120,257 +39,33 @@ NTU RGB+D & 40 & 60 & 50/100 & Pose only & Secondary \\
 
 Raw sensor data requires several preprocessing steps before training. This section describes the normalization, alignment, and segmentation procedures applied to each modality.
 
-\subsection{Skeleton Normalization}
+\paragraph{Skeleton Normalization.}
+Skeleton pose data exhibits significant variation across subjects due to differences in body proportions and global positioning. We apply a two-stage normalization procedure to ensure scale and translation invariance. First, all skeleton sequences are centered relative to the hip position in the first frame: $\mathbf{p}'_{t,j} = \mathbf{p}_{t,j} - \mathbf{p}_{1,\text{hip}}$, where $\mathbf{p}_{t,j} \in \mathbb{R}^3$ is the position of joint $j$ at timestep $t$. Using the first-frame hip as reference (rather than per-frame centering) preserves the global motion trajectory. Second, to account for varying body sizes, we scale all coordinates by the median torso length $s = \text{median}_{t} \|\mathbf{p}_{t,\text{head}} - \mathbf{p}_{t,\text{hip}}\|_2$, computing $\mathbf{p}''_{t,j} = \mathbf{p}'_{t,j}/s$. Using the median provides robustness to outlier frames, and a minimum threshold of $10^{-4}$ prevents division by near-zero values.
 
-Skeleton pose data exhibits significant variation across subjects due to differences in body proportions and global positioning. We apply a two-stage normalization procedure to ensure scale and translation invariance.
+\paragraph{Temporal Alignment.}
+When skeleton and accelerometer data have different temporal lengths (due to frame drops or sampling rate mismatches), we align them through linear interpolation. We define normalized time axes $t_{\text{skel}} = \text{linspace}(0, 1, N_{\text{skel}})$ and $t_{\text{acc}} = \text{linspace}(0, 1, N_{\text{acc}})$, then interpolate skeleton positions to match accelerometer timestamps. This produces synchronized pose and accelerometer sequences of equal length.
 
-\subsubsection{Translation Normalization}
+\paragraph{Accelerometer Standardization.}
+Accelerometer signals are standardized to zero mean and unit variance: $\mathbf{a}_{\text{std}} = (\mathbf{a} - \boldsymbol{\mu}_{\text{train}})/(\boldsymbol{\sigma}_{\text{train}} + \epsilon)$, where $\boldsymbol{\mu}_{\text{train}}, \boldsymbol{\sigma}_{\text{train}} \in \mathbb{R}^3$ are the per-axis mean and standard deviation computed over training samples only, and $\epsilon = 10^{-8}$ prevents division by zero. The same training statistics are applied to validation and test sets to prevent data leakage.
 
-All skeleton sequences are centered relative to the hip position in the first frame:
-\begin{equation}
-    \mathbf{p}'_{t,j} = \mathbf{p}_{t,j} - \mathbf{p}_{1,\text{hip}}
-\end{equation}
-where $\mathbf{p}_{t,j} \in \mathbb{R}^3$ is the position of joint $j$ at timestep $t$, and $\mathbf{p}_{1,\text{hip}}$ is the hip position at the first frame. Using the first-frame hip as reference (rather than per-frame centering) preserves the global motion trajectory of the skeleton.
+\paragraph{Sliding Window Segmentation.}
+Continuous sensor streams are segmented into fixed-length windows for batch processing. For UTD-MHAD we use a window length of 100 samples (2 seconds at 50 Hz) with stride of 5 samples (0.1 seconds). For MM-Fit we treat the window size as a hyperparameter whose best performing value is found during hyper-parameters optimization (HPO). The reason behind this decision is how MM-Fit data set is stored which allows for using many options as window size. We, however, set the stride to 20 samples (0.2 seconds). The shorter stride relative to window length creates overlapping windows, effectively augmenting the training data. For datasets with per-frame labels (MM-Fit), each window is assigned the label of the activity occurring at its temporal midpoint; windows spanning activity boundaries are included if at least 50\% of frames belong to the assigned activity. Action clips shorter than the window length are padded by replicating edge values, which preserves temporal characteristics better than zero-padding.
 
-\subsubsection{Scale Normalization}
-
-To account for varying body sizes, we scale all coordinates by the median torso length:
-\begin{equation}
-    s = \text{median}_{t} \|\mathbf{p}_{t,\text{head}} - \mathbf{p}_{t,\text{hip}}\|_2
-\end{equation}
-\begin{equation}
-    \mathbf{p}''_{t,j} = \frac{\mathbf{p}'_{t,j}}{s}
-\end{equation}
-
-Using the median (rather than mean) provides robustness to outlier frames. A minimum threshold of $10^{-4}$ is applied to prevent division by near-zero values.
-
-\subsection{Temporal Alignment}
-
-When skeleton and accelerometer data have different temporal lengths (due to frame drops or sampling rate mismatches), we align them through linear interpolation.
-
-For each skeleton joint coordinate, we define normalized time axes:
-\begin{align}
-    t_{\text{skel}} &= \text{linspace}(0, 1, N_{\text{skel}}) \\
-    t_{\text{acc}} &= \text{linspace}(0, 1, N_{\text{acc}})
-\end{align}
-and interpolate skeleton positions to match accelerometer timestamps:
-\begin{equation}
-    \mathbf{p}_{\text{aligned}}(t) = \text{interp}(t_{\text{skel}}, \mathbf{p}_{\text{raw}}, t_{\text{acc}})
-\end{equation}
-
-This produces synchronized pose and accelerometer sequences of equal length.
-
-\subsection{Accelerometer Standardization}
-
-Accelerometer signals are standardized to zero mean and unit variance using statistics computed from the training set only:
-\begin{equation}
-    \mathbf{a}_{\text{std}} = \frac{\mathbf{a} - \boldsymbol{\mu}_{\text{train}}}{\boldsymbol{\sigma}_{\text{train}} + \epsilon}
-\end{equation}
-where $\boldsymbol{\mu}_{\text{train}}, \boldsymbol{\sigma}_{\text{train}} \in \mathbb{R}^3$ are the per-axis mean and standard deviation computed over all training samples, and $\epsilon = 10^{-8}$ prevents division by zero.
-
-Importantly, the same training statistics are applied to validation and test sets to prevent data leakage.
-
-\subsection{Sliding Window Segmentation}
-
-Continuous sensor streams are segmented into fixed-length windows for batch processing. Each window provides a single training sample.
-
-\subsubsection{Window Parameters}
-
-\begin{itemize}
-    \item \textbf{UTD-MHAD:} Window length of 100 samples (2 seconds at 50 Hz) with stride of 5 samples (0.1 seconds)
-    \item \textbf{MM-Fit:} Window length of 500 samples (5 seconds at 100 Hz) with stride of 20 samples (0.2 seconds)
-\end{itemize}
-
-The shorter stride relative to window length creates overlapping windows, effectively augmenting the training data.
-
-\subsubsection{Activity Label Assignment}
-
-For datasets with per-frame labels (MM-Fit), each window is assigned the label of the activity occurring at its temporal midpoint. Windows spanning activity boundaries are included if at least 50\% of frames belong to the assigned activity; otherwise, they are discarded.
-
-\subsubsection{Short Sequence Handling}
-
-Action clips shorter than the window length are padded by replicating edge values:
-\begin{equation}
-    \mathbf{x}_{\text{padded}}[t] = \begin{cases}
-        \mathbf{x}[0] & \text{if } t < 0 \\
-        \mathbf{x}[T-1] & \text{if } t \geq T \\
-        \mathbf{x}[t] & \text{otherwise}
-    \end{cases}
-\end{equation}
-
-This edge-padding strategy preserves the temporal characteristics of the original signal better than zero-padding.
-
-\subsection{Joint Selection}
-
-For pose-to-IMU regression, we select the three arm joints corresponding to the accelerometer placement location:
-
-\begin{itemize}
-    \item \textbf{UTD-MHAD:} Joints 8, 9, 10 (right shoulder, elbow, wrist) matching the right-wrist sensor
-    \item \textbf{MM-Fit:} Joints 16, 17, 18 (left shoulder, elbow, wrist) matching the left-wrist smartwatch
-\end{itemize}
-
-This reduces the input dimensionality from the full skeleton (17--25 joints) to the kinematically relevant arm chain.
+\paragraph{Joint Selection.}
+In this thesis we don't use all of the joints in pose sequence. For pose-to-IMU regression, we select the three arm joints corresponding to the accelerometer placement location: joints 8, 9, 10 (right shoulder, elbow, wrist) for UTD-MHAD matching the right-wrist sensor, and joints 16, 17, 18 (left shoulder, elbow, wrist) for MM-Fit matching the left-wrist smartwatch. This reduces the input dimensionality from the full skeleton (17--25 joints) to the kinematically relevant arm chain.
 
 \section{Evaluation Protocol}
 \label{sec:evaluation-protocol}
 
-This section describes the metrics, validation strategy, and statistical procedures used to evaluate model performance.
-
-\subsection{Metrics}
-
-We report the following classification metrics:
-
-\textbf{Macro F1 Score.} The primary evaluation metric, computed as the unweighted mean of per-class F1 scores:
+\paragraph{Metric.}
+Since our main goal is improving HAR classification, we report \textbf{Macro F1 Score} as our primary metric. It is the unweighted mean of per-class F1 scores, defined as:
 \begin{equation}
     \text{F1}_{\text{macro}} = \frac{1}{K} \sum_{k=1}^{K} \frac{2 \cdot P_k \cdot R_k}{P_k + R_k}
 \end{equation}
-where $P_k$ and $R_k$ are precision and recall for class $k$. Macro F1 treats all classes equally regardless of sample count, making it appropriate for imbalanced datasets.
+where $P_k$ and $R_k$ are precision and recall for class $k$. Macro F1 treats all classes equally regardless of sample count, making it appropriate for imbalanced datasets such as MM-Fit where ``no activity'' periods are overrepresented.
 
-\textbf{Accuracy.} The proportion of correctly classified samples:
-\begin{equation}
-    \text{Accuracy} = \frac{1}{N} \sum_{i=1}^{N} \mathbbm{1}[\hat{y}_i = y_i]
-\end{equation}
+\paragraph{Hyperparameter Selection.}
+For each scenario, we perform three sequential passes of hyperparameter optimization as described in \Cref{chap:implementation}. All HPO runs are ranked by validation F1. After each pass, we select the top 10 configurations and re-run each with 5 different seeds, computing mean and standard deviation to identify the truly best-performing parameter set rather than one that succeeded due to a lucky initialization. The winning configuration from each pass is fixed before proceeding to the next. During HPO, we use 40\% of full training epochs to speed up the search.
 
-We prioritize macro F1 over accuracy because activity datasets often exhibit class imbalance (e.g., ``no activity'' periods are overrepresented in MM-Fit).
-
-\subsection{Validation Strategy}
-
-Model selection and hyperparameter tuning use validation set performance:
-\begin{itemize}
-    \item \textbf{Early stopping:} Training halts when validation macro F1 does not improve for 35 consecutive epochs
-    \item \textbf{Model selection:} The checkpoint with highest validation F1 is retained for test evaluation
-    \item \textbf{HPO objective:} Optuna maximizes validation F1 when comparing hyperparameter configurations
-\end{itemize}
-
-Test set evaluation is performed only once per final configuration to prevent implicit overfitting through repeated evaluation.
-
-\subsection{Statistical Reporting}
-
-To account for initialization variance, we report results as mean $\pm$ standard deviation over multiple random seeds:
-\begin{itemize}
-    \item \textbf{HPO validation:} Top-$K$ configurations are validated with 5 seeds
-    \item \textbf{Final test evaluation:} Best configuration is evaluated with 10 seeds
-\end{itemize}
-
-This provides confidence intervals on reported performance and guards against reporting results from ``lucky'' random initializations.
-
-\section{Experimental Scenarios}
-\label{sec:scenarios}
-
-Rather than comparing against external baselines, we adopt an ablation-based experimental design. Starting from a joint training baseline that uses all proposed components, we systematically disable or modify individual elements to measure their contribution. This approach isolates the effect of each design choice while controlling for implementation differences.
-
-\subsection{Baseline: Joint Training (Scenario 2)}
-\label{sec:scenario-baseline}
-
-Our baseline configuration employs joint end-to-end training with shared components and all loss terms enabled:
-\begin{equation}
-    \mathcal{L}_{\text{total}} = \alpha \mathcal{L}_{\text{cls}} + \beta \mathcal{L}_{\text{sim}} + \gamma \mathcal{L}_{\text{mse}}
-\end{equation}
-
-The architecture uses a shared feature extractor $F$ and classifier $C$ for both real and simulated paths. During training, each batch provides pose-accelerometer-label triplets $(\mathbf{p}, \mathbf{a}, y)$. The real path computes $\hat{y}_{\text{real}} = C(F(\mathbf{a}))$ while the simulated path computes $\hat{y}_{\text{sim}} = C(F(R(\mathbf{p})))$. All three loss components---activity classification on both paths, feature similarity between paths, and MSE regression---jointly optimize the entire system.
-
-This baseline establishes the performance of our complete proposed method.
-
-\subsection{Loss Ablations}
-
-We isolate the contribution of individual loss terms by disabling them:
-
-\subsubsection{Without MSE Loss (Scenario 22)}
-
-Setting $\gamma = 0$ removes the direct signal-level supervision on the regressor:
-\begin{equation}
-    \mathcal{L}_{\text{total}} = \alpha \mathcal{L}_{\text{cls}} + \beta \mathcal{L}_{\text{sim}}
-\end{equation}
-
-The regressor receives gradients only through the classification and similarity losses. This tests whether task-driven gradients alone can train an effective pose-to-IMU transformation, or whether explicit signal matching is necessary.
-
-\subsubsection{Without Feature Similarity (Scenario 25)}
-
-Setting $\beta = 0$ removes the explicit feature alignment constraint:
-\begin{equation}
-    \mathcal{L}_{\text{total}} = \alpha \mathcal{L}_{\text{cls}} + \gamma \mathcal{L}_{\text{mse}}
-\end{equation}
-
-This ablation tests whether the shared feature extractor naturally learns domain-invariant representations through classification alone, or whether explicit similarity enforcement is beneficial.
-
-\subsection{Architecture Variants}
-
-We explore alternative component sharing strategies:
-
-\subsubsection{Separate Classifiers (Scenario 23)}
-
-Using separate classifiers $C$ and $C_{\text{sim}}$ for real and simulated paths allows each to specialize:
-\begin{align}
-    \hat{y}_{\text{real}} &= C(F(\mathbf{a})) \\
-    \hat{y}_{\text{sim}} &= C_{\text{sim}}(F(R(\mathbf{p})))
-\end{align}
-
-The feature extractor remains shared, so representations are aligned, but classification heads can adapt to domain-specific feature distributions. At test time, only $C$ is used with real data.
-
-\subsubsection{Separate Feature Extractors (Scenario 24)}
-
-Using separate feature extractors $F$ and $F_{\text{sim}}$ allows domain-specific feature learning:
-\begin{align}
-    \mathbf{z}_{\text{real}} &= F(\mathbf{a}) \\
-    \mathbf{z}_{\text{sim}} &= F_{\text{sim}}(R(\mathbf{p}))
-\end{align}
-
-The classifier remains shared, forcing both extractors to produce compatible representations. The similarity loss compares $\mathbf{z}_{\text{real}}$ and $\mathbf{z}_{\text{sim}}$ to encourage alignment despite separate encoders.
-
-\subsection{Auxiliary Pose Data (Scenario 3)}
-\label{sec:scenario-auxiliary}
-
-This variant incorporates NTU RGB+D as a secondary pose-only dataset to test whether additional pose diversity improves generalization:
-\begin{equation}
-    \mathcal{L}_{\text{total}} = \mathcal{L}_{\text{primary}} + \lambda_{\text{aux}} \mathcal{L}_{\text{aux}}
-\end{equation}
-
-Secondary pose sequences pass through the regressor and a dedicated auxiliary classifier $C_{\text{aux}}$. This tests whether leveraging large-scale pose data (without corresponding accelerometer ground truth) can improve the regressor's ability to generate useful simulated signals.
-
-\subsection{Adversarial Domain Adaptation}
-
-We explore adversarial approaches to bridge the gap between real and simulated distributions:
-
-\subsubsection{Feature-level Discriminator (Scenario 4.1)}
-
-A discriminator $D_F$ operates on feature embeddings, trained to distinguish $\mathbf{z}_{\text{real}}$ from $\mathbf{z}_{\text{sim}}$. Using a Gradient Reversal Layer (GRL), the feature extractor learns to fool the discriminator while maintaining classification performance:
-\begin{equation}
-    \mathcal{L}_{\text{total}} = \mathcal{L}_{\text{baseline}} + \lambda_{\text{adv}} \mathcal{L}_{\text{adv}}
-\end{equation}
-
-This encourages domain-invariant feature representations.
-
-\subsubsection{Signal-level Discriminator (Scenario 4.2)}
-
-A discriminator $D_S$ operates directly on accelerometer signals, distinguishing real $\mathbf{a}$ from simulated $\tilde{\mathbf{a}} = R(\mathbf{p})$. Using WGAN-GP with alternating updates, the regressor learns to produce realistic waveforms:
-\begin{equation}
-    \mathcal{L}_D = \mathbb{E}[D_S(\tilde{\mathbf{a}})] - \mathbb{E}[D_S(\mathbf{a})] + \lambda_{\text{GP}} \cdot \text{GP}
-\end{equation}
-
-This directly improves signal quality rather than relying on the feature extractor to compensate for simulation artifacts. An optional ACGAN variant adds class conditioning to encourage class-specific realism.
-
-\subsection{Scenario Summary}
-
-\Cref{tab:scenarios} summarizes all experimental scenarios and their key modifications relative to the baseline.
-
-\begin{table}[!t]
-\centering
-\caption{Summary of experimental scenarios. All scenarios share the same base architecture; differences are highlighted.}
-\label{tab:scenarios}
-\begin{tabular}{llp{5.5cm}}
-\hline
-\textbf{Scenario} & \textbf{Name} & \textbf{Key Modification} \\
-\hline
-2 & Baseline & Joint training with all losses ($\alpha, \beta, \gamma > 0$) \\
-22 & No MSE & $\gamma = 0$; regressor learns from task gradients only \\
-25 & No Similarity & $\beta = 0$; no explicit feature alignment \\
-23 & Separate Classifiers & Domain-specific classifiers $C$, $C_{\text{sim}}$ \\
-24 & Separate Extractors & Domain-specific encoders $F$, $F_{\text{sim}}$ \\
-3 & Auxiliary Data & Secondary NTU pose dataset with $C_{\text{aux}}$ \\
-4 & Feature Adversarial & GRL + discriminator on features \\
-42 & Signal Adversarial & WGAN-GP discriminator on signals \\
-\hline
-\end{tabular}
-\end{table}
-
-This ablation-based design allows us to attribute performance differences to specific components rather than implementation variations, providing clear insights into which elements of the proposed method contribute most to improved activity recognition.
+\paragraph{Final Evaluation.}
+After completing all three HPO passes, we take the best configuration and run final evaluation 10 times with different seeds using the full training epoch budget. We report test set performance as mean $\pm$ standard deviation over these 10 runs. Test set evaluation is performed only after HPO is complete to prevent implicit overfitting through repeated evaluation.

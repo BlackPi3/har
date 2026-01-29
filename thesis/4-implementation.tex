@@ -11,19 +11,11 @@ Our framework comprises four primary neural network components: the feature extr
 \subsection{Feature Extractor}
 \label{sec:feature-extractor}
 
-The feature extractor $F$ transforms raw accelerometer signals into fixed-dimensional feature representations suitable for classification. We adapt the encoder portion of the convolutional autoencoder architecture from MM-Fit \cite{stromback2020mm}, using 1D convolutions that operate along the temporal axis while treating the three accelerometer axes as input channels.
-
-\subsubsection{Architecture}
-
-Our implementation maps an accelerometer window $\mathbf{a}\in\mathbb{R}^{3\times T}$ to an embedding $\mathbf{z}\in\mathbb{R}^{d}$ using a stack of strided temporal convolutions, optional pooling, and a final linear projection (\texttt{MmfitEncoder1D}). The detailed architecture is controlled entirely through configuration; \Cref{tab:fe-params} reports the hyperparameters and their default values.
-
-\subsubsection{Configurable Parameters}
-
-\Cref{tab:fe-params} summarizes the configurable parameters of our MM-Fit encoder implementation and the default values used in our configuration.
+The feature extractor $F$ transforms raw accelerometer signals into fixed-dimensional feature representations suitable for classification. In thesis we adapt the encoder portion of the convolutional autoencoder architecture from MM-Fit \cite{stromback2020mm} as our feature extractor, using 1D convolutions that operate along the temporal axis while treating the three accelerometer axes as input channels. Our implementation maps an accelerometer window $\mathbf{a}\in\mathbb{R}^{3\times T}$ to an embedding $\mathbf{z}\in\mathbb{R}^{d}$ using a stack of strided temporal convolutions, optional pooling, and a final linear projection. The detailed architecture is controlled entirely through configuration. \Cref{tab:fe-params} reports the hyperparameters and their default values. For linear layers (including the final projection), we use Kaiming Normal initialization \cite{he2015delving} as implemented in PyTorch for LeakyReLU-based networks.
 
 \begin{table}[!t]
 \centering
-\caption{MM-Fit encoder (\texttt{MmfitEncoder1D}) parameters and default configuration values.}
+\caption{Feature Extractor parameters and default configuration values.}
 \label{tab:fe-params}
 \begin{tabular}{llp{6.5cm}}
 \hline
@@ -45,32 +37,20 @@ Our implementation maps an accelerometer window $\mathbf{a}\in\mathbb{R}^{3\time
 \end{tabular}
 \end{table}
 
-\subsubsection{Weight Initialization}
-
-For linear layers (including the final projection), we use Kaiming Normal initialization \cite{he2015delving} as implemented in PyTorch for LeakyReLU-based networks.
-
 \subsection{Activity Classifier}
 \label{sec:classifier}
 
-The activity classifier $C$ maps feature embeddings to class predictions. We implement a multi-layer perceptron (MLP) with configurable hidden layers.
-
-\subsubsection{Architecture}
-
-The classifier is a configurable MLP head (\texttt{MlpClassifier}) that maps the encoder embedding to $K$ activity logits. We report its tunable hyperparameters and default values in \Cref{tab:clf-params}.
-
-\subsubsection{Configurable Parameters}
-
-\Cref{tab:clf-params} lists the MLP classifier parameters and the default values used in our configuration.
+The activity classifier $C$ maps feature embeddings to class predictions. We implement a multi-layer perceptron (MLP) with configurable hidden layers. The classifier is a configurable MLP head that maps the encoder embedding to $K$ activity logits. We report its tunable hyperparameters and default values in \Cref{tab:clf-params}.
 
 \begin{table}[!t]
 \centering
-\caption{MLP classifier (\texttt{MlpClassifier}) parameters and default configuration values.}
+\caption{MLP classifier parameters and default configuration values.}
 \label{tab:clf-params}
 \begin{tabular}{llp{6.5cm}}
 \hline
 \textbf{Parameter} & \textbf{Default} & \textbf{Description} \\
 \hline
-\texttt{f\_in} & 100 & Input embedding dimension (equals encoder \texttt{embedding\_dim}) \\
+\texttt{f\_in} & 100 & Input embedding dimension (equals feature dimension \texttt{embedding\_dim}) \\
 \texttt{n\_classes} & --- & Number of activity classes $K$ (dataset-dependent) \\
 \texttt{hidden\_units} & $[100]$ & Hidden layer widths \\
 \texttt{dropout} & 0.2 & Dropout probability after each hidden layer \\
@@ -81,11 +61,7 @@ The classifier is a configurable MLP head (\texttt{MlpClassifier}) that maps the
 \subsection{Pose-to-IMU Regressor}
 \label{sec:regressor}
 
-The regressor $R$ transforms skeleton pose sequences into simulated accelerometer signals. We adopt the regressor architecture proposed by Fortes Rey et al.\ \cite{fortes2021translating}. Compared to the original formulation which predicts a single sensor channel at a time, our implementation predicts the full 3-axis accelerometer window jointly.
-
-\subsubsection{Architecture Overview}
-
-The regressor consumes a pose window $\mathbf{p} \in \mathbb{R}^{C_{\text{in}} \times J \times T}$ and outputs a simulated accelerometer window $\tilde{\mathbf{a}} \in \mathbb{R}^{3 \times T}$. Our implementation is a residual Temporal Convolutional Network (TCN): joint-temporal blocks operate on tensors of shape $(B, C_{\text{in}}, J, T)$ using dilated convolutions, followed by a temporal aggregation block and a final projection. An optional per-output-channel variant exists (\texttt{separate\_channel=true}), but we use a shared backbone by default.
+The regressor $R$ transforms skeleton pose sequences into simulated accelerometer signals. We adopt the regressor architecture proposed by Rey \textit{et al.} \cite{fortes2021translating}. Compared to the original formulation which predicts a single sensor channel at a time, our implementation predicts the full 3-axis accelerometer window jointly. The regressor consumes a pose window $\mathbf{p} \in \mathbb{R}^{C_{\text{in}} \times J \times T}$ and outputs a simulated accelerometer window $\tilde{\mathbf{a}} \in \mathbb{R}^{3 \times T}$. Our implementation is a residual Temporal Convolutional Network (TCN): joint-temporal blocks operate on tensors of shape $(B, C_{\text{in}}, J, T)$ using dilated convolutions, followed by a temporal aggregation block and a final projection. An optional per-output-channel variant exists (\texttt{separate\_channel=true}), but we use a shared backbone by default.
 
 \subsubsection{Configurable Parameters}
 
@@ -316,23 +292,21 @@ The TPE sampler may suggest previously-evaluated hyperparameter configurations. 
 
 \subsection{Top-K Validation}
 
-After the search phase completes, we keep the top-$K$ configurations (\texttt{top\_k} in the HPO YAML) and optionally re-evaluate each with multiple seeds (\texttt{repeat.count}). The orchestrator writes a summary report (\texttt{repeats\_report.yaml}) containing mean and standard deviation per configuration, and exports the best configuration parameters (\texttt{repeats\_best\_params.yaml}) for downstream evaluation.
-
-This validation step ensures the final selected configuration is robust to initialization variance rather than benefiting from a favorable random seed.
+After each HPO pass completes, we select the top-10 configurations by validation F1 and re-evaluate each with 5 different seeds. The orchestrator writes a summary report (\texttt{repeats\_report.yaml}) containing mean and standard deviation per configuration, and exports the best configuration parameters (\texttt{repeats\_best\_params.yaml}) for the next pass. This validation step ensures the selected configuration is robust to initialization variance rather than benefiting from a favorable random seed.
 
 \begin{algorithm}[!t]
 \caption{Top-$K$ repeats and best-parameter export (\texttt{experiments/run\_hpo.py}).}
 \label{alg:hpo-topk-repeats}
 \begin{algorithmic}[1]
-\Require Completed Optuna study, $K=\texttt{top\_k}$, repeat count $R=\texttt{repeat.count}$, metric $m$, direction (min/max)
+\Require Completed Optuna study, $K=10$, repeat count $R=5$, metric $m$ (validation F1)
 \State Select top-$K$ \emph{unique} configurations by objective value (deduplicated by hyperparameters)
 \ForAll{selected configurations $\theta_k$ with trial id $t_k$}
     \For{$r=0$ to $R-1$}
-        \State Run \texttt{experiments.run\_trial} with overrides $\theta_k$ and \texttt{seed}$=r$; record score $v_{k,r}$ for metric $m$
+        \State Run \texttt{experiments.run\_trial} with overrides $\theta_k$ and \texttt{seed}$=r$; record score $v_{k,r}$
     \EndFor
     \State Compute $\mu_k=\text{mean}(\{v_{k,r}\}_{r=0}^{R-1})$ and $\sigma_k=\text{std}(\{v_{k,r}\}_{r=0}^{R-1})$
 \EndFor
-\State Write \texttt{repeats\_report.yaml} containing $(t_k,\mu_k,\sigma_k)$ and select $k^\star=\arg\max/\arg\min_k \mu_k$
+\State Write \texttt{repeats\_report.yaml} containing $(t_k,\mu_k,\sigma_k)$ and select $k^\star=\arg\max_k \mu_k$
 \State Export best configuration $\theta_{k^\star}$ to \texttt{repeats\_best\_params.yaml}
 \end{algorithmic}
 \end{algorithm}
@@ -373,18 +347,16 @@ Checkpoint saving is optional (controlled via \texttt{save\_artifacts} and \text
 Final evaluation on the test set is performed through a dedicated script (\texttt{experiments/run\_eval.py}), which loads the best hyperparameters from the HPO repeats outputs, re-runs training/evaluation with multiple seeds, and aggregates test metrics.
 
 \begin{algorithm}[!t]
-\caption{Evaluation of the best HPO configuration (\texttt{experiments/run\_eval.py}).}
+\caption{Final evaluation of the best HPO configuration (\texttt{experiments/run\_eval.py}).}
 \label{alg:eval-pipeline}
 \begin{algorithmic}[1]
-\Require Study directory containing \texttt{repeats\_report.yaml} and \texttt{repeats\_best\_params.yaml}
-\Require Base seed $s_0$ and repeat count $R$ (default $R=10$)
+\Require Study directory containing \texttt{repeats\_best\_params.yaml}
+\Require Base seed $s_0$, repeat count $R=10$, full training epochs
 \State Load best hyperparameters $\theta^\star$ from \texttt{repeats\_best\_params.yaml}
-\State Infer the base trial config name (from the saved HPO snapshot) and construct the base command for \texttt{experiments.run\_trial}
 \For{$r=0$ to $R-1$}
-    \State $s \gets s_0 + r$
-    \State Run \texttt{experiments.run\_trial} with overrides $\theta^\star$, \texttt{seed}$=s$, and a dedicated output directory
-    \State Read \texttt{results.json} and extract test metrics $\mathbf{m}_r$
+    \State Run \texttt{experiments.run\_trial} with $\theta^\star$, \texttt{seed}$=s_0+r$, and full epoch budget
+    \State Extract test metrics from \texttt{results.json}
 \EndFor
-\State Aggregate metrics across repeats and report mean $\pm$ standard deviation
+\State Report test F1 as mean $\pm$ standard deviation over 10 runs
 \end{algorithmic}
 \end{algorithm}

@@ -22,22 +22,22 @@ We evaluate all training scenarios on both primary datasets (UTD-MHAD and MM-Fit
 \textbf{Scenario} & F1 & $\Delta$F1 & F1 & $\Delta$F1 \\
 \hline
 \multicolumn{5}{l}{\textit{Baseline}} \\
-Baseline & $.667 \pm .009$ & --- & \textbf{$.857 \pm .016$} & --- \\
+Scenario 2.1 & $.667 \pm .009$ & --- & \textbf{$.857 \pm .016$} & --- \\
 \hline
 \multicolumn{5}{l}{\textit{Loss Ablations}} \\
-No MSE ($\gamma=0$) & $.050 \pm .014$ & $-$92.5\% & $.075 \pm .001$ & $-$91.2\% \\
-No Similarity ($\beta=0$) & $.661 \pm .015$ & $-$0.9\% & $.815 \pm .037$ & $-$4.9\% \\
+Scenario 2.2 ($\gamma=0$) & $.050 \pm .014$ & $-$92.5\% & $.075 \pm .001$ & $-$91.2\% \\
+Scenario 2.3 ($\beta=0$) & $.661 \pm .015$ & $-$0.9\% & $.815 \pm .037$ & $-$4.9\% \\
 \hline
 \multicolumn{5}{l}{\textit{Architecture Variants}} \\
-Shared Encoder, Sep. Classifiers & $.672 \pm .014$ & $+$0.7\% & $.844 \pm .059$ & $-$1.5\% \\
-Sep. Encoders, Shared Classifier & $.676 \pm .016$ & $+$1.3\% & $.821 \pm .035$ & $-$4.2\% \\
+Scenario 2.4 & $.672 \pm .014$ & $+$0.7\% & $.844 \pm .059$ & $-$1.5\% \\
+Scenario 2.5 & $.676 \pm .016$ & $+$1.3\% & $.821 \pm .035$ & $-$4.2\% \\
 \hline
 \multicolumn{5}{l}{\textit{Auxiliary Data}} \\
-Auxiliary NTU Pose & $.681 \pm .017$ & $+$2.1\% & $.791 \pm .041$ & $-$7.7\% \\
+Scenario 3 & $.681 \pm .017$ & $+$2.1\% & $.791 \pm .041$ & $-$7.7\% \\
 \hline
 \multicolumn{5}{l}{\textit{Adversarial Training}} \\
-Feature Discriminator & $.627 \pm .017$ & $-$6.0\% & $.812 \pm .001$ & $-$5.3\% \\
-Signal Discriminator & \underline{$.689 \pm .019$} & \underline{$+$3.3\%} & $.799 \pm .025$ & $-$6.8\% \\
+Scenario 4.1 & $.627 \pm .017$ & $-$6.0\% & $.812 \pm .001$ & $-$5.3\% \\
+Scenario 4.2 & \underline{$.689 \pm .019$} & \underline{$+$3.3\%} & $.799 \pm .025$ & $-$6.8\% \\
 \hline
 \end{tabular}
 \end{table}
