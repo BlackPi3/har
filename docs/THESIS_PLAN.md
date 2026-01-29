@@ -112,76 +112,51 @@ This thesis investigates using simulated accelerometer signals derived from skel
 
 ---
 
-## Chapter 6: Results & Analysis
+## Chapter 6: Results & Analysis ✓ DRAFT COMPLETE
 
 > **Status**: Draft in `thesis/6-results.tex`
-> **Purpose**: Present experimental findings with immediate analysis
+> **Purpose**: Present experimental findings ("what happened and why")
+> **Structure**: Paragraphs with inline analysis, no deep subsection nesting
 
-### 6.1 Main Results
-- Table: Test F1 for all scenarios × datasets (using Scenario 2.1, 2.2, etc. naming)
-- Key findings summary
-
-### 6.2 Ablation Studies
-- Loss ablations: γ=0 (Scenario 2.2), β=0 (Scenario 2.3)
-- Architecture ablations: Separate classifiers (2.4), Separate FEs (2.5)
-- Supporting figures: waveform comparisons, classifier confidence plots
-
-### 6.3 Auxiliary Data Analysis (Scenario 3)
-- Per-class F1 comparisons
-- Dataset compatibility analysis
-
-### 6.4 Adversarial Training Analysis (Scenarios 4.1, 4.2)
-- Discriminator accuracy over epochs
-- Training dynamics plots
-
-### 6.5 HPO Insights
-- Optimal configurations table
-- Dataset-specific patterns
-
-### 6.6 Summary of Findings
-- Numbered list of key conclusions
+- Main results table (F1 for all scenarios × datasets)
+- Loss ablation analysis: γ=0 catastrophic failure, β=0 modest degradation
+- Architecture variant analysis: separate classifiers (2.4), separate FEs (2.5)
+- Auxiliary data analysis (Scenario 3): per-class F1, domain overlap tables (UTD-NTU, MMFit-NTU)
+- Adversarial training analysis (Scenarios 4.1, 4.2): discriminator dynamics figures
+- HPO insights: optimal configurations table
+- Figures: waveform comparisons, classifier confidence, discriminator accuracy, per-class F1
 
 ---
 
-## Chapter 7: Discussion
+## Chapter 7: Discussion ✓ DRAFT COMPLETE
 
-> **Purpose**: Broader interpretation, limitations, recommendations
-> **Distinction from Ch 6**: Ch 6 = "what happened", Ch 7 = "what it means + what's next"
+> **Status**: Written in `thesis/7-discussion.tex`
+> **Purpose**: Broader interpretation ("what it means + what's next")
+> **Structure**: `\paragraph{}` style, no deep subsection nesting
 
-### 7.1 Key Findings (synthesis)
-- Cross-scenario insights
-- When does simulation help vs hurt?
+### Findings (paragraphs, no subsections)
+- **Dataset Size**: UTD benefits from variants, MM-Fit degrades; HPO with regularization/capacity tuning could not recover MM-Fit performance
+- **Domain Gap**: Signal-level adversarial works (UTD), feature-level doesn't; similarity loss may already handle feature alignment; adversarial actively degrades MM-Fit (competing gradients)
+- **Regression Loss**: Necessary anchor; without it regressor exploits unconstrained freedom; shared-weight architecture means bad sim data actively corrupts real representations
+- **Auxiliary Data**: Domain compatibility > quantity; NTU clip structure more similar to UTD than MM-Fit
 
-### 7.2 Limitations
-- Dataset-specific tuning required
-- Computational cost of HPO
-- Skeleton quality dependence
-- Generalization to unseen sensor placements
-
-### 7.3 Practical Recommendations
-- Guidelines for practitioners:
-  - When to use simulation-augmented training
-  - Which scenario to start with
-  - HPO budget recommendations
+### Limitations and Future Work (paragraphs, no subsections)
+- **Baseline Performance**: Slightly below prior work (zolfaghari2024sensor), unresolved
+- **Generalizability**: Only two primary datasets tested
+- **Adversarial Variants**: GRL vs WGAN-GP confounded with feature-level vs signal-level; need cross-combinations
+- **Auxiliary Data**: NTU format confounds overlap analysis; need MM-Fit-compatible secondary dataset; Scenarios 3+4 untested
 
 ---
 
-## Chapter 8: Conclusion
+## Chapter 8: Conclusion ✓ DRAFT COMPLETE
 
-### 8.1 Summary of Contributions
-1. Systematic comparison of training scenarios for pose-to-IMU simulation
-2. Adversarial domain adaptation for bridging sim-to-real gap
-3. Multi-pass HPO strategy for efficient hyperparameter search
+> **Status**: Written in `thesis/8-conclusion.tex`
+> **Structure**: Four flowing paragraphs, no sections/subsections. Focus on adversarial training as main goal.
 
-### 8.2 Answers to Research Questions
-- RQ1: Does simulated accelerometer data improve HAR?
-- RQ2: Which training scenario is most effective?
-- RQ3: Does adversarial learning help close the domain gap?
-
-### 8.3 Future Work
-- Extension to other sensor modalities (gyroscope, magnetometer)
-- Cross-dataset generalization (train on UTD, test on MM-Fit)
-- Real-time deployment considerations
+- Summary: framework, eight scenarios, three-pass HPO, two datasets
+- Adversarial results: signal-level WGAN-GP improved UTD-MHAD (+3.3%), feature-level GRL degraded both; improvement did not transfer to MM-Fit
+- Dataset size divergence: variants help data-scarce UTD, hurt data-sufficient MM-Fit; regression loss essential; auxiliary data conditional on domain compatibility
+- Research questions answered inline (no Q&A format): simulation helps conditionally, no single best scenario, adversarial helps on small dataset only
 
 ---
 
