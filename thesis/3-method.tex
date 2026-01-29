@@ -2,7 +2,7 @@
 \label{chap:method}
 
 This chapter describes our method to enhance HAR which focuses on the efficient use of available real and simulated sensor data.
-While most other methods consider sensor data simulation and training a HAR classifier as different, independent steps, ours performs both in an end-to-end fashion.
+While most other methods consider sensor data simulation and training a HAR classifier as different, independent steps \cite{kwon2020imutube, fortes2021translating, santhalingam2023synthetic}, ours performs both in an end-to-end fashion \cite{zolfaghari2024sensor}.
 
 \section{Problem Formulation}
 \label{sec:problem}
@@ -14,9 +14,9 @@ We address the challenge of improving HAR by leveraging simulated IMU data deriv
 
 In this thesis we require synchronized pairs of skeletal pose sequences and accelerometer signals that are labeled with activity classes. These data streams originate from different sensor modalities and undergo preprocessing before use.
 
-\textbf{Accelerometer Data} is a component of Inertial Measurement Units (IMUs) embedded in smartphones, smartwatches, or dedicated wearable devices capture tri-axial acceleration at fixed sampling rates (typically 50--100\,Hz). 
+\textbf{Accelerometer Data} is a component of Inertial Measurement Units (IMUs) embedded in smartphones, smartwatches, or dedicated wearable devices capture tri-axial acceleration at fixed sampling rates (typically 50--100\,Hz) \cite{lara2012survey, hammerla2016deep}. 
 
-\textbf{Pose Sequences} is extracted from visual sensors, RGB cameras, depth sensors (RGB-D), or multi-view camera arrays (Fig. \ref{fig:3dpose-extraction}). Vision-based pose estimation pipelines first detect 2D keypoints in each frame using convolutional detectors, then lift these to 3D joint coordinates through volumetric representations, using various methods such as triangulation from multiple views, or learned regressors.
+\textbf{Pose Sequences} is extracted from visual sensors, RGB cameras, depth sensors (RGB-D), or multi-view camera arrays (Fig. \ref{fig:3dpose-extraction}). Vision-based pose estimation pipelines first detect 2D keypoints in each frame using convolutional detectors, then lift these to 3D joint coordinates through volumetric representations, using various methods such as triangulation from multiple views, or learned regressors \cite{fang2022alphapose, zhu2023motionbert}.
 
 \textbf{Synchronization} of multi-sensor recordings require temporal alignment so that each pose frame corresponds to the concurrent accelerometer sample. Datasets such as MM-Fit provide time-synchronized streams, enabling direct pairing of pose and accelerometer windows for the same activity instance \cite{stromback2020mm}. This synchronization is essential for learning the pose-to-accelerometer mapping, as the regressor must observe corresponding motion patterns in both modalities.
 
@@ -83,7 +83,7 @@ Since both $\mathbf{a}$ and $\tilde{\mathbf{a}}$ share the same label $y$, the c
 \begin{equation}
     \mathcal{L}_{\text{cls}} = \text{CE}(\hat{y}_{\text{real}}, y) + \text{CE}(\hat{y}_{\text{sim}}, y)
 \end{equation}
-where CE denotes cross-entropy loss and $\cos(\cdot, \cdot)$ denotes cosine similarity. The similarity loss encourages $F$ to produce similar representations for corresponding real and simulated samples, reducing the domain gap.
+where CE denotes cross-entropy loss and $\cos(\cdot, \cdot)$ denotes cosine similarity. This signal-level supervision ensures the regressor learns the pose-to-accelerometer mapping in a physically meaningful way. The similarity loss encourages $F$ to produce similar representations for corresponding real and simulated samples, reducing the domain gap. Crucially, $\mathbf{z}_{\text{real}}$ and $\mathbf{z}_{\text{sim}}$ correspond to the same time window: they originate from synchronized pose and accelerometer recordings of the same activity instance. This pairing is essential---if we compared features from unrelated samples, the loss would push the feature extractor toward a trivial solution where all inputs map to similar representations regardless of the underlying activity. By enforcing similarity only between corresponding pairs, the loss encourages consistent representations for the same motion captured through different modalities, while preserving discriminative information across different activities.
 
 This sequential approach treats pose-to-IMU regression and activity classification as independent tasks and we refer to it as \textbf{Scenario 1}
 
@@ -113,151 +113,14 @@ The simulated data path serves purely as a training-time augmentation mechanism.
 
 The key advantage is that all losses backpropagate through the entire pipeline. In particular, the classification loss now reaches the regressor, meaning $R$ learns to produce signals that are not just realistic-looking, but \emph{useful for classification}, preserving activity-discriminative information rather than merely mimicking the statistical properties of real accelerometer data.
 
-We refer to this baseline configuration as the \textbf{Scenario 2.1}. As illustrated in \Cref{fig:baseline}, both the real and simulated paths share the same feature extractor $F$ and classifier $C$, with all three loss terms active ($\alpha, \beta, \gamma > 0$). This serves as the foundation for all experimental variants explored in this thesis.
+We refer to this baseline configuration as the \textbf{Scenario 2.1}. As illustrated in \Cref{fig:baseline}, both the real and simulated paths share the same feature extractor $F$ and classifier $C$, with all three loss terms active ($\alpha, \beta, \gamma > 0$). This serves as the foundation for all experimental variants explored in this thesis. Different configurations selectively enable or disable loss terms, or modify the architecture, to study their individual contributions. All loss weights ($\alpha, \beta, \gamma$) and optimization details are specified in \Cref{chap:implementation}.
 
-\section{Loss Function Design}
-\label{sec:losses}
+\section{Adversarial Training}
+\label{sec:adversarial}
 
-The training objective combines multiple loss terms that guide different aspects of learning. Each loss component addresses a specific goal, and their relative importance is controlled by three weighting coefficients: $\alpha$, $\beta$, and $\gamma$.
+Joint training (Scenario 2.1) improves over the two-step approach by allowing classification gradients to reach the regressor. However, a domain gap between real and simulated accelerometer data persists: the feature extractor $F$ may still learn to distinguish between the two sources, limiting the benefit of synthetic augmentation. The main contribution of this thesis is to investigate whether adversarial training can further close this gap and improve HAR performance.
 
-\subsection{Classification Loss}
-
-The primary objective is accurate activity recognition. We apply cross-entropy loss on both the real and simulated accelerometer paths:
-\begin{equation}
-    \mathcal{L}_{\text{cls}} = \text{CE}(\hat{y}_{\text{real}}, y) + \text{CE}(\hat{y}_{\text{sim}}, y)
-\end{equation}
-where $\text{CE}$ denotes cross-entropy loss, $y$ is the ground truth label, and $\hat{y}_{\text{real}} = C(F(\mathbf{a}))$, $\hat{y}_{\text{sim}} = C(F(\tilde{\mathbf{a}}))$ are the predicted class distributions from the real and simulated paths respectively. By training on both paths with the same labels, the classifier learns to produce correct predictions regardless of whether the input originates from real or simulated accelerometer data. This loss is weighted by coefficient $\alpha$.
-
-\subsection{Feature Similarity Loss}
-
-To encourage domain-invariant representations, we minimize the distance between feature embeddings of real and simulated data using cosine similarity:
-\begin{equation}
-    \mathcal{L}_{\text{similarity}} = 1 - \frac{1}{N} \sum_{i=1}^{N} \cos(\mathbf{z}_{\text{real},i}, \mathbf{z}_{\text{sim},i})
-\end{equation}
-where $\cos(\cdot, \cdot)$ denotes cosine similarity. Crucially, $\mathbf{z}_{\text{real},i}$ and $\mathbf{z}_{\text{sim},i}$ correspond to the same time window: they originate from synchronized pose and accelerometer recordings of the same activity instance. This pairing is essential. If we compared features from unrelated samples, the loss would push the feature extractor toward a solution where all inputs map to similar representations regardless of the underlying activity. By enforcing similarity only between corresponding pairs, the loss encourages the feature extractor to produce consistent representations for the same motion captured through different modalities, while preserving discriminative information across different activities. This loss is weighted by coefficient $\beta$.
-
-\subsection{Regression Loss}
-
-To guide the regressor toward producing realistic accelerometer signals, we minimize the mean squared error between simulated and real data:
-\begin{equation}
-    \mathcal{L}_{\text{regression}} = \frac{1}{N} \sum_{i=1}^{N} \lVert \mathbf{a}_i - \tilde{\mathbf{a}}_i \rVert^{2}
-\end{equation}
-This signal-level supervision ensures the regressor learns the mapping from pose to accelerometer in a physically meaningful way. The regression loss is weighted by coefficient $\gamma$.
-
-\subsection{Total Objective}
-
-The baseline training objective combines these three losses:
-\begin{equation}
-    \mathcal{L}_{\text{total}} = \alpha \mathcal{L}_{\text{cls}} + \beta \mathcal{L}_{\text{similarity}} + \gamma \mathcal{L}_{\text{regression}}
-\end{equation}
-where $\alpha$, $\beta$, and $\gamma$ are hyperparameters controlling the contribution of each term. Different experimental configurations selectively enable or disable these terms to study their individual contributions, as detailed in \Cref{sec:scenarios}.
-
-All loss weights ($\alpha, \beta, \gamma$) and optimization details are specified in \Cref{chap:implementation}.
-
-\section{Training Scenarios}
-\label{sec:scenarios}
-
-In this thesis we look for methods to increase performance of HAR and will investigate different architectural choices and loss components. We define eight training scenarios. Each scenario modifies the baseline configuration in a specific way, enabling controlled ablation studies and architectural comparisons.
-
-\Cref{tab:scenarios} summarizes all scenarios. We have already introduced Scenario 1 and Scenario 2.1 and in the following subsections, we describe each variant in detail.
-
-\begin{table}[!t]
-\centering
-\caption{Overview of training scenarios. Each row indicates which components are modified relative to the baseline.}
-\label{tab:scenarios}
-\begin{tabular}{lp{6cm}}
-\hline
-\textbf{Scenario} & \textbf{Description} \\
-\hline
-Scenario 2.1: Baseline & Shared $F$ and $C$; all losses enabled ($\alpha, \beta, \gamma > 0$) \\
-Scenario 2.2: MSE Ablation & Baseline with $\gamma = 0$ (no regression loss) \\
-Scenario 2.3: Similarity Ablation & Baseline with $\beta = 0$ (no feature similarity loss) \\
-Scenario 2.4: Shared rep. \& Sep. Cls. & Separate classifiers $C$ and $C_{\text{sim}}$ for real and simulated paths \\
-Scenario 2.5: Sep. rep. \& Shared Cls. & Separate feature extractors $F$ and $F_{\text{sim}}$ for real and simulated paths \\
-Scenario 3: Auxiliary Pose & Additional pose-only dataset (NTU) with secondary classifier \\
-Scenario 4.1: Feature Discriminator & Adversarial discriminator on feature embeddings \\
-Scenario 4.2: Signal Discriminator & Adversarial discriminator on raw accelerometer signals \\
-\hline
-\end{tabular}
-\end{table}
-
-\subsection{Scenario 2.2: Effect of MSE Loss}
-\label{sec:scenario-mse-ablation}
-
-This ablation sets $\gamma = 0$, removing the regression loss entirely. The regressor still produces simulated accelerometer signals, but receives no direct signal-level supervision. Instead, it relies solely on gradients backpropagated from the classification and similarity losses. This tests whether explicit signal matching is necessary, or whether task-driven gradients suffice.
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\textwidth]{Thesis_Template_DE_EN/BA_MA_English/Figures/arch-gamma.pdf}
-  \caption{Ablation: removing the regression loss ($\gamma = 0$). The regressor $R$ receives no direct signal-level supervision; gradients flow only through the classification and similarity losses. This tests whether task-driven gradients alone can guide meaningful pose-to-IMU simulation.}
-  \label{fig:ablation-mse}
-\end{figure}
-
-\subsection{Scenario 2.3: Effect of Similarity Loss}
-\label{sec:scenario-sim-ablation}
-
-This ablation sets $\beta = 0$, removing the feature similarity loss. The feature extractor no longer receives explicit pressure to align real and simulated representations. This tests whether the shared architecture alone provides sufficient domain alignment, or whether explicit feature matching is beneficial.
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\textwidth]{Thesis_Template_DE_EN/BA_MA_English/Figures/arch-beta.pdf}
-  \caption{Ablation: removing the feature similarity loss ($\beta = 0$). The feature extractor $F$ no longer receives explicit pressure to align $\mathbf{z}_{\text{real}}$ and $\mathbf{z}_{\text{sim}}$. Domain alignment relies solely on the shared architecture.}
-  \label{fig:ablation-sim}
-\end{figure}
-
-\subsection{Scenario 2.4: Shared Representation, Separate Classifiers}
-\label{sec:scenario-dual-classifier}
-
-This variant introduces a second classifier $C_{\text{sim}}$ dedicated to the simulated path:
-\begin{equation}
-    \hat{y}_{\text{sim}} = C_{\text{sim}}(F(\tilde{\mathbf{a}}))
-\end{equation}
-while the real path continues to use the original classifier $C$. Both classifiers share the same feature extractor $F$. The motivation is that simulated and real features, while similar, may benefit from specialized decision boundaries. At inference time, only $C$ is used with real accelerometer data.
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\textwidth]{Thesis_Template_DE_EN/BA_MA_English/Figures/arch-sharedrep.pdf}
-  \caption{Shared representation, separate classifiers. Both paths share the feature extractor $F$, but use separate classifiers: $C$ for real features and $C_{\text{sim}}$ for simulated features. This allows domain-specific decision boundaries while maintaining shared feature representations. At inference, only $C$ is used.}
-  \label{fig:dual-classifier}
-\end{figure}
-
-\subsection{Scenario 2.5: Separate Representations, Shared Classifier}
-\label{sec:scenario-dual-encoder}
-
-This variant introduces a second feature extractor $F_{\text{sim}}$ dedicated to the simulated path:
-\begin{equation}
-    \mathbf{z}_{\text{sim}} = F_{\text{sim}}(\tilde{\mathbf{a}})
-\end{equation}
-while the real path uses the original $F$. Both feature extractors feed into the same classifier $C$. The motivation is that real and simulated accelerometer signals may have different characteristics requiring specialized encoding, while the classification task remains unified. At inference time, only $F$ is used.
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\textwidth]{Thesis_Template_DE_EN/BA_MA_English/Figures/arch-sharedcls.pdf}
-  \caption{Separate representations, shared classifier. The real path uses feature extractor $F$ while the simulated path uses $F_{\text{sim}}$, allowing domain-specific encoding. Both feed into the same classifier $C$. At inference, only $F$ is used.}
-  \label{fig:dual-encoder}
-\end{figure}
-
-\subsection{Scenario 3: Auxiliary Pose Data}
-\label{sec:scenario-auxiliary}
-
-Compared to the baseline, this scenario introduces an additional pose-only dataset and a secondary classifier, while keeping the main real/sim architecture unchanged.
-
-This scenario augments training with a secondary pose-only dataset (NTU RGB+D) that lacks corresponding real accelerometer data. Although NTU RGB+D contains different activity classes than the primary dataset, we select the same subset of skeletal joints across both datasets to ensure the regressor $R$ receives consistently structured pose inputs. The secondary data flows through the regressor and feature extractor, then to a dedicated secondary classifier $C_{\text{aux}}$:
-\begin{equation}
-    \mathbf{p}_{\text{aux}} \xrightarrow{R} \tilde{\mathbf{a}}_{\text{aux}} \xrightarrow{F} \mathbf{z}_{\text{aux}} \xrightarrow{C_{\text{aux}}} \hat{y}_{\text{aux}}
-\end{equation}
-The secondary classification loss is weighted by a separate coefficient $\lambda_{\text{aux}}$:
-\begin{equation}
-    \mathcal{L}_{\text{total}} = \alpha \mathcal{L}_{\text{cls}} + \beta \mathcal{L}_{\text{similarity}} + \gamma \mathcal{L}_{\text{regression}} + \lambda_{\text{aux}} \mathcal{L}_{\text{aux}}
-\end{equation}
-This tests whether additional pose diversity improves the regressor's generalization, even when the auxiliary dataset has different activity classes. 
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\textwidth]{Thesis_Template_DE_EN/BA_MA_English/Figures/arch-aux.pdf}
-  \caption{Auxiliary pose data scenario. A secondary pose-only dataset (NTU RGB+D) augments training. Secondary poses flow through the regressor $R$ and feature extractor $F$ to a dedicated classifier $C_{\text{aux}}$. The auxiliary loss $\mathcal{L}_{\text{aux}}$ (weighted by $\lambda_{\text{aux}}$) provides additional supervision to improve regressor generalization.}
-  \label{fig:auxiliary-pose}
-\end{figure}
+Adversarial training introduces a discriminator network that learns to distinguish real from simulated data. By training the main network to fool the discriminator, we encourage either the feature representations or the generated signals to become domain-invariant. We explore two complementary strategies: a feature-level discriminator that operates on learned embeddings (\Cref{sec:scenario-disc-feature}), and a signal-level discriminator that operates directly on raw accelerometer waveforms (\Cref{sec:scenario-disc-signal}).
 
 \subsection{Scenario 4.1: Feature-level Discriminator}
 \label{sec:scenario-disc-feature}
@@ -376,4 +239,109 @@ At evaluation time, the discriminator is not used and predictions are produced f
   \includegraphics[width=\textwidth]{Thesis_Template_DE_EN/BA_MA_English/Figures/arch-signaldisc.pdf}
   \caption{Signal-level discriminator (Scenario 4.2). The critic $D_S$ operates on raw accelerometer windows and is trained with WGAN-GP to assign higher scores to real signals than to simulated signals $\tilde{\mathbf{a}} = R(\mathbf{p})$. Using alternating critic/generator updates and an ACGAN auxiliary head, this directly pressures the regressor to generate realistic accelerometer waveforms.}
   \label{fig:disc-signal}
+\end{figure}
+
+\section{Training Variants}
+\label{sec:scenarios}
+
+Beyond adversarial training, we investigate additional architectural choices and loss ablations to understand which components of the baseline are essential. Each variant modifies the baseline configuration in a specific way, enabling controlled ablation studies and architectural comparisons.
+
+\Cref{tab:scenarios} summarizes all scenarios. Scenarios 1 and 2.1 were introduced in \Cref{sec:problem}, and the adversarial scenarios (4.1 and 4.2) in \Cref{sec:adversarial}. The remaining variants are described below.
+
+\begin{table}[!t]
+\centering
+\caption{Overview of training scenarios. Each row indicates which components are modified relative to the baseline.}
+\label{tab:scenarios}
+\begin{tabular}{lp{6cm}}
+\hline
+\textbf{Scenario} & \textbf{Description} \\
+\hline
+Scenario 2.1: Baseline & Shared $F$ and $C$; all losses enabled ($\alpha, \beta, \gamma > 0$) \\
+Scenario 2.2: MSE Ablation & Baseline with $\gamma = 0$ (no regression loss) \\
+Scenario 2.3: Similarity Ablation & Baseline with $\beta = 0$ (no feature similarity loss) \\
+Scenario 2.4: Shared rep. \& Sep. Cls. & Separate classifiers $C$ and $C_{\text{sim}}$ for real and simulated paths \\
+Scenario 2.5: Sep. rep. \& Shared Cls. & Separate feature extractors $F$ and $F_{\text{sim}}$ for real and simulated paths \\
+Scenario 3: Auxiliary Pose & Additional pose-only dataset (NTU) with secondary classifier \\
+Scenario 4.1: Feature Discriminator & Adversarial discriminator on feature embeddings \\
+Scenario 4.2: Signal Discriminator & Adversarial discriminator on raw accelerometer signals \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Scenario 2.2: Effect of MSE Loss}
+\label{sec:scenario-mse-ablation}
+
+This ablation sets $\gamma = 0$, removing the regression loss entirely. The regressor still produces simulated accelerometer signals, but receives no direct signal-level supervision. Instead, it relies solely on gradients backpropagated from the classification and similarity losses. This tests whether explicit signal matching is necessary, or whether task-driven gradients suffice.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\textwidth]{Thesis_Template_DE_EN/BA_MA_English/Figures/arch-gamma.pdf}
+  \caption{Ablation: removing the regression loss ($\gamma = 0$). The regressor $R$ receives no direct signal-level supervision; gradients flow only through the classification and similarity losses. This tests whether task-driven gradients alone can guide meaningful pose-to-IMU simulation.}
+  \label{fig:ablation-mse}
+\end{figure}
+
+\subsection{Scenario 2.3: Effect of Similarity Loss}
+\label{sec:scenario-sim-ablation}
+
+This ablation sets $\beta = 0$, removing the feature similarity loss. The feature extractor no longer receives explicit pressure to align real and simulated representations. This tests whether the shared architecture alone provides sufficient domain alignment, or whether explicit feature matching is beneficial.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\textwidth]{Thesis_Template_DE_EN/BA_MA_English/Figures/arch-beta.pdf}
+  \caption{Ablation: removing the feature similarity loss ($\beta = 0$). The feature extractor $F$ no longer receives explicit pressure to align $\mathbf{z}_{\text{real}}$ and $\mathbf{z}_{\text{sim}}$. Domain alignment relies solely on the shared architecture.}
+  \label{fig:ablation-sim}
+\end{figure}
+
+\subsection{Scenario 2.4: Shared Representation, Separate Classifiers}
+\label{sec:scenario-dual-classifier}
+
+This variant introduces a second classifier $C_{\text{sim}}$ dedicated to the simulated path:
+\begin{equation}
+    \hat{y}_{\text{sim}} = C_{\text{sim}}(F(\tilde{\mathbf{a}}))
+\end{equation}
+while the real path continues to use the original classifier $C$. Both classifiers share the same feature extractor $F$. The motivation is that simulated and real features, while similar, may benefit from specialized decision boundaries. At inference time, only $C$ is used with real accelerometer data.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\textwidth]{Thesis_Template_DE_EN/BA_MA_English/Figures/arch-sharedrep.pdf}
+  \caption{Shared representation, separate classifiers. Both paths share the feature extractor $F$, but use separate classifiers: $C$ for real features and $C_{\text{sim}}$ for simulated features. This allows domain-specific decision boundaries while maintaining shared feature representations. At inference, only $C$ is used.}
+  \label{fig:dual-classifier}
+\end{figure}
+
+\subsection{Scenario 2.5: Separate Representations, Shared Classifier}
+\label{sec:scenario-dual-encoder}
+
+This variant introduces a second feature extractor $F_{\text{sim}}$ dedicated to the simulated path:
+\begin{equation}
+    \mathbf{z}_{\text{sim}} = F_{\text{sim}}(\tilde{\mathbf{a}})
+\end{equation}
+while the real path uses the original $F$. Both feature extractors feed into the same classifier $C$. The motivation is that real and simulated accelerometer signals may have different characteristics requiring specialized encoding, while the classification task remains unified. At inference time, only $F$ is used.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\textwidth]{Thesis_Template_DE_EN/BA_MA_English/Figures/arch-sharedcls.pdf}
+  \caption{Separate representations, shared classifier. The real path uses feature extractor $F$ while the simulated path uses $F_{\text{sim}}$, allowing domain-specific encoding. Both feed into the same classifier $C$. At inference, only $F$ is used.}
+  \label{fig:dual-encoder}
+\end{figure}
+
+\subsection{Scenario 3: Auxiliary Pose Data}
+\label{sec:scenario-auxiliary}
+
+Compared to the baseline, this scenario introduces an additional pose-only dataset and a secondary classifier, while keeping the main real/sim architecture unchanged.
+
+This scenario augments training with a secondary pose-only dataset (NTU RGB+D) \cite{shahroudy2016ntu} that lacks corresponding real accelerometer data. Although NTU RGB+D contains different activity classes than the primary dataset, we select the same subset of skeletal joints across both datasets to ensure the regressor $R$ receives consistently structured pose inputs. The secondary data flows through the regressor and feature extractor, then to a dedicated secondary classifier $C_{\text{aux}}$:
+\begin{equation}
+    \mathbf{p}_{\text{aux}} \xrightarrow{R} \tilde{\mathbf{a}}_{\text{aux}} \xrightarrow{F} \mathbf{z}_{\text{aux}} \xrightarrow{C_{\text{aux}}} \hat{y}_{\text{aux}}
+\end{equation}
+The secondary classification loss is weighted by a separate coefficient $\lambda_{\text{aux}}$:
+\begin{equation}
+    \mathcal{L}_{\text{total}} = \alpha \mathcal{L}_{\text{cls}} + \beta \mathcal{L}_{\text{similarity}} + \gamma \mathcal{L}_{\text{regression}} + \lambda_{\text{aux}} \mathcal{L}_{\text{aux}}
+\end{equation}
+This tests whether additional pose diversity improves the regressor's generalization, even when the auxiliary dataset has different activity classes. 
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\textwidth]{Thesis_Template_DE_EN/BA_MA_English/Figures/arch-aux.pdf}
+  \caption{Auxiliary pose data scenario. A secondary pose-only dataset (NTU RGB+D) augments training. Secondary poses flow through the regressor $R$ and feature extractor $F$ to a dedicated classifier $C_{\text{aux}}$. The auxiliary loss $\mathcal{L}_{\text{aux}}$ (weighted by $\lambda_{\text{aux}}$) provides additional supervision to improve regressor generalization.}
+  \label{fig:auxiliary-pose}
 \end{figure}

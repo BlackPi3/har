@@ -1,0 +1,4 @@
+\section*{Abstract}
+Wearable sensor--based Human Activity Recognition (HAR) is often constrained by the cost of collecting and labeling inertial data. At the same time, 3D skeletal pose sequences are easier to obtain at scale, motivating the synthesis of accelerometer signals from pose to augment training. This thesis studies whether \emph{adversarial training} can reduce the gap between simulated and real sensor signals/features and improve HAR.
+
+We build on top of an end-to-end framework that jointly trains a pose-to-IMU regressor and an IMU-based activity classifier, and we introduce adversarial objectives at both the signal and feature levels to align simulated and real distributions. Experiments across two datasets show that adversarial alignment can help, but its effectiveness is dependent on the dataset. In this thesis we show that signal-level adversarial training can improve HAR performance under certain conditions.
