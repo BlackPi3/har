@@ -1,3 +1,6 @@
+# This source code was written with the assistance of GitHub Copilot autocomplete.
+# The author has thoroughly tested and reviewed all code.
+
 #!/usr/bin/env python
 """
 Run a fresh training/evaluation for the best config of an HPO study.

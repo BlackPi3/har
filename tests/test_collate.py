@@ -1,3 +1,6 @@
+# This source code was written with the assistance of GitHub Copilot autocomplete.
+# The author has thoroughly tested and reviewed all code.
+
 import torch
 from src.datasets.common.collate import mask_collate
 

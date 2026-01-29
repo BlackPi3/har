@@ -1,3 +1,6 @@
+# This source code was written with the assistance of GitHub Copilot autocomplete.
+# The author has thoroughly tested and reviewed all code.
+
 from pathlib import Path
 import torch
 from torch.utils.data import Dataset

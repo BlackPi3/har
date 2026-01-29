@@ -1,3 +1,6 @@
+# This source code was written with the assistance of GitHub Copilot autocomplete.
+# The author has thoroughly tested and reviewed all code.
+
 import torch.nn as nn
 import torch.nn.init as init
 import math

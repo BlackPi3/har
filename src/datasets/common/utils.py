@@ -1,3 +1,6 @@
+# This source code was written with the assistance of GitHub Copilot autocomplete.
+# The author has thoroughly tested and reviewed all code.
+
 """
 Common utilities for HAR dataset loading and processing.
 These utilities can be shared across different datasets.

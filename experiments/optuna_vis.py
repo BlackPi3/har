@@ -1,3 +1,6 @@
+# This source code was written with the assistance of GitHub Copilot autocomplete.
+# The author has thoroughly tested and reviewed all code.
+
 """
 Generate a full Optuna visualization report for the scenario2_mmfit study.
 """
