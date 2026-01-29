@@ -140,69 +140,7 @@ would require retraining or architectural modifications. The physics of accelero
 
 \subsection{Activity Class Coverage}
 
-The auxiliary data experiments with NTU RGB+D reveal that secondary datasets are most beneficial when they share activity semantics with the primary dataset. When activity classes differ substantially, the regressor may learn mappings that do not transfer. The per-class analysis in \Cref{fig:scenario3-perclass} shows this effect clearly: activities with NTU equivalents tend to benefit, while dataset-specific activities (e.g., MM-Fit's fitness exercises) may degrade. This limits the utility of large-scale pose datasets for arbitrary HAR tasks.
-
-Tables~\ref{tab:utd-ntu-overlap} and~\ref{tab:mmfit-ntu-overlap} show the activity class overlap between each primary dataset and NTU RGB+D. The limited overlap---particularly for MM-Fit's fitness-focused activities---helps explain why auxiliary NTU data provides inconsistent benefits across datasets.
-
-\begin{table}[htbp]
-\centering
-\caption{UTD-MHAD activity classes and their overlap with NTU RGB+D. A checkmark ($\checkmark$) indicates a semantically similar activity exists in NTU.}
-\label{tab:utd-ntu-overlap}
-\begin{tabular}{llc}
-\toprule
-\textbf{UTD-MHAD Activity} & \textbf{NTU Equivalent} & \textbf{Overlap} \\
-\midrule
-Swipe Left & --- & $\times$ \\
-Swipe Right & --- & $\times$ \\
-Wave & Hand waving (A023) & $\checkmark$ \\
-Clap & Clapping (A010) & $\checkmark$ \\
-Throw & Throw (A007) & $\checkmark$ \\
-Arm Cross & Cross hands in front (A040) & $\checkmark$ \\
-Basketball Shoot & --- & $\times$ \\
-Draw X & --- & $\times$ \\
-Draw Circle (CW) & --- & $\times$ \\
-Draw Circle (CCW) & --- & $\times$ \\
-Draw Triangle & --- & $\times$ \\
-Bowling & --- & $\times$ \\
-Boxing & Punching/slapping (A050) & $\checkmark$ \\
-Baseball Swing & --- & $\times$ \\
-Tennis Swing & --- & $\times$ \\
-Arm Curl & --- & $\times$ \\
-Tennis Serve & --- & $\times$ \\
-Push & Pushing other person (A052) & $\checkmark$ \\
-Knock & --- & $\times$ \\
-Catch & --- & $\times$ \\
-Pickup \& Throw & Pickup (A006), Throw (A007) & $\checkmark$ \\
-\midrule
-\multicolumn{2}{r}{\textbf{Total overlap:}} & \textbf{7/21 (33\%)} \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{table}[htbp]
-\centering
-\caption{MM-Fit activity classes and their overlap with NTU RGB+D. Fitness exercises have minimal representation in NTU's daily activity vocabulary.}
-\label{tab:mmfit-ntu-overlap}
-\begin{tabular}{llc}
-\toprule
-\textbf{MM-Fit Activity} & \textbf{NTU Equivalent} & \textbf{Overlap} \\
-\midrule
-Squats & --- & $\times$ \\
-Lunges & --- & $\times$ \\
-Bicep Curls & --- & $\times$ \\
-Situps & --- & $\times$ \\
-Pushups & --- & $\times$ \\
-Tricep Extensions & --- & $\times$ \\
-Dumbbell Rows & --- & $\times$ \\
-Jumping Jacks & Jump up (A027), Hopping (A026) & $\checkmark$ \\
-Dumbbell Shoulder Press & --- & $\times$ \\
-Lateral Shoulder Raises & --- & $\times$ \\
-Non-activity & --- & $\times$ \\
-\midrule
-\multicolumn{2}{r}{\textbf{Total overlap:}} & \textbf{1/11 (9\%)} \\
-\bottomrule
-\end{tabular}
-\end{table}
+The auxiliary data experiments with NTU RGB+D reveal that secondary datasets are most beneficial when they share activity semantics with the primary dataset. When activity classes differ substantially, the regressor may learn mappings that do not transfer. The per-class analysis in \Cref{fig:scenario3-perclass} shows this effect clearly: activities with NTU equivalents tend to benefit, while dataset-specific activities (e.g., MM-Fit's fitness exercises) may degrade. This limits the utility of large-scale pose datasets for arbitrary HAR tasks. The limited overlap between primary datasets and NTU---33\% for UTD-MHAD and only 9\% for MM-Fit (Tables~\ref{tab:utd-ntu-overlap} and~\ref{tab:mmfit-ntu-overlap})---helps explain why auxiliary NTU data provides inconsistent benefits across datasets.
 
 \section{Practical Recommendations}
 \label{sec:recommendations}
